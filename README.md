@@ -1,14 +1,8 @@
-# Langflow Embedded Chat ⛓️
+# PUNKU.AI Embedded Chat ⛓️
 
 Welcome to the Langflow Embedded Chat repository! 🎉
 
 The Langflow Embedded Chat is a powerful web component that enables seamless communication with the [Langflow ⛓️](https://github.com/logspace-ai/langflow). This widget provides a chat interface, allowing you to integrate Langflow ⛓️ into your web applications effortlessly.
-
-[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-## What is Langflow?
-
-Langflow is a no-code open-source project that empowers developers to build cutting-edge applications using Language Model technologies. With Langflow, you can leverage the power of LLMs (Large Language Models) to enhance user interactions, generate human-like text, and gain valuable insights from natural language data.
 
 ## Features
 
@@ -20,42 +14,6 @@ Langflow is a no-code open-source project that empowers developers to build cutt
 
 🌐 Multilingual Support: Communicate with users in multiple languages, opening up your application to a global audience.
 
-## Installation
-
-### Option 1: CDN Link
-
-Use the Langflow Widget directly from the CDN by including the following script tag in your HTML:
-
-```html
-<script src="https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.6/dist/build/static/js/bundle.min.js"></script>
-```
-
-### Option 2: Local Build
-
-1. Clone this repository to your local machine:
-
-```bash
-git clone https://github.com/logspace-ai/langflow-embedded-chat.git
-```
-
-2. Navigate to the project directory:
-
-```bash
-cd langflow-embedded-chat
-```
-
-3. Build the project to generate the bundle:
-
-```bash
-npm run build
-```
-
-5. After the build process completes, you'll find the bundle in the `dist/build/static/js` folder. You can include this JavaScript file in your HTML:
-
-```html
-<script src="path/to/your/langflow-widget.js"></script>
-```
-
 ## Usage
 
 ### on simple HTML
@@ -65,10 +23,10 @@ npm run build
 <script src="https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.6/dist/build/static/js/bundle.min.js"></script>
 </head>
 <body>
-<langflow-chat
-    host_url="langflow url"
+<punku-chat
+    host_url="punku.ai url"
     flow_id="your_flow_id"
-  ></langflow-chat>
+  ></punku-chat>
 </body>
 </html>
 ```
@@ -83,9 +41,9 @@ Encapsulate your custom element in a react component
 export default function ChatWidget() {
   return (
     <div>
-<langflow-chat
-    host_url="langflow url"
-    flow_id="your_flow_id"></langflow-chat>
+<punku-chat
+    host_url="punku.ai url"
+    flow_id="your_flow_id"></punku-chat>
     </div>
   );
 }
@@ -253,15 +211,3 @@ Use the widget API to customize your widget:
   - Type: JSON
   - Required: No
   - Description: Additional headers to be sent to Langflow server
-
-
-## Live example:
-Try out or [live example](https://codesandbox.io/s/langflow-embedded-chat-example-dv9zpx) to see how the Langflow Embedded Chat ⛓️ works. 
-
-1. first create a Flow and save it using [Langflow ⛓️](https://github.com/logspace-ai/langflow).
-2. Get the hosted URL to use in the live example.
-3. If you are using a public host (like [Hugging Face Spaces](https://huggingface.co/spaces/Logspace/Langflow)) use tweaks to keep your API keys safe.
-
-## License
-
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT) - see the [LICENSE](https://github.com/logspace-ai/langflow-embedded-chat/tree/main/LICENSE) file for details.

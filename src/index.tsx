@@ -1,7 +1,7 @@
 import r2wc from '@r2wc/react-to-web-component';
 import ChatWidget from './chatWidget';
 
-customElements.define('langflow-chat', r2wc(ChatWidget, {
+customElements.define('punku-chat', r2wc(ChatWidget, {
     shadow: "closed",
     props: {
         start_open: "boolean",
