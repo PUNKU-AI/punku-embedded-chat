@@ -1,14 +1,14 @@
 # PUNKU.AI Embedded Chat ⛓️
 
-Welcome to the Langflow Embedded Chat repository! 🎉
+Welcome to the PUNKU.AI Embedded Chat repository! 🎉
 
-The Langflow Embedded Chat is a powerful web component that enables seamless communication with the [Langflow ⛓️](https://github.com/logspace-ai/langflow). This widget provides a chat interface, allowing you to integrate Langflow ⛓️ into your web applications effortlessly.
+The PUNKU.AI Embedded Chat is a powerful web component that enables seamless communication with the [PUNKU.AI app](https://app.punku.ai). This widget provides a chat interface, allowing you to integrate PUNKU.AI into your web applications effortlessly.
 
 ## Features
 
 🌟 Seamless Integration: Easily integrate the Langflow Widget into your website or web application with just a few lines of JavaScript.
 
-🚀 Interactive Chat Interface: Engage your users with a user-friendly chat interface, powered by Langflow's advanced language understanding capabilities.
+🚀 Interactive Chat Interface: Engage your users with a user-friendly chat interface, powered by PUNKU's advanced language understanding capabilities.
 
 🎛️ Customizable Styling: Customize the appearance of the chat widget to match your application's design and branding.
 
@@ -34,7 +34,7 @@ The Langflow Embedded Chat is a powerful web component that enables seamless com
 ### on React
  Import the js bundle in the index.html of your react project
 ```html
-<script src="https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.6/dist/build/static/js/bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js"></script>
 ```
 Encapsulate your custom element in a react component
 ```html
