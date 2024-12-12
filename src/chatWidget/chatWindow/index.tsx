@@ -112,6 +112,7 @@ export default function ChatWindow({
               Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
                 addMessage({
                   message: extractMessageFromOutput(output),
+                  message_id: output.id || output.component_id,
                   isSend: false,
                 });
               })
@@ -121,6 +122,7 @@ export default function ChatWindow({
               Object.values(flowOutputs[0].outputs).forEach((output: any) => {
                 addMessage({
                   message: extractMessageFromOutput(output),
+                  message_id: output.id || output.component_id,
                   isSend: false,
                 });
               })
@@ -215,8 +217,13 @@ export default function ChatWindow({
               error_message_style={error_message_style}
               key={index}
               message={message.message}
+              message_id={message.message_id}
               isSend={message.isSend}
               error={message.error}
+              feedback={message.feedback}
+              api_key={api_key}
+              additional_headers={additional_headers}
+              host_url={hostUrl}
             />
           ))}
           {sendingMessage && (

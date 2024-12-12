@@ -20,6 +20,36 @@ export async function sendMessage(baseUrl: string, flowId: string, message: stri
     if(sessionId.current && sessionId.current!=""){
         data.session_id=sessionId.current;
     }
+    console.log(data);
+    console.log(headers);
     let response = axios.post(`${baseUrl}/api/v1/run/${flowId}`, data,{headers});
     return response;
+}
+
+export async function sendFeedback(
+  baseUrl: string,
+  message_id: string,
+  feedback: string,
+  api_key?: string,
+  additional_headers?: {[key: string]: string}
+) {
+  let headers: {[key: string]: string} = {"Content-Type": "application/json"}
+  if (api_key) {
+    headers["x-api-key"] = api_key;
+  }
+  if (additional_headers) {
+    headers = Object.assign(headers, additional_headers);
+  }
+
+  console.log(
+    `${baseUrl}/api/v1/messages`,
+    { message_id, feedback },
+    { headers }
+  );
+
+  return axios.patch(
+    `${baseUrl}/api/v1/messages`,
+    { message_id, feedback },
+    { headers }
+  );
 }
