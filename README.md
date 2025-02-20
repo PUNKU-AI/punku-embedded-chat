@@ -20,7 +20,7 @@ The PUNKU.AI Embedded Chat is a powerful web component that enables seamless com
 ```html
 <html lang="en">
 <head>
-<script src="https://cdn.jsdelivr.net/gh/logspace-ai/langflow-embedded-chat@v1.0.6/dist/build/static/js/bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js"></script>
 </head>
 <body>
 <punku-chat

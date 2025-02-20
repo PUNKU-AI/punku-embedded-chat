@@ -21,7 +21,7 @@ function findMessageInObject(obj: any): string | null {
 
   // Check messages array
   if (Array.isArray(obj.messages)) {
-    const message = obj.messages.find(m => m.message)?.message;
+    const message = obj.messages.find((m: { message: any }) => m.message)?.message;
     if (message) return message;
   }
 
