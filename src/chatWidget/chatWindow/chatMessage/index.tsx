@@ -3,12 +3,58 @@ import { ChatMessageType } from "../../../types/chatWidget";
 import remarkGfm from "remark-gfm";
 import rehypeMathjax from "rehype-mathjax";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
+
+function parseMessage(message: any): string {
+  try {
+    // Handle null or undefined
+    if (!message) return "No message available";
+
+    // Handle string messages directly
+    if (typeof message === "string") return message;
+
+    // Handle Langflow message format
+    if (typeof message === "object") {
+      // Check for text property
+      if (message.text) return message.text;
+      
+      // Check for nested message
+      if (message.message) {
+        if (typeof message.message === "string") return message.message;
+        if (typeof message.message === "object" && message.message.text) {
+          return message.message.text;
+        }
+      }
+
+      // Handle array of messages
+      if (Array.isArray(message)) {
+        return message
+          .map(item => parseMessage(item))
+          .filter(Boolean)
+          .join("\n");
+      }
+
+      // If we have type and content
+      if (message.type && message.content) {
+        return message.content;
+      }
+
+      // Fallback to JSON stringify for unknown object structures
+      return JSON.stringify(message);
+    }
+
+    // Final fallback for any other type
+    return String(message);
+  } catch (error) {
+    console.error("Error parsing message:", error);
+    return "Error displaying message";
+  }
+}
 
 export default function ChatMessage({
   message,
-  message_id,  // This is already destructured from props
+  message_id,
   isSend,
   error,
   user_message_style,
@@ -25,15 +71,16 @@ export default function ChatMessage({
 }) {
   const [currentFeedback, setCurrentFeedback] = useState(feedback);
 
+  // Parse message content once and memoize it
+  const parsedMessage = useMemo(() => parseMessage(message), [message]);
+
   const handleFeedback = async (newFeedback: string) => {
-    console.log("message_id", message_id);
-    console.log("isSend", isSend);
-    if (!message || isSend) return;
+    if (!parsedMessage || isSend) return;
     
     try {
       await sendFeedback(
         host_url,
-        message,
+        parsedMessage,
         newFeedback,
         api_key,
         additional_headers
@@ -52,11 +99,11 @@ export default function ChatMessage({
     >
       {isSend ? (
         <div style={user_message_style} className="cl-user_message">
-          {message}
+          {parsedMessage}
         </div>
       ) : error ? (
         <div style={error_message_style} className={"cl-error_message"}>
-          {message}
+          {parsedMessage}
         </div>
       ) : (
         <div style={bot_message_style} className={"cl-bot_message"}>
@@ -65,7 +112,7 @@ export default function ChatMessage({
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeMathjax]}
           >
-            {message}
+            {parsedMessage}
           </Markdown>
           {!currentFeedback && !isSend && (
             <div className="feedback-buttons">
@@ -99,7 +146,6 @@ export default function ChatMessage({
           margin-top: 8px;
           gap: 8px;
         }
-
         .feedback-button {
           padding: 4px;
           border: none;
@@ -111,7 +157,6 @@ export default function ChatMessage({
           align-items: center;
           transition: all 0.2s;
         }
-
         .feedback-button:hover {
           color: #3b82f6;
           background-color: rgba(59, 130, 246, 0.1);
