@@ -85,11 +85,13 @@ export default function ChatMessage({
   feedback,
   api_key,
   additional_headers,
-  host_url
+  host_url,
+  show_feedback = false
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
+  show_feedback?: boolean;
 }) {
   const [currentFeedback, setCurrentFeedback] = useState(feedback);
 
@@ -136,7 +138,7 @@ export default function ChatMessage({
           >
             {parsedMessage}
           </Markdown>
-          {!currentFeedback && !isSend && (
+          {show_feedback && !currentFeedback && !isSend && (
             <div className="feedback-buttons">
               <button 
                 className="feedback-button" 
@@ -154,7 +156,7 @@ export default function ChatMessage({
               </button>
             </div>
           )}
-          {currentFeedback && (
+          {show_feedback && currentFeedback && (
             <div className="feedback-response">
               {currentFeedback === "Good Response" ? "👍" : "👎"} Thank you for your feedback!
             </div>

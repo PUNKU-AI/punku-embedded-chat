@@ -123,6 +123,7 @@ Use the widget API to customize your widget:
 | window_title          | string    | No       |
 | session_id            | string    | No       |
 | additional_headers    | json      | No       |
+| show_feedback         | boolean   | No       |
 
 - **bot_message_style:**
   - Type: JSON
@@ -224,6 +225,11 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: Styling options for the send icon in the chat window.
 
+- **theme:**
+  - Type: String
+  - Required: No
+  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", and "aurora".
+
 - **tweaks:**
   - Type: JSON
   - Required: No
@@ -233,6 +239,11 @@ Use the widget API to customize your widget:
   - Type: JSON
   - Required: No
   - Description: Styling options for formatting user messages in the chat window.
+
+- **welcome_message:**
+  - Type: String
+  - Required: No
+  - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
 
 - **width:**
   - Type: Number
@@ -252,14 +263,10 @@ Use the widget API to customize your widget:
 - **additional_headers:**
   - Type: JSON
   - Required: No
-  - Description: Additional headers to be sent to Langflow server
+  - Description: Additional headers to send with the API requests.
 
-- **theme:**
-  - Type: String
+- **show_feedback:**
+  - Type: Boolean
   - Required: No
-  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", and "aurora".
-
-- **welcome_message:**
-  - Type: String
-  - Required: No
-  - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
+  - Default: false
+  - Description: Controls whether to display feedback buttons (thumbs up/down) for bot messages. When enabled, users can provide feedback on responses.

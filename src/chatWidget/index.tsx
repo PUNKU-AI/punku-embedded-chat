@@ -33,8 +33,9 @@ export default function ChatWidget({
   additional_headers,
   session_id,
   start_open=false,
-  theme = "default",
+  theme = "ocean",
   welcome_message,
+  show_feedback = false,
 }: {
   api_key?: string;
   input_value: string,
@@ -67,6 +68,7 @@ export default function ChatWidget({
   start_open?: boolean;
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
+  show_feedback?: boolean;
 }) {
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
@@ -1142,60 +1144,27 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 /* Welcome message styles */
 .cl-welcome-message {
-  padding: 16px;
-  margin-bottom: 8px;
+  padding: 16px 0 0 0;
   position: relative;
   z-index: 1;
 }
 
+/* Remove any remaining custom welcome text styling */
 .cl-welcome-text {
-  background-color: rgba(37, 99, 235, 0.9);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border-top-left-radius: 4px;
-  max-width: 85%;
-  margin-left: 8px;
-  font-size: 14px;
-  line-height: 1.5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  animation: fadeIn 0.5s ease-out;
-  position: relative;
+  display: none;
 }
 
-/* Theme-specific welcome message styles */
-.theme-dark .cl-welcome-text {
-  background-color: rgba(45, 75, 143, 0.9);
-}
-
-.theme-ocean .cl-welcome-text {
-  background-color: rgba(45, 45, 124, 0.9);
-}
-
-.theme-aurora .cl-welcome-text {
-  background-color: rgba(124, 58, 237, 0.9);
+/* Hide the unnecessary pointer triangles */
+.cl-welcome-text::before,
+.theme-dark .cl-welcome-text::before,
+.theme-ocean .cl-welcome-text::before,
+.theme-aurora .cl-welcome-text::before {
+  display: none;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-/* Remove the triangle pointer as it's causing styling issues */
-.cl-welcome-text::before {
-  display: none;
-}
-
-.theme-dark .cl-welcome-text::before {
-  display: none;
-}
-
-.theme-ocean .cl-welcome-text::before {
-  display: none;
-}
-
-.theme-aurora .cl-welcome-text::before {
-  display: none;
 }
 
 /* Add these styles at an appropriate location in the CSS */
@@ -1258,6 +1227,80 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .theme-aurora .cl-header {
   background-color: #2d1b4b;
+}
+
+/* Message styles */
+.cl-messages {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-message {
+  display: flex;
+  margin-bottom: 12px;
+  max-width: 100%;
+}
+
+.cl-message-content {
+  max-width: 100%;
+}
+
+.cl-message-text {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.cl-bot-message {
+  width: fit-content;
+  max-width: 90%;
+  border-radius: 0.75rem;
+  border-top-left-radius: 0.125rem;
+  background-color: rgb(229 231 235);
+  padding: 0.5rem 1rem;
+  text-align: left;
+  color: rgb(31 41 55);
+}
+
+/* Theme-specific message styling overrides */
+.theme-ocean .cl-bot-message {
+  background-color: rgba(30,30,30,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+.theme-dark .cl-bot-message {
+  background-color: var(--bot-bubble-bg);
+  color: var(--text-color);
+}
+
+.theme-aurora .cl-bot-message {
+  background-color: rgba(30,64,175,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+/* Theme-specific message classes */
+.theme-ocean-message {
+  background-color: rgba(30,30,30,0.8) !important;
+  color: white !important;
+  border-radius: 12px !important;
+}
+
+.theme-dark-message {
+  background-color: #363636 !important;
+  color: white !important;
+}
+
+.theme-aurora-message {
+  background-color: rgba(30,64,175,0.8) !important;
+  color: white !important;
+  border-radius: 12px !important;
+}
+
+.theme-default-message {
+  background-color: rgb(229 231 235) !important;
+  color: rgb(31 41 55) !important;
 }
     `;
 
@@ -2529,6 +2572,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           additional_headers={additional_headers}
           theme={theme}
           welcome_message={welcome_message}
+          show_feedback={show_feedback}
         />
       </div>
     </div>

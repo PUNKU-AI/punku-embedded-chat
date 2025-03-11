@@ -40,7 +40,8 @@ export default function ChatWindow({
   sessionId,
   additional_headers,
   theme = "default",
-  welcome_message
+  welcome_message,
+  show_feedback = false
 }: {
   api_key?: string;
   output_type: string,
@@ -75,6 +76,7 @@ export default function ChatWindow({
   additional_headers?: { [key: string]: string };
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
+  show_feedback?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -253,28 +255,33 @@ export default function ChatWindow({
           </div>
         </div>
         
-        {/* Welcome message - only show if there are no messages yet */}
-        {messages.length === 0 && (
-          <div className="cl-welcome-message">
-            <div className="cl-welcome-text">{displayWelcomeMessage}</div>
-          </div>
-        )}
-
         <div className="cl-messages_container">
+          {/* Welcome message - only show if there are no messages yet */}
+          {messages.length === 0 && (
+            <div className="cl-messages">
+              <div className={`cl-message cl-bot-message theme-${theme}-message`}>
+                <div className="cl-message-content">
+                  <div className="cl-message-text">{displayWelcomeMessage}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {messages.map((message, index) => (
             <ChatMessage
               bot_message_style={bot_message_style}
               user_message_style={user_message_style}
               error_message_style={error_message_style}
               key={index}
-              message={message.message}
               message_id={message.message_id}
+              message={message.message}
               isSend={message.isSend}
               error={message.error}
               feedback={message.feedback}
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}
+              show_feedback={show_feedback}
             />
           ))}
           {sendingMessage && (
