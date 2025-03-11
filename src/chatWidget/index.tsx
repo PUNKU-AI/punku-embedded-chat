@@ -33,6 +33,8 @@ export default function ChatWidget({
   additional_headers,
   session_id,
   start_open=false,
+  theme = "default",
+  welcome_message,
 }: {
   api_key?: string;
   input_value: string,
@@ -63,10 +65,14 @@ export default function ChatWidget({
   additional_headers?: { [key: string]: string };
   session_id?: string;
   start_open?: boolean;
+  theme?: "default" | "dark" | "ocean" | "aurora";
+  welcome_message?: string;
 }) {
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const sessionId = useRef(session_id ?? uuidv4());
+  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   function updateLastMessage(message: ChatMessageType) {
     setMessages((prev) => {
       prev[prev.length - 1] = message;
@@ -76,7 +82,6 @@ export default function ChatWidget({
   function addMessage(message: ChatMessageType) {
     setMessages((prev) => [...prev, message]);
   }
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const styles = `
     /*
@@ -653,26 +658,29 @@ video {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
   sans-serif;
-  position: absolute;
+  position: absolute !important;
+  top: 0 !important;
+  left: 100% !important;
+  margin-left: 10px !important;
   transition-property: all;
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .cl-online-message {
-  height: 0.5rem;
-  width: 0.5rem;
-  border-radius: 9999px;
-  --tw-bg-opacity: 1;
-  background-color: rgb(34 197 94 / var(--tw-bg-opacity));
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  margin-right: 5px;
 }
 
 .cl-offline-message {
-  height: 0.5rem;
-  width: 0.5rem;
-  border-radius: 9999px;
-  --tw-bg-opacity: 1;
-  background-color: rgb(239 68 68 / var(--tw-bg-opacity));
+  width: 8px;
+  height: 8px;
+  background-color: #F44336;
+  border-radius: 50%;
+  margin-right: 5px;
 }
 
 .cl-send-icon {
@@ -696,11 +704,9 @@ video {
 .cl-header-subtitle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 300;
-  color: rgb(107 114 128);
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 2px;
 }
 
 .cl-header {
@@ -720,6 +726,18 @@ video {
   --tw-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   --tw-shadow-colored: 0 0 10px var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+.cl-header-logo {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+}
+
+.cl-header-content {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
 }
 
 .cl-messages_container {
@@ -917,6 +935,329 @@ input:-ms-input-placeholder { /* Internet Explorer 10-11 */
 
 input::-ms-input-placeholder { /* Microsoft Edge */
   color: rgb(156 163 175);
+}
+
+/* Theme: Ocean */
+.theme-ocean .cl-messages_container {
+  background-image: url('https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.theme-ocean .cl-messages_container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  z-index: -1;
+}
+
+.theme-ocean .cl-user_message {
+  background-color: rgba(45,45,124,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+.theme-ocean .cl-bot_message {
+  background-color: rgba(30,30,30,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+.theme-ocean .cl-header {
+  background-color: rgba(30,30,30,0.95);
+  color: #ffffff;
+}
+
+.theme-ocean .cl-header-subtitle {
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0px 1px 2px rgba(0,0,0,0.4);
+}
+
+.theme-ocean .cl-input_container {
+  background-color: rgba(30,30,30,0.95);
+  border-color: rgba(255,255,255,0.1);
+}
+
+.theme-ocean .cl-input-element {
+  background-color: rgba(45,45,124,0.3);
+  color: white;
+}
+
+.theme-ocean .cl-input-element::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+.theme-ocean .cl-trigger {
+  background-color: rgba(30,30,30,0.95);
+}
+
+/* Theme: Dark */
+.theme-dark {
+  --bg-color: #1a1a1a;
+  --header-bg: #242424;
+  --text-color: #ffffff;
+  --input-bg: #2a2a2a;
+  --user-bubble-bg: #2d4b8f;
+  --bot-bubble-bg: #363636;
+  --border-color: #404040;
+  --placeholder-color: rgba(255,255,255,0.6);
+}
+
+.theme-dark .cl-window {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.theme-dark .cl-header {
+  background-color: var(--header-bg);
+  color: var(--text-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-dark .cl-header-subtitle {
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0px 1px 2px rgba(0,0,0,0.3);
+}
+
+.theme-dark .cl-input_container {
+  background-color: var(--header-bg);
+  border-color: var(--border-color);
+}
+
+.theme-dark .cl-input-element {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+}
+
+.theme-dark .cl-input-element::placeholder {
+  color: var(--placeholder-color);
+}
+
+.theme-dark .cl-messages_container {
+  background-color: var(--bg-color);
+}
+
+.theme-dark .cl-user_message {
+  background-color: var(--user-bubble-bg);
+  color: var(--text-color);
+}
+
+.theme-dark .cl-bot_message {
+  background-color: var(--bot-bubble-bg);
+  color: var(--text-color);
+}
+
+.theme-dark .cl-trigger {
+  background-color: var(--header-bg);
+}
+
+/* Theme: Aurora */
+.theme-aurora .cl-window {
+  background-color: #0f172a;
+  color: #ffffff;
+}
+
+.theme-aurora .cl-header {
+  background-color: rgba(15,23,42,0.95);
+  color: #ffffff;
+  background-image: linear-gradient(to right, #7e22ce, #3b82f6);
+}
+
+.theme-aurora .cl-header-subtitle {
+  color: rgba(255,255,255,0.95);
+  font-weight: 500;
+  text-shadow: 0px 1px 3px rgba(0,0,0,0.5);
+}
+
+.theme-aurora .cl-messages_container {
+  background-image: url('https://images.unsplash.com/photo-1531366936337-7c912a4589a7?q=80&w=1000');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.theme-aurora .cl-messages_container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  z-index: -1;
+}
+
+.theme-aurora .cl-user_message {
+  background-color: rgba(124,58,237,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+.theme-aurora .cl-bot_message {
+  background-color: rgba(30,64,175,0.8);
+  color: white;
+  border-radius: 12px;
+}
+
+.theme-aurora .cl-input_container {
+  background-color: rgba(15,23,42,0.95);
+  border-color: rgba(255,255,255,0.1);
+}
+
+.theme-aurora .cl-input-element {
+  background-color: rgba(124,58,237,0.2);
+  color: white;
+}
+
+.theme-aurora .cl-input-element::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+/* Logo colors for themes */
+.theme-dark .cl-header-logo path,
+.theme-ocean .cl-header-logo path,
+.theme-aurora .cl-header-logo path {
+  fill: #ffffff;
+}
+
+/* Theme: Dark */
+.theme-dark .cl-header-logo path {
+  fill: #ffffff;
+}
+
+/* Theme: Ocean */
+.theme-ocean .cl-header-logo path {
+  fill: #ffffff;
+}
+
+/* Theme: Aurora */
+.theme-aurora .cl-header-logo path {
+  fill: #ffffff;
+}
+
+/* Welcome message styles */
+.cl-welcome-message {
+  padding: 16px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.cl-welcome-text {
+  background-color: rgba(37, 99, 235, 0.9);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-top-left-radius: 4px;
+  max-width: 85%;
+  margin-left: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.5s ease-out;
+  position: relative;
+}
+
+/* Theme-specific welcome message styles */
+.theme-dark .cl-welcome-text {
+  background-color: rgba(45, 75, 143, 0.9);
+}
+
+.theme-ocean .cl-welcome-text {
+  background-color: rgba(45, 45, 124, 0.9);
+}
+
+.theme-aurora .cl-welcome-text {
+  background-color: rgba(124, 58, 237, 0.9);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Remove the triangle pointer as it's causing styling issues */
+.cl-welcome-text::before {
+  display: none;
+}
+
+.theme-dark .cl-welcome-text::before {
+  display: none;
+}
+
+.theme-ocean .cl-welcome-text::before {
+  display: none;
+}
+
+.theme-aurora .cl-welcome-text::before {
+  display: none;
+}
+
+/* Add these styles at an appropriate location in the CSS */
+
+.cl-header {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  background-color: #1a1a1a;
+  color: white;
+}
+
+.cl-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.cl-header-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.cl-header-subtitle {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cl-online-message {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10b981;
+}
+
+.cl-offline-message {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #f43f5e;
+}
+
+/* Theme-specific header styles */
+.theme-dark .cl-header {
+  background-color: #1a1a1a;
+}
+
+.theme-ocean .cl-header {
+  background-color: #1e1e3c;
+}
+
+.theme-aurora .cl-header {
+  background-color: #2d1b4b;
 }
     `;
 
@@ -2139,47 +2480,57 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   margin-top: 0 !important;
 }`
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ 
+      position: "fixed", 
+      top: "20px", 
+      left: "20px",
+      transform: "none",
+      zIndex: 9998
+    }}>
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
-      <ChatTrigger
-        triggerRef={triggerRef}
-        open={open}
-        setOpen={setOpen}
-        style={chat_trigger_style}
-      />
-      <ChatWindow
-        api_key={api_key}
-        input_type={input_type}
-        output_type={output_type}
-        output_component={output_component}
-        open={open}
-        height={height}
-        width={width}
-        send_icon_style={send_icon_style}
-        bot_message_style={bot_message_style}
-        user_message_style={user_message_style}
-        chat_window_style={chat_window_style}
-        error_message_style={error_message_style}
-        send_button_style={send_button_style}
-        placeholder={placeholder}
-        input_style={input_style}
-        online={online}
-        online_message={online_message}
-        offline_message={offline_message}
-        placeholder_sending={placeholder_sending}
-        window_title={window_title}
-        input_container_style={input_container_style}
-        tweaks={tweaks}
-        flowId={flow_id}
-        hostUrl={host_url}
-        updateLastMessage={updateLastMessage}
-        addMessage={addMessage}
-        messages={messages}
-        triggerRef={triggerRef}
-        position={chat_position}
-        sessionId={sessionId}
-        additional_headers={additional_headers}
-      />
+      <div style={{ position: "relative" }}>
+        <ChatTrigger 
+          style={chat_trigger_style} 
+          open={open} 
+          setOpen={setOpen} 
+          triggerRef={triggerRef}
+        />
+        <ChatWindow
+          api_key={api_key}
+          hostUrl={host_url}
+          flowId={flow_id}
+          messages={messages}
+          updateLastMessage={updateLastMessage}
+          open={open}
+          triggerRef={triggerRef}
+          addMessage={addMessage}
+          output_type={output_type}
+          input_type={input_type}
+          output_component={output_component}
+          send_icon_style={send_icon_style}
+          bot_message_style={bot_message_style}
+          user_message_style={user_message_style}
+          chat_window_style={chat_window_style}
+          error_message_style={error_message_style}
+          send_button_style={send_button_style}
+          placeholder_sending={placeholder_sending}
+          online={online}
+          online_message={online_message}
+          offline_message={offline_message}
+          window_title={window_title}
+          placeholder={placeholder}
+          input_style={input_style}
+          input_container_style={input_container_style}
+          position="center-right"
+          width={width}
+          height={height}
+          tweaks={tweaks}
+          sessionId={sessionId}
+          additional_headers={additional_headers}
+          theme={theme}
+          welcome_message={welcome_message}
+        />
+      </div>
     </div>
   );
 }

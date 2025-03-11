@@ -14,6 +14,46 @@ The PUNKU.AI Embedded Chat is a powerful web component that enables seamless com
 
 🌐 Multilingual Support: Communicate with users in multiple languages, opening up your application to a global audience.
 
+## Theme Options
+
+The PUNKU.AI Chat Widget supports various visual themes to match your application's design. You can easily customize the appearance by adding the `theme` attribute to your widget.
+
+### Available Themes
+
+| Theme   | Description                                                           |
+|---------|-----------------------------------------------------------------------|
+| default | Standard light theme with clean white background                      |
+| dark    | Dark mode theme with dark backgrounds and light text                  |
+| ocean   | Beautiful ocean background with translucent message bubbles           |
+| aurora  | Northern lights inspired theme with colorful gradient backgrounds     |
+
+### How to Use Themes
+
+Simply add the `theme` attribute to your chat widget:
+
+```html
+<punku-chat
+  theme="ocean"
+  host_url="your-punku-api-url"
+  flow_id="your-flow-id"
+></punku-chat>
+```
+
+### Custom Styling
+
+You can still apply custom styling to themed widgets using the style properties:
+
+```html
+<punku-chat
+  theme="dark"
+  host_url="your-punku-api-url"
+  flow_id="your-flow-id"
+  chat_window_style='{"borderRadius":"16px"}'
+></punku-chat>
+```
+
+Custom styles will be merged with the theme styles, allowing you to override specific properties while keeping the theme's overall look.
+
 ## Usage
 
 ### on simple HTML
@@ -75,8 +115,10 @@ Use the widget API to customize your widget:
 | placeholder_sending   | string    | No       |
 | send_button_style     | json      | No       |
 | send_icon_style       | json      | No       |
+| theme                 | string    | No       |
 | tweaks                | json      | No       |
 | user_message_style    | json      | No       |
+| welcome_message       | string    | No       |
 | width                 | number    | No       |
 | window_title          | string    | No       |
 | session_id            | string    | No       |
@@ -211,3 +253,13 @@ Use the widget API to customize your widget:
   - Type: JSON
   - Required: No
   - Description: Additional headers to be sent to Langflow server
+
+- **theme:**
+  - Type: String
+  - Required: No
+  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", and "aurora".
+
+- **welcome_message:**
+  - Type: String
+  - Required: No
+  - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
