@@ -3,16 +3,30 @@ export function getChatPosition(
 	Cwidth:number,
 	Cheight:number,
 	position?: string,
-): { top: string; left: string;
-	position?: string, } {
+): { 
+	top: string; 
+	left: string;
+	bottom?: string;
+	right?: string;
+	position?: string 
+} {
 	if (!triggerPosition) {
 		return { top: "0px", left: "0px" }; // Return empty string if trigger position is not available
 	}
 
-	const { top, left, width, height } = triggerPosition;
+	// Default to fixed bottom-right of the screen
+	if(!position) {
+		return { 
+			top: "auto", 
+			left: "auto", 
+			position: "bottom-right",
+			bottom: "20px",
+			right: "20px" 
+		};
+	}
 
+	const { top, left, width, height } = triggerPosition;
 	const distance = 5; // Adjust this value to set the desired distance from the trigger
-	if(!position) return { top: distance + height+ "px", left: width + "px" };
 
 	switch (position) {
 		case "top-left":
@@ -29,7 +43,7 @@ export function getChatPosition(
 				left: width + distance + "px",
 			};
 		case "bottom-right":
-			return { top: distance + height+ "px", left: width + "px" };
+			return { top: -Cheight - distance + "px", left: -Cwidth - distance + "px" };
 		case "bottom-center":
 			return {
 				top: distance + height+ "px",
@@ -43,7 +57,7 @@ export function getChatPosition(
 }
 
 export function getAnimationOrigin(position?:string) {
-	if(!position) return "origin-top-left";
+	if(!position) return "origin-bottom-right";
 	switch (position) {
 		case "top-left":
 			return 'origin-bottom-right'

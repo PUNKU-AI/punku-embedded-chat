@@ -660,10 +660,6 @@ video {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
   sans-serif;
-  position: absolute !important;
-  top: 0 !important;
-  left: 100% !important;
-  margin-left: 10px !important;
   transition-property: all;
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -2522,11 +2518,44 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .markdown-body>*:first-child>.heading-element:first-child {
   margin-top: 0 !important;
 }`
+  // Get position styles for the chat trigger based on chat_position prop
+  const getCornerStyle = (position = "bottom-right") => {
+    switch(position) {
+      case "top-left":
+        return { top: "20px", left: "20px", bottom: "auto", right: "auto" };
+      case "top-right": 
+        return { top: "20px", right: "20px", bottom: "auto", left: "auto" };
+      case "bottom-left":
+        return { bottom: "20px", left: "20px", top: "auto", right: "auto" };
+      case "bottom-right":
+      default:
+        return { bottom: "20px", right: "20px", top: "auto", left: "auto" };
+    }
+  };
+
+  // Get chat window offset based on position
+  const getChatWindowOffset = (position = "bottom-right") => {
+    switch(position) {
+      case "top-left":
+        return { top: "70px", left: "20px", bottom: "auto", right: "auto" };
+      case "top-right": 
+        return { top: "70px", right: "20px", bottom: "auto", left: "auto" };
+      case "bottom-left":
+        return { bottom: "70px", left: "20px", top: "auto", right: "auto" };
+      case "bottom-right":
+      default:
+        return { bottom: "70px", right: "20px", top: "auto", left: "auto" };
+    }
+  };
+  
+  const cornerPosition = chat_position || "bottom-right";
+  const triggerStyle = getCornerStyle(cornerPosition);
+  const chatWindowStyle = getChatWindowOffset(cornerPosition);
+
   return (
     <div style={{ 
       position: "fixed", 
-      top: "20px", 
-      left: "20px",
+      ...triggerStyle,
       transform: "none",
       zIndex: 9998
     }}>
@@ -2538,6 +2567,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           setOpen={setOpen} 
           triggerRef={triggerRef}
         />
+      </div>
+      <div style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}>
         <ChatWindow
           api_key={api_key}
           hostUrl={host_url}
@@ -2564,7 +2595,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           placeholder={placeholder}
           input_style={input_style}
           input_container_style={input_container_style}
-          position="center-right"
+          position={cornerPosition}
           width={width}
           height={height}
           tweaks={tweaks}

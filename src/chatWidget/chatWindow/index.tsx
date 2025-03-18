@@ -81,7 +81,12 @@ export default function ChatWindow({
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
-  const [windowPosition, setWindowPosition] = useState({ left: "0", top: "0" });
+  const [windowPosition, setWindowPosition] = useState<{ 
+    left: string; 
+    top: string; 
+    bottom?: string; 
+    right?: string; 
+  }>({ left: "0", top: "0" });
   const inputRef = useRef<HTMLInputElement>(null); /* User input Ref */
   useEffect(() => {
     if (triggerRef)
@@ -205,16 +210,17 @@ export default function ChatWindow({
   return (
     <div
       className={
-        "cl-chat-window " +
-        getAnimationOrigin(position) +
+        "cl-chat-window" +
         (open ? " cl-scale-100" : " cl-scale-0")
       }
       style={{ 
-        position: "absolute", 
-        top: "0", 
-        left: "100%", 
-        marginLeft: "10px",
-        zIndex: 9999 
+        position: "fixed", 
+        bottom: "100px",
+        right: "20px",
+        maxHeight: "70vh",
+        maxWidth: "90vw",
+        transform: "none !important", // Override any transforms with !important
+        zIndex: 9999
       }}
     >
       <div
