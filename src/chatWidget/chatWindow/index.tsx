@@ -204,7 +204,7 @@ export default function ChatWindow({
   const displayTitle = window_title;
   
   // Determine welcome message based on theme
-  const defaultWelcomeMessage = "Hi there! How can I assist you today?";
+  const defaultWelcomeMessage = "Hallo! Wie kann ich Ihnen heute helfen?";
   const displayWelcomeMessage = welcome_message || defaultWelcomeMessage;
 
   return (
