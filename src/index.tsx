@@ -36,5 +36,6 @@ customElements.define('punku-chat', r2wc(ChatWidget, {
         welcome_message: "string",
         show_feedback: "boolean",
         default_language: "string",
+        header_icon: "string",
     },
 }));

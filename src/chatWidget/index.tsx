@@ -38,6 +38,7 @@ export default function ChatWidget({
   welcome_message,
   show_feedback = false,
   default_language = "de",
+  header_icon,
 }: {
   api_key?: string;
   input_value: string,
@@ -72,6 +73,7 @@ export default function ChatWidget({
   welcome_message?: string;
   show_feedback?: boolean;
   default_language?: Language;
+  header_icon?: string;
 }) {
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
@@ -2547,6 +2549,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .cl-language-select option {
   background-color: #2c3e50;
   color: white;
+}
+
+.cl-header-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
 }`
   // Get position styles for the chat trigger based on chat_position prop
   const getCornerStyle = (position = "bottom-right") => {
@@ -2636,6 +2645,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           show_feedback={show_feedback}
           language={language}
           setLanguage={setLanguage}
+          header_icon={header_icon}
         />
       </div>
     </div>

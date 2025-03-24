@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { Send, MessagesSquare } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -45,7 +45,8 @@ export default function ChatWindow({
   welcome_message,
   show_feedback = false,
   language,
-  setLanguage
+  setLanguage,
+  header_icon
 }: {
   api_key?: string;
   output_type: string,
@@ -83,6 +84,7 @@ export default function ChatWindow({
   show_feedback?: boolean;
   language: Language;
   setLanguage: React.Dispatch<React.SetStateAction<Language>>;
+  header_icon?: string;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -238,20 +240,23 @@ export default function ChatWindow({
       >
         <div className="cl-header">
           <div className="cl-header-content">
-            <svg 
-              className="cl-header-logo" 
-              width="24" 
-              height="24" 
-              viewBox="0 0 200 200" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path fillRule="evenodd" clipRule="evenodd" d="M100 200C155.228 200 200 155.228 200 100C200 44.7715 155.228 0 100 0C44.7715 0 0 44.7715 0 100C0 155.228 44.7715 200 100 200ZM100 180C144.183 180 180 144.183 180 100C180 55.8172 144.183 20 100 20C55.8172 20 20 55.8172 20 100C20 144.183 55.8172 180 100 180Z" fill="white"/>
-              <path d="M136.464 63.5355C143.345 70.4168 143.345 81.5832 136.464 88.4645C129.583 95.3457 118.417 95.3457 111.536 88.4645C104.654 81.5832 104.654 70.4168 111.536 63.5355C118.417 56.6543 129.583 56.6543 136.464 63.5355Z" fill="white"/>
-              <path d="M88.4645 111.536C95.3457 118.417 95.3457 129.583 88.4645 136.464C81.5832 143.345 70.4168 143.345 63.5355 136.464C56.6543 129.583 56.6543 118.417 63.5355 111.536C70.4168 104.654 81.5832 104.654 88.4645 111.536Z" fill="white"/>
-              <path d="M63.5355 63.5355C70.4168 56.6543 81.5832 56.6543 88.4645 63.5355C95.3457 70.4168 95.3457 81.5832 88.4645 88.4645C81.5832 95.3457 70.4168 95.3457 63.5355 88.4645C56.6543 81.5832 56.6543 70.4168 63.5355 63.5355Z" fill="white"/>
-              <path d="M136.464 111.536C143.345 118.417 143.345 129.583 136.464 136.464C129.583 143.345 118.417 143.345 111.536 136.464C104.654 129.583 104.654 118.417 111.536 111.536C118.417 104.654 129.583 104.654 136.464 111.536Z" fill="white"/>
-            </svg>
+            {header_icon ? (
+              <img 
+                src={header_icon} 
+                alt="Chat icon" 
+                className="cl-header-logo" 
+                width="24" 
+                height="24"
+              />
+            ) : (
+              <div className="cl-default-header-icon">
+                <MessagesSquare 
+                  className="cl-header-logo" 
+                  color="white" 
+                  size={24}
+                />
+              </div>
+            )}
             {displayTitle}
             <LanguageSwitcher 
               language={language} 
