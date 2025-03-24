@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
+import { Language, translations } from "../translations";
 const { v4: uuidv4 } = require('uuid');
 
 export default function ChatWidget({
@@ -36,6 +37,7 @@ export default function ChatWidget({
   theme = "ocean",
   welcome_message,
   show_feedback = false,
+  default_language = "de",
 }: {
   api_key?: string;
   input_value: string,
@@ -69,9 +71,11 @@ export default function ChatWidget({
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
   show_feedback?: boolean;
+  default_language?: Language;
 }) {
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [language, setLanguage] = useState<Language>(default_language || 'de');
   const sessionId = useRef(session_id ?? uuidv4());
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -2517,6 +2521,32 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .markdown-body>*:first-child>.heading-element:first-child {
   margin-top: 0 !important;
+}
+
+/* Language Switcher Styles */
+.cl-language-switcher {
+  margin-left: auto;
+}
+
+.cl-language-select {
+  background-color: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  color: white;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.2s ease;
+}
+
+.cl-language-select:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+.cl-language-select option {
+  background-color: #2c3e50;
+  color: white;
 }`
   // Get position styles for the chat trigger based on chat_position prop
   const getCornerStyle = (position = "bottom-right") => {
@@ -2604,6 +2634,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           theme={theme}
           welcome_message={welcome_message}
           show_feedback={show_feedback}
+          language={language}
+          setLanguage={setLanguage}
         />
       </div>
     </div>

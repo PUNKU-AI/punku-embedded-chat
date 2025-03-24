@@ -6,6 +6,8 @@ import ChatMessage from "./chatMessage";
 import { sendMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
+import LanguageSwitcher from "../../components/LanguageSwitcher";
+import { Language, translations } from "../../translations";
 
 export default function ChatWindow({
   api_key,
@@ -25,8 +27,8 @@ export default function ChatWindow({
   send_button_style,
   online = true,
   open,
-  online_message = "Powered by PUNKU.AI",
-  offline_message = "Powered by PUNKU.AI",
+  online_message,
+  offline_message,
   window_title = "Chat",
   placeholder,
   input_style,
@@ -41,7 +43,9 @@ export default function ChatWindow({
   additional_headers,
   theme = "default",
   welcome_message,
-  show_feedback = false
+  show_feedback = false,
+  language,
+  setLanguage
 }: {
   api_key?: string;
   output_type: string,
@@ -77,6 +81,8 @@ export default function ChatWindow({
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
   show_feedback?: boolean;
+  language: Language;
+  setLanguage: React.Dispatch<React.SetStateAction<Language>>;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -200,12 +206,14 @@ export default function ChatWindow({
     }, 100);
   }, [messages, open]);
 
-  // Add theme-specific title modifications
-  const displayTitle = window_title;
+  // Get translations based on current language
+  const t = translations[language];
   
-  // Determine welcome message based on theme
-  const defaultWelcomeMessage = "Hallo! Wie kann ich Ihnen heute helfen?";
-  const displayWelcomeMessage = welcome_message || defaultWelcomeMessage;
+  // Add theme-specific title modifications
+  const displayTitle = window_title || t.windowTitle;
+  
+  // Determine welcome message
+  const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
   return (
     <div
@@ -245,17 +253,21 @@ export default function ChatWindow({
               <path d="M136.464 111.536C143.345 118.417 143.345 129.583 136.464 136.464C129.583 143.345 118.417 143.345 111.536 136.464C104.654 129.583 104.654 118.417 111.536 111.536C118.417 104.654 129.583 104.654 136.464 111.536Z" fill="white"/>
             </svg>
             {displayTitle}
+            <LanguageSwitcher 
+              language={language} 
+              onLanguageChange={setLanguage} 
+            />
           </div>
           <div className="cl-header-subtitle">
             {online ? (
               <>
                 <div className="cl-online-message"></div>
-                {online_message}
+                {online_message || t.onlineMessage}
               </>
             ) : (
               <>
                 <div className="cl-offline-message"></div>
-                {offline_message}
+                {offline_message || t.offlineMessage}
               </>
             )}
           </div>
@@ -304,7 +316,7 @@ export default function ChatWindow({
             }}
             type="text"
             disabled={sendingMessage}
-            placeholder={sendingMessage ? (placeholder_sending || "Thinking...") : (placeholder || "Type your message...")}
+            placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
             style={input_style}
             ref={inputRef}
             className="cl-input-element"
