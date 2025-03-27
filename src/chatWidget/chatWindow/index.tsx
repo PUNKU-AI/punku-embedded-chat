@@ -282,6 +282,7 @@ export default function ChatWindow({
             background-color: ${background_color || '#FFFFFF'} !important;
             border-color: transparent !important;
           }
+          /* Send button styling is handled inline */
         `}
       </style>
       
@@ -419,12 +420,33 @@ export default function ChatWindow({
             </style>
           )}
           <button
-            style={send_button_style}
+            className="cl-send-button"
+            style={{
+              // Base styles
+              borderRadius: '50%',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              margin: '8px',
+              cursor: 'pointer',
+              // Always set button color directly if provided
+              backgroundColor: button_color || (send_button_style && send_button_style.backgroundColor) || '#3b82f6',
+              // Apply remaining styles from send_button_style (if any)
+              ...(send_button_style || {})
+            }}
             disabled={sendingMessage}
             onClick={handleClick}
           >
             <Send
-              style={{...send_icon_style, ...(button_text_color ? {stroke: `${button_text_color} !important`} : {})}}
+              style={{
+                width: '18px',
+                height: '18px',
+                stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
+                ...(send_icon_style || {})
+              }}
               className={
                 "cl-send-icon " +
                 (!sendingMessage

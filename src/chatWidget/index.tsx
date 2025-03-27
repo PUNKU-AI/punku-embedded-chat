@@ -638,6 +638,21 @@ video {
   transition-duration: 150ms;
 }
 
+.cl-send-button {
+  background-color: rgb(59 130 246 / var(--tw-bg-opacity));
+  color: rgb(255 255 255 / var(--tw-text-opacity));
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  margin: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
 .cl-trigger:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(29 78 216 / var(--tw-bg-opacity));
@@ -717,6 +732,14 @@ video {
 
 .cl-sending-message {
   stroke: #9ca3af;
+}
+
+.cl-send-button .cl-send-icon {
+  stroke: white;
+}
+
+.cl-send-button:hover {
+  opacity: 0.9;
 }
 
 .cl-header-subtitle {
