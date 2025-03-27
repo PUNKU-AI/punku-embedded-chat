@@ -46,7 +46,14 @@ export default function ChatWindow({
   show_feedback = false,
   language,
   setLanguage,
-  header_icon
+  header_icon,
+  background_color,
+  bot_message_color,
+  user_message_color,
+  button_color,
+  button_text_color,
+  bot_message_text_color,
+  user_message_text_color
 }: {
   api_key?: string;
   output_type: string,
@@ -85,6 +92,13 @@ export default function ChatWindow({
   language: Language;
   setLanguage: React.Dispatch<React.SetStateAction<Language>>;
   header_icon?: string;
+  background_color?: string;
+  bot_message_color?: string;
+  user_message_color?: string;
+  button_color?: string;
+  button_text_color?: string;
+  bot_message_text_color?: string;
+  user_message_text_color?: string;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -233,12 +247,56 @@ export default function ChatWindow({
         zIndex: 9999
       }}
     >
+      {/* Custom style overrides for when custom colors are provided */}
+      <style>
+        {`
+          .cl-window.custom-theme {
+            background-color: ${background_color || '#FFFFFF'} !important;
+            background-image: none !important;
+          }
+          .cl-window.custom-theme * {
+            background-image: none !important;
+          }
+          .cl-window.custom-theme .cl-messages_container {
+            background-color: ${background_color || '#FFFFFF'} !important;
+            background-image: none !important;
+          }
+          .cl-window.custom-theme .cl-bot_message,
+          .cl-window.custom-theme .cl-bot-message {
+            background-color: ${bot_message_color || '#EDEADD'} !important;
+            color: ${bot_message_text_color || '#333333'} !important;
+          }
+          .cl-window.custom-theme .cl-user_message {
+            background-color: ${user_message_color || '#4A90E2'} !important;
+            color: ${user_message_text_color || '#FFFFFF'} !important;
+          }
+          .cl-window.custom-theme .cl-messages_container {
+            background-color: ${background_color || '#FFFFFF'} !important;
+            background-image: none !important;
+          }
+          .cl-window.custom-theme .cl-header {
+            background-color: ${button_color || '#4A90E2'} !important;
+            color: ${button_text_color || '#FFFFFF'} !important;
+          }
+          .cl-window.custom-theme .cl-input_container {
+            background-color: ${background_color || '#FFFFFF'} !important;
+            border-color: transparent !important;
+          }
+        `}
+      </style>
+      
       <div
-        style={{ ...chat_window_style, width, height, minWidth: width }}
+        style={{ 
+          ...chat_window_style, 
+          width, 
+          height, 
+          minWidth: width,
+          ...(background_color ? {backgroundColor: `${background_color} !important`} : {})
+        }}
         ref={ref}
-        className={`cl-window ${theme ? `theme-${theme}` : ""}`}
+        className={`cl-window ${(button_color || background_color || bot_message_color || user_message_color) ? "custom-theme" : (theme ? `theme-${theme}` : "")}`}
       >
-        <div className="cl-header">
+        <div className="cl-header" style={button_color ? {backgroundColor: `${button_color} !important`, color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
           <div className="cl-header-content">
             {header_icon ? (
               <img 
@@ -263,7 +321,7 @@ export default function ChatWindow({
               onLanguageChange={setLanguage} 
             />
           </div>
-          <div className="cl-header-subtitle">
+          <div className="cl-header-subtitle" style={button_color ? {color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
             {online ? (
               <>
                 <div className="cl-online-message"></div>
@@ -278,11 +336,18 @@ export default function ChatWindow({
           </div>
         </div>
         
-        <div className="cl-messages_container">
+        <div className="cl-messages_container" style={background_color ? { backgroundColor: `${background_color} !important` } : undefined}>
           {/* Welcome message - only show if there are no messages yet */}
           {messages.length === 0 && (
             <div className="cl-messages">
-              <div className={`cl-message cl-bot-message theme-${theme}-message`}>
+              <div 
+                className={`cl-message cl-bot_message`} 
+                style={{
+                  ...(bot_message_style || {}),
+                  ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
+                  ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
+                }}
+              >
                 <div className="cl-message-content">
                   <div className="cl-message-text">{displayWelcomeMessage}</div>
                 </div>
@@ -292,8 +357,22 @@ export default function ChatWindow({
           
           {messages.map((message, index) => (
             <ChatMessage
-              bot_message_style={bot_message_style}
-              user_message_style={user_message_style}
+              bot_message_style={
+                bot_message_style || 
+                (bot_message_color || bot_message_text_color ? 
+                  {
+                    ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
+                    ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
+                  } : undefined)
+              }
+              user_message_style={
+                user_message_style || 
+                (user_message_color || user_message_text_color ? 
+                  {
+                    ...(user_message_color ? {backgroundColor: `${user_message_color} !important`} : {}),
+                    ...(user_message_text_color ? {color: `${user_message_text_color} !important`} : {})
+                  } : undefined)
+              }
               error_message_style={error_message_style}
               key={index}
               message_id={message.message_id}
@@ -312,7 +391,7 @@ export default function ChatWindow({
           )}
           <div ref={lastMessage}></div>
         </div>
-        <div style={input_container_style} className="cl-input_container">
+        <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -322,17 +401,30 @@ export default function ChatWindow({
             type="text"
             disabled={sendingMessage}
             placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
-            style={input_style}
+            style={{
+              ...input_style, 
+              ...(button_color ? {
+                backgroundColor: 'rgba(255,255,255,0.1) !important', 
+                color: `${button_text_color || '#FFFFFF'} !important`
+              } : {})
+            }}
             ref={inputRef}
             className="cl-input-element"
           />
+          {button_color && (
+            <style>
+              {`.cl-input-element::placeholder { 
+                color: rgba(255,255,255,0.6) !important; 
+              }`}
+            </style>
+          )}
           <button
             style={send_button_style}
             disabled={sendingMessage}
             onClick={handleClick}
           >
             <Send
-              style={send_icon_style}
+              style={{...send_icon_style, ...(button_text_color ? {stroke: `${button_text_color} !important`} : {})}}
               className={
                 "cl-send-icon " +
                 (!sendingMessage

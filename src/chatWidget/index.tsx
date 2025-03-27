@@ -39,6 +39,13 @@ export default function ChatWidget({
   show_feedback = false,
   default_language = "de",
   header_icon,
+  button_color,
+  button_text_color,
+  background_color,
+  bot_message_color,
+  user_message_color,
+  bot_message_text_color,
+  user_message_text_color,
 }: {
   api_key?: string;
   input_value: string,
@@ -74,6 +81,13 @@ export default function ChatWidget({
   show_feedback?: boolean;
   default_language?: Language;
   header_icon?: string;
+  button_color?: string;
+  button_text_color?: string;
+  background_color?: string;
+  bot_message_color?: string;
+  user_message_color?: string;
+  bot_message_text_color?: string;
+  user_message_text_color?: string;
 }) {
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
@@ -2591,6 +2605,33 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const triggerStyle = getCornerStyle(cornerPosition);
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
 
+  // Create style objects from simple color props if provided
+  const chatTriggerStyleFromProps = button_color || button_text_color ? {
+    ...(chat_trigger_style || {}),
+    ...(button_color ? { backgroundColor: `${button_color}` } : {}),
+    ...(button_text_color ? { color: `${button_text_color}` } : {})
+  } : chat_trigger_style;
+
+  const chatWindowStyleFromProps = background_color ? {
+    ...(chat_window_style || {}),
+    backgroundColor: `${background_color}`
+  } : chat_window_style;
+
+  const botMessageStyleFromProps = bot_message_color || bot_message_text_color ? {
+    ...(bot_message_style || {}),
+    ...(bot_message_color ? { backgroundColor: `${bot_message_color}` } : {}),
+    ...(bot_message_text_color ? { color: `${bot_message_text_color}` } : {})
+  } : bot_message_style;
+
+  const userMessageStyleFromProps = user_message_color || user_message_text_color ? {
+    ...(user_message_style || {}),
+    ...(user_message_color ? { backgroundColor: `${user_message_color}` } : {}),
+    ...(user_message_text_color ? { color: `${user_message_text_color}` } : {})
+  } : user_message_style;
+
+  // Override theme if custom colors are provided
+  const effectiveTheme = (button_color || background_color || bot_message_color || user_message_color) ? "default" : theme;
+
   return (
     <div style={{ 
       position: "fixed", 
@@ -2601,7 +2642,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
       <div style={{ position: "relative" }}>
         <ChatTrigger 
-          style={chat_trigger_style} 
+          style={chatTriggerStyleFromProps} 
           open={open} 
           setOpen={setOpen} 
           triggerRef={triggerRef}
@@ -2620,13 +2661,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           output_type={output_type}
           input_type={input_type}
           output_component={output_component}
+          bot_message_style={botMessageStyleFromProps}
+          user_message_style={userMessageStyleFromProps}
+          chat_window_style={chatWindowStyleFromProps}
           send_icon_style={send_icon_style}
-          bot_message_style={bot_message_style}
-          user_message_style={user_message_style}
-          chat_window_style={chat_window_style}
           error_message_style={error_message_style}
-          send_button_style={send_button_style}
           placeholder_sending={placeholder_sending}
+          send_button_style={send_button_style}
           online={online}
           online_message={online_message}
           offline_message={offline_message}
@@ -2640,12 +2681,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           tweaks={tweaks}
           sessionId={sessionId}
           additional_headers={additional_headers}
-          theme={theme}
+          theme={effectiveTheme}
           welcome_message={welcome_message}
           show_feedback={show_feedback}
           language={language}
           setLanguage={setLanguage}
           header_icon={header_icon}
+          bot_message_text_color={bot_message_text_color}
+          user_message_text_color={user_message_text_color}
         />
       </div>
     </div>

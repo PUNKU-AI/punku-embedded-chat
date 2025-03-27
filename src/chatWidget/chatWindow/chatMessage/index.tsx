@@ -122,7 +122,12 @@ export default function ChatMessage({
       }
     >
       {isSend ? (
-        <div style={user_message_style} className="cl-user_message">
+        <div 
+          style={{
+            ...(user_message_style || {}),
+          }} 
+          className="cl-user_message"
+        >
           {parsedMessage}
         </div>
       ) : error ? (
@@ -130,7 +135,12 @@ export default function ChatMessage({
           {parsedMessage}
         </div>
       ) : (
-        <div style={bot_message_style} className={"cl-bot_message"}>
+        <div 
+          style={{
+            ...(bot_message_style || {}),
+          }} 
+          className={"cl-bot_message"}
+        >
           <Markdown 
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}

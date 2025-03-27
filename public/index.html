@@ -3,13 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Punku Chat Widget Demo</title>
 </head>
-<body style="width: 100vh; height: 100vh; ">
-        <punku-chat window_title="Langflow Chat" 
+<body style="width: 100vh; height: 100vh; background-color: #f5f5f5;">
+    <h1>Punku Chat Widget with Custom Colors</h1>
+    <p>This demonstrates the chat widget with customized colors.</p>
+    
+    <punku-chat 
+        window_title="Customized Chat" 
         flow_id="be1e92a7-b194-4b03-a36e-a95c94995bcc"
         host_url="http://localhost:7860"
         width="700"
-        ></punku-chat>
+        button_color="#9A8747"
+        button_text_color="#FFFFFF"
+        background_color="#F9F6EA"
+        bot_message_color="#EDEADD"
+        user_message_color="#9A8747"
+        theme=""
+    ></punku-chat>
 </body>
 </html>

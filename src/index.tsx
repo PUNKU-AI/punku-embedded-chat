@@ -37,5 +37,12 @@ customElements.define('punku-chat', r2wc(ChatWidget, {
         show_feedback: "boolean",
         default_language: "string",
         header_icon: "string",
+        button_color: "string",
+        button_text_color: "string",
+        background_color: "string",
+        bot_message_color: "string",
+        user_message_color: "string",
+        user_message_text_color: "string",
+        bot_message_text_color: "string",
     },
 }));

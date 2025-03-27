@@ -1,8 +1,27 @@
 import { MessageSquare, X } from "lucide-react"
-export default function ChatTrigger({ style, open, setOpen, triggerRef }: { style?: React.CSSProperties, open: boolean, setOpen: Function, triggerRef: React.RefObject<HTMLButtonElement> | null }) {
+export default function ChatTrigger({ 
+    style, 
+    open, 
+    setOpen, 
+    triggerRef,
+    buttonColor,
+    buttonTextColor
+}: { 
+    style?: React.CSSProperties, 
+    open: boolean, 
+    setOpen: Function, 
+    triggerRef: React.RefObject<HTMLButtonElement> | null,
+    buttonColor?: string,
+    buttonTextColor?: string
+}) {
+    const customStyles = {
+        ...style,
+        ...(buttonColor && { backgroundColor: `${buttonColor} !important` }),
+        ...(buttonTextColor && { color: `${buttonTextColor} !important` })
+    };
 
     return (
-        <button ref={triggerRef} style={style}
+        <button ref={triggerRef} style={customStyles}
             onClick={() => { setOpen(!open) }}
             onMouseDown={(e) => {
                 e.preventDefault()

@@ -54,6 +54,46 @@ You can still apply custom styling to themed widgets using the style properties:
 
 Custom styles will be merged with the theme styles, allowing you to override specific properties while keeping the theme's overall look.
 
+## Color Customization
+
+The chat widget provides simple color properties for easy customization of the interface:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| button_color | string | Background color of the chat trigger button (hex code) |
+| button_text_color | string | Text color of the chat trigger button (hex code) |
+| background_color | string | Background color of the chat window (hex code) |
+| bot_message_color | string | Background color of bot message bubbles (hex code) |
+| bot_message_text_color | string | Text color of bot messages (hex code) |
+| user_message_color | string | Background color of user message bubbles (hex code) |
+| user_message_text_color | string | Text color of user messages (hex code) |
+
+These simple properties make it easy for non-technical users to customize the appearance:
+
+```html
+<punku-chat
+  button_color="#9A8747"
+  button_text_color="#FFFFFF"
+  background_color="#F9F6EA"
+  bot_message_color="#EDEADD"
+  bot_message_text_color="#333333"
+  user_message_color="#9A8747"
+  user_message_text_color="#FFFFFF"
+  welcome_message="Hello! How can I help you today?"
+></punku-chat>
+```
+
+For more advanced customization, you can still use the style properties:
+
+```html
+<punku-chat
+  chat_trigger_style='{"backgroundColor":"#9A8747","color":"#FFFFFF"}'
+  chat_window_style='{"backgroundColor":"#F9F6EA"}'
+  bot_message_style='{"backgroundColor":"#EDEADD","color":"#333333"}'
+  user_message_style='{"backgroundColor":"#9A8747","color":"#FFFFFF"}'
+></punku-chat>
+```
+
 ## Usage
 
 ### on simple HTML
@@ -95,7 +135,12 @@ Use the widget API to customize your widget:
 
 | Prop                  | Type      | Required |
 |-----------------------|-----------|----------|
+| background_color      | string    | No       |
+| bot_message_color     | string    | No       |
 | bot_message_style     | json      | No       |
+| bot_message_text_color| string    | No       |
+| button_color          | string    | No       |
+| button_text_color     | string    | No       |
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
@@ -104,6 +149,7 @@ Use the widget API to customize your widget:
 | output_component      | string    | No       |
 | error_message_style   | json      | No       |
 | flow_id               | string    | Yes      |
+| header_icon           | string    | No       |
 | height                | number    | No       |
 | host_url              | string    | Yes      |
 | input_container_style | json      | No       |
@@ -117,7 +163,9 @@ Use the widget API to customize your widget:
 | send_icon_style       | json      | No       |
 | theme                 | string    | No       |
 | tweaks                | json      | No       |
+| user_message_color    | string    | No       |
 | user_message_style    | json      | No       |
+| user_message_text_color| string   | No       |
 | welcome_message       | string    | No       |
 | width                 | number    | No       |
 | window_title          | string    | No       |
@@ -125,10 +173,35 @@ Use the widget API to customize your widget:
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
 
+- **background_color:**
+  - Type: String
+  - Required: No
+  - Description: Background color of the chat window (hex code).
+
+- **bot_message_color:**
+  - Type: String
+  - Required: No
+  - Description: Background color of bot message bubbles (hex code).
+
 - **bot_message_style:**
   - Type: JSON
   - Required: No
   - Description: Styling options for formatting bot messages in the chat window.
+
+- **bot_message_text_color:**
+  - Type: String
+  - Required: No
+  - Description: Text color of bot messages (hex code).
+
+- **button_color:**
+  - Type: String
+  - Required: No
+  - Description: Background color of the chat trigger button (hex code).
+
+- **button_text_color:**
+  - Type: String
+  - Required: No
+  - Description: Text color of the chat trigger button (hex code).
 
 - **input_type:**
   - Type: String
@@ -174,6 +247,11 @@ Use the widget API to customize your widget:
   - Type: Number
   - Required: No
   - Description: Specifies the height of the chat window in pixels.
+
+- **header_icon:**
+  - Type: String
+  - Required: No
+  - Description: URL of a custom icon to display in the chat window header.
 
 - **host_url:**
   - Type: String
@@ -235,10 +313,20 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: Additional custom tweaks for the associated flow.
 
+- **user_message_color:**
+  - Type: String
+  - Required: No
+  - Description: Background color of user message bubbles (hex code).
+
 - **user_message_style:**
   - Type: JSON
   - Required: No
   - Description: Styling options for formatting user messages in the chat window.
+
+- **user_message_text_color:**
+  - Type: String
+  - Required: No
+  - Description: Text color of user messages (hex code).
 
 - **welcome_message:**
   - Type: String
