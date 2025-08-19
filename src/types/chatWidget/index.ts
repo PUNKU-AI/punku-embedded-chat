@@ -7,6 +7,7 @@ export type ChatMessageType = {
     error_message_style?: React.CSSProperties;
     feedback?: string;
     message_id?: string;
+    streaming?: boolean;
   };
 
 

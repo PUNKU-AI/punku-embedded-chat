@@ -3,7 +3,7 @@ import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from ".
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
-import { sendMessage } from "../../controllers";
+import { sendMessage, streamMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import LanguageSwitcher from "../../components/LanguageSwitcher";
@@ -53,7 +53,8 @@ export default function ChatWindow({
   button_color,
   button_text_color,
   bot_message_text_color,
-  user_message_text_color
+  user_message_text_color,
+  enable_streaming = false
 }: {
   api_key?: string;
   output_type: string,
@@ -99,6 +100,7 @@ export default function ChatWindow({
   button_text_color?: string;
   bot_message_text_color?: string;
   user_message_text_color?: string;
+  enable_streaming?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -125,86 +127,176 @@ export default function ChatWindow({
   /* Initial listener for loss of focus that refocuses User input after a small delay */
 
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   function handleClick() {
     if (value && value.trim() !== "") {
       addMessage({ message: value, isSend: true });
       setSendingMessage(true);
       setValue("");
-      sendMessage(hostUrl, flowId, value, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
-        .then((res) => {
-          if (
-            res.data &&
-            res.data.outputs &&
-            Object.keys(res.data.outputs).length > 0 &&
-            res.data.outputs[0].outputs && res.data.outputs[0].outputs.length > 0
-          ) {
-            const flowOutputs: Array<any> = res.data.outputs[0].outputs;
-            if (output_component &&
-              flowOutputs.map(e => e.component_id).includes(output_component)) {
-              Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: output.id || output.component_id,
-                  isSend: false,
-                });
-              })
-            } else if (
-              flowOutputs.length === 1
+  
+      if (!enable_streaming) {
+        sendMessage(hostUrl, flowId, value, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
+          .then((res) => {
+            if (
+              res.data &&
+              res.data.outputs &&
+              Object.keys(res.data.outputs).length > 0 &&
+              res.data.outputs[0].outputs && res.data.outputs[0].outputs.length > 0
             ) {
-              Object.values(flowOutputs[0].outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: output.id || output.component_id,
-                  isSend: false,
-                });
-              })
-            } else {
-              flowOutputs
-              .sort((a, b) => {
-                // Get the earliest timestamp from each flowOutput's outputs
-                const aTimestamp = Math.min(...Object.values(a.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                const bTimestamp = Math.min(...Object.values(b.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                return aTimestamp - bTimestamp; // Sort descending (newest first)
-              })
-              .forEach((flowOutput) => {
-                Object.values(flowOutput.outputs).forEach((output: any) => {
+              const flowOutputs: Array<any> = res.data.outputs[0].outputs;
+              if (output_component &&
+                flowOutputs.map(e => e.component_id).includes(output_component)) {
+                Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
                   addMessage({
                     message: extractMessageFromOutput(output),
+                    message_id: output.id || output.component_id,
                     isSend: false,
                   });
+                })
+              } else if (
+                flowOutputs.length === 1
+              ) {
+                Object.values(flowOutputs[0].outputs).forEach((output: any) => {
+                  addMessage({
+                    message: extractMessageFromOutput(output),
+                    message_id: flowOutputs[0].results.message.data.id,
+                    isSend: false,
+                  });
+                })
+              } else {
+                flowOutputs
+                .sort((a, b) => {
+                  const aTimestamp = Math.min(...Object.values(a.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
+                  const bTimestamp = Math.min(...Object.values(b.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
+                  return aTimestamp - bTimestamp;
+                })
+                .forEach((flowOutput) => {
+                  Object.values(flowOutput.outputs).forEach((output: any) => {
+                    addMessage({
+                      message: extractMessageFromOutput(output),
+                      isSend: false,
+                    });
+                  });
                 });
+              }
+            }
+            if (res.data && res.data.session_id) {
+              sessionId.current = res.data.session_id;
+            }
+            setSendingMessage(false);
+          })
+          .catch((err) => {
+            const response = err.response;
+            if (err.code === "ERR_NETWORK") {
+              updateLastMessage({
+                message: "Network error",
+                isSend: false,
+                error: true,
+              });
+            } else if (
+              response &&
+              response.status === 500 &&
+              response.data &&
+              response.data.detail
+            ) {
+              updateLastMessage({
+                message: response.data.detail,
+                isSend: false,
+                error: true,
               });
             }
-          }
-          if (res.data && res.data.session_id) {
-            sessionId.current = res.data.session_id;
-          }
-          setSendingMessage(false);
-        })
-        .catch((err) => {
-          const response = err.response;
-          if (err.code === "ERR_NETWORK") {
+            console.error(err);
+            setSendingMessage(false);
+          });
+      } else {
+        // Streaming version
+        let currentMessageId: string | null = null;
+        let message_to_add = "";
+        
+        streamMessage(
+          hostUrl, 
+          flowId, 
+          value, 
+          input_type, 
+          output_type, 
+          sessionId, 
+          output_component, 
+          tweaks, 
+          api_key, 
+          additional_headers,
+          (data) => {
+            // Handle streaming data as it arrives
+            if (data.event === 'add_message' && data.data.sender==="Machine") {
+              // console.log('Data from :', data.data.sender);
+              // console.log('Streaming text:', data.data.text);
+              const new_message = data.data.text;
+              if (new_message) {
+                setIsStreaming(true);
+                message_to_add = new_message;
+                if (currentMessageId) {
+                  updateLastMessage({
+                    message: message_to_add,
+                    message_id: currentMessageId,
+                    isSend: false,
+                    streaming: true
+                  });
+                } else {
+                  currentMessageId = data.data.id;
+                  addMessage({
+                    message: message_to_add,
+                    message_id: currentMessageId,
+                    isSend: false,
+                    streaming: true
+                  });
+                }
+              }
+            } else if (data.event === 'end') {
+              // Final result - might contain session_id or final data
+              if (data.session_id) {
+                sessionId.current = data.data.session_id;
+              }
+              
+              // Mark message as complete (remove streaming flag)
+              if (currentMessageId) {
+                updateLastMessage({
+                  message: message_to_add,
+                  message_id: currentMessageId,
+                  isSend: false,
+                  streaming: false // Mark as complete
+                });
+              }
+            }
+          },
+          () => {
+            // Stream ended
+            // console.log('Stream completed');
+            setSendingMessage(false);
+            setIsStreaming(false);
+            
+            // Ensure final message is marked as complete
+            if (currentMessageId) {
+              updateLastMessage({
+                message: message_to_add,
+                message_id: currentMessageId,
+                isSend: false,
+                streaming: false
+              });
+            }
+          },
+          (error) => {
+            // Stream error
+            console.error('Streaming error:', error);
+            setSendingMessage(false);
+            
             updateLastMessage({
-              message: "Network error",
+              message: error.message || "Streaming error occurred",
               isSend: false,
               error: true,
             });
-          } else if (
-            response &&
-            response.status === 500 &&
-            response.data &&
-            response.data.detail
-          ) {
-            updateLastMessage({
-              message: response.data.detail,
-              isSend: false,
-              error: true,
-            });
           }
-          console.error(err);
-          setSendingMessage(false);
-        });
+        );
+      }
     }
   }
 
@@ -380,14 +472,12 @@ export default function ChatWindow({
               message={message.message}
               isSend={message.isSend}
               error={message.error}
-              feedback={message.feedback}
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}
-              show_feedback={show_feedback}
             />
           ))}
-          {sendingMessage && (
+          {sendingMessage && !isStreaming && (
             <ChatMessagePlaceholder bot_message_style={bot_message_style} />
           )}
           <div ref={lastMessage}></div>

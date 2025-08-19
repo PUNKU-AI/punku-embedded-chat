@@ -82,36 +82,39 @@ export default function ChatMessage({
   user_message_style,
   bot_message_style,
   error_message_style,
-  feedback,
   api_key,
   additional_headers,
   host_url,
-  show_feedback = false
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
-  show_feedback?: boolean;
 }) {
-  const [currentFeedback, setCurrentFeedback] = useState(feedback);
-
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
 
-  const handleFeedback = async (newFeedback: string) => {
-    if (!parsedMessage || isSend) return;
+  const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(null);
+
+  const handleFeedback = async (type: 'thumbsUp' | 'thumbsDown') => {
+    setSelectedFeedback(type);
     
-    try {
-      await sendFeedback(
-        host_url,
-        parsedMessage,
-        newFeedback,
-        api_key,
-        additional_headers
-      );
-      setCurrentFeedback(newFeedback);
-    } catch (error) {
-      console.error("Error sending feedback:", error);
+    // Only send feedback for AI messages (not user messages)
+    if (!isSend && message_id && host_url) {
+      try {
+        const feedbackValue = type === 'thumbsUp' ? 'positive' : 'negative';
+        await sendFeedback(
+          host_url,
+          message_id,
+          feedbackValue,
+          api_key,
+          additional_headers
+        );
+        console.log(`Feedback sent: ${feedbackValue} (positive_feedback: ${type === 'thumbsUp' ? 'true' : 'false'})`);
+      } catch (error) {
+        console.error("Error sending feedback:", error);
+        // Optionally revert the selection if feedback fails
+        setSelectedFeedback(null);
+      }
     }
   };
 
@@ -148,52 +151,82 @@ export default function ChatMessage({
           >
             {parsedMessage}
           </Markdown>
-          {show_feedback && !currentFeedback && !isSend && (
-            <div className="feedback-buttons">
-              <button 
-                className="feedback-button" 
-                onClick={() => handleFeedback("Good Response")}
-                aria-label="Like"
-              >
-                <ThumbsUp size={18} />
-              </button>
-              <button 
-                className="feedback-button" 
-                onClick={() => handleFeedback("Bad Response")}
-                aria-label="Dislike"
-              >
-                <ThumbsDown size={18} />
-              </button>
-            </div>
-          )}
-          {show_feedback && currentFeedback && (
-            <div className="feedback-response">
-              {currentFeedback === "Good Response" ? "👍" : "👎"} Thank you for your feedback!
+          
+          {/* Simple thumbs up/down feedback */}
+          {!isSend && !error && (
+            <div className="feedback-container">
+              <div className="feedback-buttons">
+                <button 
+                  className={`feedback-button thumbs-up ${selectedFeedback === 'thumbsUp' ? 'selected' : ''}`}
+                  onClick={() => handleFeedback('thumbsUp')}
+                  aria-label="Thumbs up"
+                  title="Thumbs up"
+                >
+                  <ThumbsUp size={16} />
+                </button>
+                <button 
+                  className={`feedback-button thumbs-down ${selectedFeedback === 'thumbsDown' ? 'selected' : ''}`}
+                  onClick={() => handleFeedback('thumbsDown')}
+                  aria-label="Thumbs down"
+                  title="Thumbs down"
+                >
+                  <ThumbsDown size={16} />
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
       <style>{`
-        .feedback-buttons {
+        .feedback-container {
+          margin-top: 8px;
           display: flex;
           justify-content: flex-end;
-          margin-top: 8px;
-          gap: 8px;
         }
+        
+        .feedback-buttons {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+        
         .feedback-button {
           padding: 4px;
           border: none;
-          background-color: transparent;
+          background: none;
           cursor: pointer;
-          color: #6b7280;
-          border-radius: 4px;
+          color: #9ca3af;
           display: flex;
           align-items: center;
-          transition: all 0.2s;
+          justify-content: center;
+          transition: color 0.2s ease;
+          opacity: 0.7;
         }
+        
         .feedback-button:hover {
-          color: #3b82f6;
-          background-color: rgba(59, 130, 246, 0.1);
+          opacity: 1;
+        }
+        
+        .feedback-button.thumbs-up:hover {
+          color: #10b981;
+        }
+        
+        .feedback-button.thumbs-down:hover {
+          color: #ef4444;
+        }
+        
+        .feedback-button.thumbs-up.selected {
+          color: #10b981;
+          outline: 2px solid #10b981;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+        
+        .feedback-button.thumbs-down.selected {
+          color: #ef4444;
+          outline: 2px solid #ef4444;
+          outline-offset: 2px;
+          border-radius: 4px;
         }
       `}</style>
     </div>

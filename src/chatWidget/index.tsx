@@ -717,7 +717,7 @@ video {
 }
 
 .cl-send-icon {
-  margin-right: 1.25rem;
+  margin: 0;
   height: 1.5rem;
   width: 1.5rem;
 }
@@ -2712,6 +2712,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           header_icon={header_icon}
           bot_message_text_color={bot_message_text_color}
           user_message_text_color={user_message_text_color}
+          enable_streaming={true}
         />
       </div>
     </div>
