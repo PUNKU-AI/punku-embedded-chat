@@ -3,6 +3,8 @@ import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { Language, translations } from "../translations";
+import { useEffect } from "react";
+
 const { v4: uuidv4 } = require('uuid');
 
 export default function ChatWidget({
@@ -46,6 +48,7 @@ export default function ChatWidget({
   user_message_color,
   bot_message_text_color,
   user_message_text_color,
+  widget_id = "punku-chat-widget",
 }: {
   api_key?: string;
   input_value: string,
@@ -88,7 +91,9 @@ export default function ChatWidget({
   user_message_color?: string;
   bot_message_text_color?: string;
   user_message_text_color?: string;
+  widget_id?: string;
 }) {
+  console.log("session_id", session_id);
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [language, setLanguage] = useState<Language>(default_language || 'de');
@@ -104,6 +109,27 @@ export default function ChatWidget({
   function addMessage(message: ChatMessageType) {
     setMessages((prev) => [...prev, message]);
   }
+
+  // Programmatic control functions
+  const openWidget = () => setOpen(true);
+  const closeWidget = () => setOpen(false);
+
+  // Expose widget control methods globally
+  useEffect(() => {
+    const globalWidgetId = widget_id || "punku-chat-widget";
+    
+    // Create global API object
+    (window as any)[`${globalWidgetId}_api`] = {
+      open: openWidget,
+      close: closeWidget,
+      isOpen: () => open,
+    };
+
+    // Cleanup function
+    return () => {
+      delete (window as any)[`${globalWidgetId}_api`];
+    };
+  }, [open, widget_id]);
 
   const styles = `
     /*

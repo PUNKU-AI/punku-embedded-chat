@@ -11,15 +11,116 @@
     
     <punku-chat 
         window_title="Customized Chat" 
-        flow_id="be1e92a7-b194-4b03-a36e-a95c94995bcc"
+        flow_id="8c4fa1c8-4222-417a-9c1f-7c03de4f8c26"
         host_url="http://localhost:7860"
-        width="700"
         button_color="#9A8747"
         button_text_color="#FFFFFF"
         background_color="#F9F6EA"
         bot_message_color="#EDEADD"
         user_message_color="#9A8747"
         theme=""
+        api_key="sk-Zp3fM6anGBPOlS4p_l8H2GE5tdAhvmRxOsH46nAsJOk"
+        start_open="true"
     ></punku-chat>
+    <!-- <punku-chat
+        window_title="Vector Store RAG"
+        flow_id="8c4fa1c8-4222-417a-9c1f-7c03de4f8c26"
+        host_url="http://localhost:3000"
+        api_key="sk-Zp3fM6anGBPOlS4p_l8H2GE5tdAhvmRxOsH46nAsJOk">
+    </punku-chat> -->
+    
+    <script>
+        // Wait for the widget to load
+        function waitForWidget() {
+            return new Promise((resolve) => {
+                const checkWidget = () => {
+                    if (window['punku-chat-widget_api']) {
+                        resolve(window['punku-chat-widget_api']);
+                    } else {
+                        setTimeout(checkWidget, 100);
+                    }
+                };
+                checkWidget();
+            });
+        }
+        
+        // Update status display
+        function updateStatus(message) {
+            const statusDiv = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            if (statusDiv) {
+                statusDiv.innerHTML = `[${timestamp}] ${message}`;
+            } else {
+                console.log(`[${timestamp}] ${message}`);
+            }
+        }
+        
+        // Programmatic control functions
+        async function openChat() {
+            try {
+                const widget = await waitForWidget();
+                widget.open();
+                updateStatus('✅ Chat opened programmatically');
+            } catch (error) {
+                updateStatus('❌ Error opening chat: ' + error.message);
+            }
+        }
+        
+        async function closeChat() {
+            try {
+                const widget = await waitForWidget();
+                widget.close();
+                updateStatus('✅ Chat closed programmatically');
+            } catch (error) {
+                updateStatus('❌ Error closing chat: ' + error.message);
+            }
+        }
+        
+        async function checkStatus() {
+            try {
+                const widget = await waitForWidget();
+                const isOpen = widget.isOpen();
+                updateStatus(`📊 Status - Open: ${isOpen}`);
+            } catch (error) {
+                updateStatus('❌ Error checking status: ' + error.message);
+            }
+        }
+        
+        // Auto-test when page loads
+        window.addEventListener('load', async function() {
+            updateStatus('🚀 Page loaded - testing widget connection...');
+            
+            try {
+                const widget = await waitForWidget();
+                updateStatus('✅ Widget API loaded successfully! Ready to test programmatic control.');
+
+                checkStatus();
+                
+                // Test sequence: Open -> Wait -> Close -> Wait -> Open again
+                setTimeout(() => {
+                    updateStatus('🔄 Auto-opening chat in 2 seconds...');
+                }, 1000);
+                
+                setTimeout(() => {
+                    widget.open();
+                    updateStatus('✅ Auto-opened chat successfully!');
+                }, 3000);
+                
+                // Close after 5 seconds
+                setTimeout(() => {
+                    updateStatus('🔄 Auto-closing chat in 2 seconds...');
+                }, 5000);
+                
+                setTimeout(() => {
+                    widget.close();
+                    updateStatus('✅ Auto-closed chat successfully!');
+                }, 7000);
+                
+            } catch (error) {
+                updateStatus('❌ Error loading widget API: ' + error.message);
+            }
+        });
+        
+    </script>
 </body>
 </html>

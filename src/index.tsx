@@ -44,5 +44,6 @@ customElements.define('punku-chat', r2wc(ChatWidget, {
         user_message_color: "string",
         user_message_text_color: "string",
         bot_message_text_color: "string",
+        widget_id: "string",
     },
 }));
