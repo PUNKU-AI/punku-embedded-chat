@@ -93,7 +93,6 @@ export default function ChatWidget({
   user_message_text_color?: string;
   widget_id?: string;
 }) {
-  console.log("session_id", session_id);
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [language, setLanguage] = useState<Language>(default_language || 'de');

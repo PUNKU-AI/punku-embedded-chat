@@ -251,10 +251,10 @@ export default function ChatWindow({
                   });
                 }
               }
-            } else if (data.event === 'end') {
+            } else if (data.event === "end") {
               // Final result - might contain session_id or final data
-              if (data.session_id) {
-                sessionId.current = data.data.session_id;
+              if (data.data.result.session_id) {
+                sessionId.current = data.data.result.session_id;
               }
               
               // Mark message as complete (remove streaming flag)
