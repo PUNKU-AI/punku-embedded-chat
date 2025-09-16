@@ -1,4 +1,4 @@
-import { Send, MessagesSquare } from "lucide-react";
+import { Send, MessagesSquare, RefreshCw } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -54,7 +54,8 @@ export default function ChatWindow({
   button_text_color,
   bot_message_text_color,
   user_message_text_color,
-  enable_streaming = false
+  enable_streaming = true,
+  onStartNewSession
 }: {
   api_key?: string;
   output_type: string,
@@ -101,6 +102,7 @@ export default function ChatWindow({
   bot_message_text_color?: string;
   user_message_text_color?: string;
   enable_streaming?: boolean;
+  onStartNewSession?: () => void;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -409,10 +411,40 @@ export default function ChatWindow({
               </div>
             )}
             {displayTitle}
-            <LanguageSwitcher 
-              language={language} 
-              onLanguageChange={setLanguage} 
+            <LanguageSwitcher
+              language={language}
+              onLanguageChange={setLanguage}
             />
+            {onStartNewSession && (
+              <button
+                onClick={onStartNewSession}
+                className="cl-new-session-btn"
+                title="Start new conversation"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: '8px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <RefreshCw
+                  size={16}
+                  color={button_text_color || 'white'}
+                />
+              </button>
+            )}
           </div>
           <div className="cl-header-subtitle" style={button_color ? {color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
             {online ? (

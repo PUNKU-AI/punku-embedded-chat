@@ -2,10 +2,9 @@ import { useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
-import { Language, translations } from "../translations";
+import { Language } from "../translations";
 import { useEffect } from "react";
-
-const { v4: uuidv4 } = require('uuid');
+import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 
 export default function ChatWidget({
   api_key,
@@ -35,7 +34,7 @@ export default function ChatWidget({
   input_container_style,
   additional_headers,
   session_id,
-  start_open=false,
+  start_open = false,
   theme = "ocean",
   welcome_message,
   show_feedback = false,
@@ -49,6 +48,8 @@ export default function ChatWidget({
   bot_message_text_color,
   user_message_text_color,
   widget_id = "punku-chat-widget",
+  session_expiry_days = 0.0007,
+  idle_expiry_days = 0.00012,
 }: {
   api_key?: string;
   input_value: string,
@@ -92,11 +93,21 @@ export default function ChatWidget({
   bot_message_text_color?: string;
   user_message_text_color?: string;
   widget_id?: string;
+  session_expiry_days?: number;
+  idle_expiry_days?: number;
 }) {
+  // Initialize session with persistence
+  const sessionConfig: SessionConfig = {
+    expiryDays: session_expiry_days,
+    idleExpiryDays: idle_expiry_days
+  };
+
+  const sessionData = SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig);
+
   const [open, setOpen] = useState(start_open);
-  const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [language, setLanguage] = useState<Language>(default_language || 'de');
-  const sessionId = useRef(session_id ?? uuidv4());
+  const sessionId = useRef(sessionData.sessionId);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   function updateLastMessage(message: ChatMessageType) {
@@ -129,6 +140,26 @@ export default function ChatWidget({
       delete (window as any)[`${globalWidgetId}_api`];
     };
   }, [open, widget_id]);
+
+  // Auto-save messages to localStorage whenever they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      SessionStorage.updateMessages(flow_id, messages);
+    }
+  }, [messages, flow_id]);
+
+  // Function to start a new session
+  const startNewSession = () => {
+    // Clear current session
+    SessionStorage.clearSession(flow_id);
+
+    // Create new session
+    const newSessionData = SessionStorage.getOrCreateSession(flow_id, undefined, sessionConfig);
+
+    // Update component state
+    sessionId.current = newSessionData.sessionId;
+    setMessages([]);
+  };
 
   const styles = `
     /*
@@ -2738,6 +2769,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           bot_message_text_color={bot_message_text_color}
           user_message_text_color={user_message_text_color}
           enable_streaming={true}
+          onStartNewSession={startNewSession}
         />
       </div>
     </div>
