@@ -48,8 +48,7 @@ export default function ChatWidget({
   bot_message_text_color,
   user_message_text_color,
   widget_id = "punku-chat-widget",
-  session_expiry_days = 0.0007,
-  idle_expiry_days = 0.00012,
+  extend_hours = 0.0028,
 }: {
   api_key?: string;
   input_value: string,
@@ -93,13 +92,11 @@ export default function ChatWidget({
   bot_message_text_color?: string;
   user_message_text_color?: string;
   widget_id?: string;
-  session_expiry_days?: number;
-  idle_expiry_days?: number;
+  extend_hours?: number;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
-    expiryDays: session_expiry_days,
-    idleExpiryDays: idle_expiry_days
+    extendHours: extend_hours
   };
 
   const sessionData = SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig);
@@ -144,9 +141,9 @@ export default function ChatWidget({
   // Auto-save messages to localStorage whenever they change
   useEffect(() => {
     if (messages.length > 0) {
-      SessionStorage.updateMessages(flow_id, messages);
+      SessionStorage.updateMessages(flow_id, messages, sessionConfig);
     }
-  }, [messages, flow_id]);
+  }, [messages, flow_id, sessionConfig]);
 
   // Function to start a new session
   const startNewSession = () => {
