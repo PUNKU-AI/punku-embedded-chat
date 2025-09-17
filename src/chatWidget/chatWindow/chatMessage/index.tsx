@@ -82,26 +82,39 @@ export default function ChatMessage({
   user_message_style,
   bot_message_style,
   error_message_style,
+  feedback,
   api_key,
   additional_headers,
   host_url,
+  onFeedbackUpdate,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
+  onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
 
-  const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(null);
+  // Initialize feedback state from the message's feedback property
+  const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(
+    feedback === 'positive' ? 'thumbsUp' :
+    feedback === 'negative' ? 'thumbsDown' :
+    null
+  );
 
   const handleFeedback = async (type: 'thumbsUp' | 'thumbsDown') => {
     setSelectedFeedback(type);
-    
-    // Only send feedback for AI messages (not user messages)
+    const feedbackValue = type === 'thumbsUp' ? 'positive' : 'negative';
+
+    // Update the message data with feedback
+    if (onFeedbackUpdate && message_id) {
+      onFeedbackUpdate(message_id, feedbackValue);
+    }
+
+    // Send feedback to server for AI messages
     if (!isSend && message_id && host_url) {
       try {
-        const feedbackValue = type === 'thumbsUp' ? 'positive' : 'negative';
         await sendFeedback(
           host_url,
           message_id,
@@ -114,6 +127,10 @@ export default function ChatMessage({
         console.error("Error sending feedback:", error);
         // Optionally revert the selection if feedback fails
         setSelectedFeedback(null);
+        // Also revert the message data
+        if (onFeedbackUpdate && message_id) {
+          onFeedbackUpdate(message_id, ''); // Clear feedback
+        }
       }
     }
   };

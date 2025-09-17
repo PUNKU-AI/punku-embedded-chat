@@ -7,6 +7,7 @@ import { sendMessage, streamMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import LanguageSwitcher from "../../components/LanguageSwitcher";
+import ConfirmationModal from "../components/ConfirmationModal";
 import { Language, translations } from "../../translations";
 
 export default function ChatWindow({
@@ -130,6 +131,7 @@ export default function ChatWindow({
 
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   function handleClick() {
     if (value && value.trim() !== "") {
@@ -318,12 +320,31 @@ export default function ChatWindow({
 
   // Get translations based on current language
   const t = translations[language];
-  
+
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
-  
+
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
+
+  // Handle new session with confirmation
+  const handleNewSession = () => {
+    if (onStartNewSession) {
+      setShowConfirmModal(true);
+    }
+  };
+
+  const handleConfirmNewSession = () => {
+    setShowConfirmModal(false);
+    if (onStartNewSession) {
+      onStartNewSession();
+    }
+  };
+
+  const handleCancelNewSession = () => {
+    setShowConfirmModal(false);
+  };
+
 
   return (
     <div
@@ -331,8 +352,8 @@ export default function ChatWindow({
         "cl-chat-window" +
         (open ? " cl-scale-100" : " cl-scale-0")
       }
-      style={{ 
-        position: "fixed", 
+      style={{
+        position: "fixed",
         bottom: "100px",
         right: "20px",
         maxHeight: "70vh",
@@ -341,6 +362,8 @@ export default function ChatWindow({
         zIndex: 9999
       }}
     >
+      {/* Relative positioning wrapper for modal overlay */}
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Custom style overrides for when custom colors are provided */}
       <style>
         {`
@@ -417,7 +440,7 @@ export default function ChatWindow({
             />
             {onStartNewSession && (
               <button
-                onClick={onStartNewSession}
+                onClick={handleNewSession}
                 className="cl-new-session-btn"
                 title="Start new conversation"
                 style={{
@@ -578,6 +601,20 @@ export default function ChatWindow({
             />
           </button>
         </div>
+      </div>
+
+        {/* Confirmation Modal - positioned to cover entire widget */}
+        <ConfirmationModal
+          isOpen={showConfirmModal}
+          onConfirm={handleConfirmNewSession}
+          onCancel={handleCancelNewSession}
+          title={t.newSessionTitle}
+          message={t.newSessionConfirm}
+          confirmText={t.confirmButton}
+          cancelText={t.cancelButton}
+          buttonColor={button_color}
+          buttonTextColor={button_text_color}
+        />
       </div>
     </div>
   );
