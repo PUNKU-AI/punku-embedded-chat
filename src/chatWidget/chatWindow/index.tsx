@@ -56,7 +56,8 @@ export default function ChatWindow({
   bot_message_text_color,
   user_message_text_color,
   enable_streaming = true,
-  onStartNewSession
+  onStartNewSession,
+  onSessionValidate
 }: {
   api_key?: string;
   output_type: string,
@@ -104,6 +105,7 @@ export default function ChatWindow({
   user_message_text_color?: string;
   enable_streaming?: boolean;
   onStartNewSession?: () => void;
+  onSessionValidate?: () => boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -135,6 +137,16 @@ export default function ChatWindow({
 
   function handleClick() {
     if (value && value.trim() !== "") {
+      // Check if session is still valid before sending message
+      if (onSessionValidate && !onSessionValidate()) {
+        console.log('Session expired, clearing messages and starting new session');
+        // Session expired, clear messages and start new session
+        if (onStartNewSession) {
+          onStartNewSession();
+        }
+        // Note: Don't return here, continue with sending the message after session is cleared
+      }
+
       addMessage({ message: value, isSend: true });
       setSendingMessage(true);
       setValue("");

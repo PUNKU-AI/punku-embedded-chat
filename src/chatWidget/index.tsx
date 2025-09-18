@@ -104,6 +104,7 @@ export default function ChatWidget({
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [language, setLanguage] = useState<Language>(default_language || 'de');
+  const [isClearing, setIsClearing] = useState(false);
   const sessionId = useRef(sessionData.sessionId);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -140,13 +141,17 @@ export default function ChatWidget({
 
   // Auto-save messages to localStorage whenever they change
   useEffect(() => {
-    if (messages.length > 0) {
+    // Don't auto-save if we're in the middle of clearing a session
+    if (!isClearing && messages.length > 0) {
       SessionStorage.updateMessages(flow_id, messages, sessionConfig);
     }
-  }, [messages, flow_id, sessionConfig]);
+  }, [messages, flow_id, sessionConfig, isClearing]);
 
   // Function to start a new session
   const startNewSession = () => {
+    // Set clearing flag to prevent auto-save during session clearing
+    setIsClearing(true);
+
     // Clear current session
     SessionStorage.clearSession(flow_id);
 
@@ -156,6 +161,21 @@ export default function ChatWidget({
     // Update component state
     sessionId.current = newSessionData.sessionId;
     setMessages([]);
+
+    // Clear the clearing flag after state is updated
+    // Use setTimeout to ensure state updates have processed
+    setIsClearing(false);
+  };
+
+  // Function to validate if current session is still valid
+  const validateSession = (): boolean => {
+    const storedSession = SessionStorage.getStoredSession(flow_id);
+    if (!storedSession) {
+      return false; // No session found
+    }
+
+    // Check if session is expired
+    return !SessionStorage.isSessionExpired(storedSession, sessionConfig);
   };
 
   const styles = `
@@ -2767,6 +2787,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           user_message_text_color={user_message_text_color}
           enable_streaming={true}
           onStartNewSession={startNewSession}
+          onSessionValidate={validateSession}
         />
       </div>
     </div>
