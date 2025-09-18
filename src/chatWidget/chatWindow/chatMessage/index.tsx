@@ -169,8 +169,8 @@ export default function ChatMessage({
             {parsedMessage}
           </Markdown>
           
-          {/* Simple thumbs up/down feedback */}
-          {!isSend && !error && (
+          {/* Simple thumbs up/down feedback - hide for welcome message */}
+          {!isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">
               <div className="feedback-buttons">
                 <button 

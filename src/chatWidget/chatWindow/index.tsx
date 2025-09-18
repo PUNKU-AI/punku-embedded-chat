@@ -502,20 +502,27 @@ export default function ChatWindow({
 
           {/* Welcome message - show below session refresh message when no messages yet */}
           {messages.length === 0 && (
-            <div className="cl-messages">
-              <div
-                className={`cl-message cl-bot_message`}
-                style={{
-                  ...(bot_message_style || {}),
-                  ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
-                  ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
-                }}
-              >
-                <div className="cl-message-content">
-                  <div className="cl-message-text">{displayWelcomeMessage}</div>
-                </div>
-              </div>
-            </div>
+            <ChatMessage
+              message={displayWelcomeMessage}
+              isSend={false}
+              error={false}
+              bot_message_style={
+                bot_message_style ||
+                (bot_message_color || bot_message_text_color ?
+                  {
+                    ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
+                    ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
+                  } : undefined)
+              }
+              user_message_style={undefined}
+              error_message_style={error_message_style}
+              message_id="welcome-message"
+              feedback={undefined}
+              api_key={api_key}
+              additional_headers={additional_headers}
+              host_url={hostUrl}
+              onFeedbackUpdate={undefined}
+            />
           )}
 
           {messages.map((message, index) => (
