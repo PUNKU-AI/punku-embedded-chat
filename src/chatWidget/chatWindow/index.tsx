@@ -6,9 +6,8 @@ import ChatMessage from "./chatMessage";
 import { sendMessage, streamMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
-import LanguageSwitcher from "../../components/LanguageSwitcher";
 import ConfirmationModal from "../components/ConfirmationModal";
-import { Language, translations } from "../../translations";
+import { translations } from "../../translations";
 
 export default function ChatWindow({
   api_key,
@@ -45,8 +44,6 @@ export default function ChatWindow({
   theme = "default",
   welcome_message,
   show_feedback = false,
-  language,
-  setLanguage,
   header_icon,
   background_color,
   bot_message_color,
@@ -94,8 +91,6 @@ export default function ChatWindow({
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
   show_feedback?: boolean;
-  language: Language;
-  setLanguage: React.Dispatch<React.SetStateAction<Language>>;
   header_icon?: string;
   background_color?: string;
   bot_message_color?: string;
@@ -332,8 +327,8 @@ export default function ChatWindow({
     }, 100);
   }, [messages, open]);
 
-  // Get translations based on current language
-  const t = translations[language];
+  // Use English translations
+  const t = translations.en;
 
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
@@ -448,10 +443,6 @@ export default function ChatWindow({
               </div>
             )}
             {displayTitle}
-            <LanguageSwitcher
-              language={language}
-              onLanguageChange={setLanguage}
-            />
             {onStartNewSession && (
               <button
                 onClick={handleNewSession}
