@@ -34,7 +34,7 @@ export default function ChatWidget({
   additional_headers,
   session_id,
   start_open = false,
-  theme = "ocean",
+  theme = "default",
   welcome_message,
   show_feedback = false,
   header_icon,
@@ -46,7 +46,7 @@ export default function ChatWidget({
   bot_message_text_color,
   user_message_text_color,
   widget_id = "punku-chat-widget",
-  extend_hours = 0.0028,
+  extend_hours,
 }: {
   api_key?: string;
   input_value: string,
