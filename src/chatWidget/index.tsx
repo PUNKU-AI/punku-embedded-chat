@@ -140,14 +140,6 @@ export default function ChatWidget({
     };
   }, [open, widget_id]);
 
-  // Auto-save messages to localStorage whenever they change
-  useEffect(() => {
-    // Don't auto-save if we're in the middle of clearing a session
-    if (!isClearing && messages.length > 0) {
-      SessionStorage.updateMessages(flow_id, messages, sessionConfig);
-    }
-  }, [messages, flow_id, sessionConfig, isClearing]);
-
   // Function to start a new session
   const startNewSession = () => {
     // Set refreshing flag to show loading message
@@ -183,6 +175,22 @@ export default function ChatWidget({
 
     // Check if session is expired
     return !SessionStorage.isSessionExpired(storedSession, sessionConfig);
+  };
+
+  // Auto-save messages to localStorage whenever they change
+  useEffect(() => {
+    // Don't auto-save if we're in the middle of clearing a session
+    if (!isClearing && messages.length > 0) {
+      SessionStorage.updateMessages(flow_id, messages, sessionConfig);
+    }
+  }, [messages, flow_id, isClearing]);
+
+  const setOpenWithSessionValidation = (isOpen: boolean) => {
+    const isValid = validateSession();
+    if (!isValid) {
+      startNewSession();
+    }
+    setOpen(isOpen);
   };
 
   const styles = `
@@ -2747,7 +2755,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         <ChatTrigger 
           style={chatTriggerStyleFromProps} 
           open={open} 
-          setOpen={setOpen} 
+          setOpen={setOpenWithSessionValidation} 
           triggerRef={triggerRef}
         />
       </div>

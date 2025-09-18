@@ -499,11 +499,21 @@ export default function ChatWindow({
         </div>
         
         <div className="cl-messages_container" style={background_color ? { backgroundColor: `${background_color} !important` } : undefined}>
-          {/* Welcome message - only show if there are no messages yet */}
+          {/* Session refreshing loading message - show above everything */}
+          {isRefreshingSession && (
+            <div className="cl-session-refresh-message">
+              <div className="cl-refresh-content">
+                <div className="cl-refresh-spinner"></div>
+                <span>Session refreshing...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Welcome message - show below session refresh message when no messages yet */}
           {messages.length === 0 && (
             <div className="cl-messages">
-              <div 
-                className={`cl-message cl-bot_message`} 
+              <div
+                className={`cl-message cl-bot_message`}
                 style={{
                   ...(bot_message_style || {}),
                   ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
@@ -513,16 +523,6 @@ export default function ChatWindow({
                 <div className="cl-message-content">
                   <div className="cl-message-text">{displayWelcomeMessage}</div>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Session refreshing loading message */}
-          {isRefreshingSession && (
-            <div className="cl-session-refresh-message">
-              <div className="cl-refresh-content">
-                <div className="cl-refresh-spinner"></div>
-                <span>Session refreshing...</span>
               </div>
             </div>
           )}
