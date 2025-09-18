@@ -57,7 +57,8 @@ export default function ChatWindow({
   user_message_text_color,
   enable_streaming = true,
   onStartNewSession,
-  onSessionValidate
+  onSessionValidate,
+  isRefreshingSession = false
 }: {
   api_key?: string;
   output_type: string,
@@ -106,6 +107,7 @@ export default function ChatWindow({
   enable_streaming?: boolean;
   onStartNewSession?: () => void;
   onSessionValidate?: () => boolean;
+  isRefreshingSession?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -514,7 +516,17 @@ export default function ChatWindow({
               </div>
             </div>
           )}
-          
+
+          {/* Session refreshing loading message */}
+          {isRefreshingSession && (
+            <div className="cl-session-refresh-message">
+              <div className="cl-refresh-content">
+                <div className="cl-refresh-spinner"></div>
+                <span>Session refreshing...</span>
+              </div>
+            </div>
+          )}
+
           {messages.map((message, index) => (
             <ChatMessage
               bot_message_style={
@@ -627,6 +639,42 @@ export default function ChatWindow({
           buttonColor={button_color}
           buttonTextColor={button_text_color}
         />
+
+        <style>{`
+          .cl-session-refresh-message {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            margin: 8px 16px;
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+          }
+
+          .cl-refresh-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+
+          .cl-refresh-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     </div>
   );

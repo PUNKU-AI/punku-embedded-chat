@@ -105,6 +105,7 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [language, setLanguage] = useState<Language>(default_language || 'de');
   const [isClearing, setIsClearing] = useState(false);
+  const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const sessionId = useRef(sessionData.sessionId);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -149,6 +150,9 @@ export default function ChatWidget({
 
   // Function to start a new session
   const startNewSession = () => {
+    // Set refreshing flag to show loading message
+    setIsRefreshingSession(true);
+
     // Set clearing flag to prevent auto-save during session clearing
     setIsClearing(true);
 
@@ -162,9 +166,12 @@ export default function ChatWidget({
     sessionId.current = newSessionData.sessionId;
     setMessages([]);
 
-    // Clear the clearing flag after state is updated
+    // Clear the clearing and refreshing flags after state is updated
     // Use setTimeout to ensure state updates have processed
-    setIsClearing(false);
+    setTimeout(() => {
+      setIsClearing(false);
+      setIsRefreshingSession(false);
+    }, 500); // Show loading message for at least 500ms for better UX
   };
 
   // Function to validate if current session is still valid
@@ -2788,6 +2795,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           enable_streaming={true}
           onStartNewSession={startNewSession}
           onSessionValidate={validateSession}
+          isRefreshingSession={isRefreshingSession}
         />
       </div>
     </div>
