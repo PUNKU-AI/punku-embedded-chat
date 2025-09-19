@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
-import { Language } from "../translations";
 import { useEffect } from "react";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 
@@ -38,7 +37,6 @@ export default function ChatWidget({
   theme = "default",
   welcome_message,
   show_feedback = false,
-  default_language = "de",
   header_icon,
   button_color,
   button_text_color,
@@ -82,7 +80,6 @@ export default function ChatWidget({
   theme?: "default" | "dark" | "ocean" | "aurora";
   welcome_message?: string;
   show_feedback?: boolean;
-  default_language?: Language;
   header_icon?: string;
   button_color?: string;
   button_text_color?: string;
@@ -103,7 +100,6 @@ export default function ChatWidget({
 
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
-  const [language, setLanguage] = useState<Language>(default_language || 'de');
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const sessionId = useRef(sessionData.sessionId);
@@ -2650,31 +2646,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   margin-top: 0 !important;
 }
 
-/* Language Switcher Styles */
-.cl-language-switcher {
-  margin-left: auto;
-}
-
-.cl-language-select {
-  background-color: rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 4px;
-  color: white;
-  padding: 4px 8px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  outline: none;
-  transition: background-color 0.2s ease;
-}
-
-.cl-language-select:hover {
-  background-color: rgba(255, 255, 255, 0.4);
-}
-
-.cl-language-select option {
-  background-color: #2c3e50;
-  color: white;
-}
 
 .cl-header-logo {
   width: 24px;
@@ -2795,8 +2766,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           theme={effectiveTheme}
           welcome_message={welcome_message}
           show_feedback={show_feedback}
-          language={language}
-          setLanguage={setLanguage}
           header_icon={header_icon}
           bot_message_text_color={bot_message_text_color}
           user_message_text_color={user_message_text_color}
