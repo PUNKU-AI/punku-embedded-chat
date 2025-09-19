@@ -4,6 +4,8 @@ import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { useEffect } from "react";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
+import { Language } from "../translations";
+import { detectBrowserLanguage } from "./utils";
 
 export default function ChatWidget({
   api_key,
@@ -47,6 +49,7 @@ export default function ChatWidget({
   user_message_text_color,
   widget_id = "punku-chat-widget",
   extend_hours,
+  default_language,
 }: {
   api_key?: string;
   input_value: string,
@@ -90,6 +93,7 @@ export default function ChatWidget({
   user_message_text_color?: string;
   widget_id?: string;
   extend_hours?: number;
+  default_language?: string;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
@@ -102,6 +106,19 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
+
+  // Initialize language based on browser detection or default_language prop
+  const getInitialLanguage = (): Language => {
+    // If default_language prop is provided and valid, use it
+    if (default_language && (default_language === 'en' || default_language === 'de')) {
+      return default_language as Language;
+    }
+
+    // Otherwise, detect browser language
+    return detectBrowserLanguage(['en', 'de']) as Language;
+  };
+
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
   const sessionId = useRef(sessionData.sessionId);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -2773,6 +2790,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           onStartNewSession={startNewSession}
           onSessionValidate={validateSession}
           isRefreshingSession={isRefreshingSession}
+          language={currentLanguage}
         />
       </div>
     </div>

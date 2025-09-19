@@ -7,7 +7,7 @@ import { sendMessage, streamMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
-import { translations } from "../../translations";
+import { translations, Language } from "../../translations";
 
 export default function ChatWindow({
   api_key,
@@ -55,7 +55,8 @@ export default function ChatWindow({
   enable_streaming = true,
   onStartNewSession,
   onSessionValidate,
-  isRefreshingSession = false
+  isRefreshingSession = false,
+  language = 'en' as Language
 }: {
   api_key?: string;
   output_type: string,
@@ -103,6 +104,7 @@ export default function ChatWindow({
   onStartNewSession?: () => void;
   onSessionValidate?: () => boolean;
   isRefreshingSession?: boolean;
+  language?: Language;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -327,8 +329,8 @@ export default function ChatWindow({
     }, 100);
   }, [messages, open]);
 
-  // Use English translations
-  const t = translations.en;
+  // Use translations based on language prop
+  const t = translations[language] || translations.en;
 
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
