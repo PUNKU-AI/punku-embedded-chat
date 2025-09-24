@@ -13,12 +13,14 @@ export interface StoredSession {
 }
 
 export interface SessionConfig {
-  extendHours?: number; // Hours to extend session on activity
+  expiryHours?: number;
+  idleExpiryHours?: number;
 }
 
 export class SessionStorage {
   private static readonly STORAGE_PREFIX = 'punku-chat-session';
-  private static readonly DEFAULT_EXTEND_HOURS = 2;
+  private static readonly DEFAULT_EXPIRY_HOURS = 24; // 1 day
+  private static readonly DEFAULT_IDLE_EXPIRY_HOURS = 0.5 // 30 minutes
 
   /**
    * Get storage key for the current domain and flow
@@ -95,23 +97,16 @@ export class SessionStorage {
   }
 
   /**
-   * Update messages in stored session and extend expiration
+   * Update messages in stored session
    */
-  static updateMessages(flowId: string, messages: ChatMessageType[], config: SessionConfig = {}): boolean {
+  static updateMessages(flowId: string, messages: ChatMessageType[]): boolean {
     const session = this.getStoredSession(flowId);
     if (!session) {
       return false;
     }
 
-    const now = Date.now();
-    const extendHours = config.extendHours || this.DEFAULT_EXTEND_HOURS;
-
     session.messages = messages;
-    session.lastActiveAt = now;
-    // Extend expiration by extendHours from now
-    session.expiresAt = now + (extendHours * 60 * 60 * 1000);
-
-    console.log(`Session extended: expires in ${extendHours} hours`);
+    session.lastActiveAt = Date.now();
 
     return this.saveSession(session);
   }
@@ -132,17 +127,24 @@ export class SessionStorage {
   }
 
   /**
-   * Check if session is expired (rolling expiration based on last activity)
+   * Check if session is expired
    */
   static isSessionExpired(session: StoredSession, config: SessionConfig = {}): boolean {
     const now = Date.now();
-    const extendHours = config.extendHours || this.DEFAULT_EXTEND_HOURS;
+    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
+    const idleExpiryHours = config.idleExpiryHours || this.DEFAULT_IDLE_EXPIRY_HOURS;
 
-    // Session expires if it's been inactive for more than extendHours
-    const expiryTime = session.lastActiveAt + (extendHours * 60 * 60 * 1000);
+    // Check absolute expiration
+    const absoluteExpiry = session.expiresAt || (session.createdAt + (expiryHours * 60 * 60 * 1000));
+    if (now > absoluteExpiry) {
+      console.log('Session expired by absolute expiry');
+      return true;
+    }
 
-    if (now > expiryTime) {
-      console.log(`Session expired: ${extendHours} hours since last activity`);
+    // Check idle expiration
+    const idleExpiry = session.lastActiveAt + (idleExpiryHours * 60 * 60 * 1000);
+    if (now > idleExpiry) {
+      console.log('Session expired by idle expiry');
       return true;
     }
 
@@ -158,14 +160,14 @@ export class SessionStorage {
     config: SessionConfig = {}
   ): StoredSession {
     const now = Date.now();
-    const extendHours = config.extendHours || this.DEFAULT_EXTEND_HOURS;
+    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
 
     const session: StoredSession = {
       sessionId: providedSessionId || uuidv4(),
       messages: [],
       createdAt: now,
       lastActiveAt: now,
-      expiresAt: now + (extendHours * 60 * 60 * 1000), // Set initial expiration
+      expiresAt: now + (expiryHours * 60 * 60 * 1000),
       domain: window.location.hostname,
       flowId: flowId
     };

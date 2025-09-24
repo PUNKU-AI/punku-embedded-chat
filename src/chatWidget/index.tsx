@@ -48,7 +48,8 @@ export default function ChatWidget({
   bot_message_text_color,
   user_message_text_color,
   widget_id = "punku-chat-widget",
-  extend_hours,
+  ttl_hours,
+  idle_expiration_hours,
   default_language,
 }: {
   api_key?: string;
@@ -92,12 +93,14 @@ export default function ChatWidget({
   bot_message_text_color?: string;
   user_message_text_color?: string;
   widget_id?: string;
-  extend_hours?: number;
+  ttl_hours?: number;
+  idle_expiration_hours?: number;
   default_language?: string;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
-    extendHours: extend_hours
+    expiryHours: ttl_hours,
+    idleExpiryHours: idle_expiration_hours
   };
 
   const sessionData = SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig);
@@ -153,6 +156,14 @@ export default function ChatWidget({
     };
   }, [open, widget_id]);
 
+  // Auto-save messages to localStorage whenever they change
+  useEffect(() => {
+    // Don't auto-save if we're in the middle of clearing a session
+    if (!isClearing && messages.length > 0) {
+      SessionStorage.updateMessages(flow_id, messages);
+    }
+  }, [messages, flow_id, isClearing]);
+
   // Function to start a new session
   const startNewSession = () => {
     // Set refreshing flag to show loading message
@@ -189,14 +200,6 @@ export default function ChatWidget({
     // Check if session is expired
     return !SessionStorage.isSessionExpired(storedSession, sessionConfig);
   };
-
-  // Auto-save messages to localStorage whenever they change
-  useEffect(() => {
-    // Don't auto-save if we're in the middle of clearing a session
-    if (!isClearing && messages.length > 0) {
-      SessionStorage.updateMessages(flow_id, messages, sessionConfig);
-    }
-  }, [messages, flow_id, isClearing]);
 
   const setOpenWithSessionValidation = (isOpen: boolean) => {
     const isValid = validateSession();
