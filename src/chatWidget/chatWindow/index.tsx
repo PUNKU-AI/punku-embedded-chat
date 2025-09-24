@@ -138,7 +138,7 @@ export default function ChatWindow({
     if (value && value.trim() !== "") {
       // Check if session is still valid before sending message
       if (onSessionValidate && !onSessionValidate()) {
-        console.log('Session expired, clearing messages and starting new session');
+        // console.log('Session expired, clearing messages and starting new session');
         // Session expired, clear messages and start new session
         if (onStartNewSession) {
           onStartNewSession();

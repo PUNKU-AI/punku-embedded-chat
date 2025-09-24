@@ -122,7 +122,7 @@ export default function ChatMessage({
           api_key,
           additional_headers
         );
-        console.log(`Feedback sent: ${feedbackValue} (positive_feedback: ${type === 'thumbsUp' ? 'true' : 'false'})`);
+        // console.log(`Feedback sent: ${feedbackValue} (positive_feedback: ${type === 'thumbsUp' ? 'true' : 'false'})`);
       } catch (error) {
         console.error("Error sending feedback:", error);
         // Optionally revert the selection if feedback fails

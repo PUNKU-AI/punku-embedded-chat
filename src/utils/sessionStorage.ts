@@ -137,14 +137,14 @@ export class SessionStorage {
     // Check absolute expiration
     const absoluteExpiry = session.expiresAt || (session.createdAt + (expiryHours * 60 * 60 * 1000));
     if (now > absoluteExpiry) {
-      console.log('Session expired by absolute expiry');
+      // console.log('Session expired by absolute expiry');
       return true;
     }
 
     // Check idle expiration
     const idleExpiry = session.lastActiveAt + (idleExpiryHours * 60 * 60 * 1000);
     if (now > idleExpiry) {
-      console.log('Session expired by idle expiry');
+      // console.log('Session expired by idle expiry');
       return true;
     }
 
