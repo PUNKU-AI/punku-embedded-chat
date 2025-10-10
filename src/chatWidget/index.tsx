@@ -81,7 +81,7 @@ export default function ChatWidget({
   additional_headers?: { [key: string]: string };
   session_id?: string;
   start_open?: boolean;
-  theme?: "default" | "dark" | "ocean" | "aurora";
+  theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit";
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;

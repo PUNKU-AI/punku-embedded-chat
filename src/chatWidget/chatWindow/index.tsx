@@ -89,7 +89,7 @@ export default function ChatWindow({
   height?: number;
   sessionId: React.MutableRefObject<string>;
   additional_headers?: { [key: string]: string };
-  theme?: "default" | "dark" | "ocean" | "aurora";
+  theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit";
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;
@@ -482,6 +482,35 @@ export default function ChatWindow({
                 <div className="cl-online-message"></div>
                 {online_message ? (
                   online_message
+                ) : theme === 'punku-ai-bookingkit' ? (
+                  <>
+                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    <a
+                      href="https://www.punku.ai/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: 'inherit',
+                        textDecoration: 'underline',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      PUNKU.AI
+                    </a>
+                    {' & '}
+                    <a
+                      href="https://bookingkit.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: 'inherit',
+                        textDecoration: 'underline',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      bookingkit
+                    </a>
+                  </>
                 ) : (
                   <>
                     {language === 'de' ? 'Unterstützt von ' : 'Supported by '}

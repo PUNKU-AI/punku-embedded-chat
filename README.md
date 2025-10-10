@@ -20,12 +20,13 @@ The PUNKU.AI Chat Widget supports various visual themes to match your applicatio
 
 ### Available Themes
 
-| Theme   | Description                                                           |
-|---------|-----------------------------------------------------------------------|
-| default | Standard light theme with clean white background                      |
-| dark    | Dark mode theme with dark backgrounds and light text                  |
-| ocean   | Beautiful ocean background with translucent message bubbles           |
-| aurora  | Northern lights inspired theme with colorful gradient backgrounds     |
+| Theme              | Description                                                           |
+|--------------------|-----------------------------------------------------------------------|
+| default            | Standard light theme with clean white background                      |
+| dark               | Dark mode theme with dark backgrounds and light text                  |
+| ocean              | Beautiful ocean background with translucent message bubbles           |
+| aurora             | Northern lights inspired theme with colorful gradient backgrounds     |
+| punku-ai-bookingkit| Same as default theme, but with "Powered by PUNKU.AI & bookingkit" branding |
 
 ### How to Use Themes
 
@@ -312,7 +313,7 @@ Use the widget API to customize your widget:
 - **theme:**
   - Type: String
   - Required: No
-  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", and "aurora".
+  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", and "punku-ai-bookingkit".
 
 - **tweaks:**
   - Type: JSON
