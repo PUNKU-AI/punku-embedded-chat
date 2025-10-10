@@ -480,7 +480,25 @@ export default function ChatWindow({
             {online ? (
               <>
                 <div className="cl-online-message"></div>
-                {online_message || t.onlineMessage}
+                {online_message ? (
+                  online_message
+                ) : (
+                  <>
+                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    <a
+                      href="https://www.punku.ai/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: 'inherit',
+                        textDecoration: 'underline',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      PUNKU.AI
+                    </a>
+                  </>
+                )}
               </>
             ) : (
               <>

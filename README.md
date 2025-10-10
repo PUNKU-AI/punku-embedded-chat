@@ -144,6 +144,7 @@ Use the widget API to customize your widget:
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
+| default_language      | string    | No       |
 | output_type           | string    | No       |
 | input_type            | string    | No       |
 | output_component      | string    | No       |
@@ -232,6 +233,11 @@ Use the widget API to customize your widget:
   - Type: JSON
   - Required: No
   - Description: Styling options for the overall chat window.
+
+- **default_language:**
+  - Type: String
+  - Required: No
+  - Description: Sets the default language for the chat interface. Supported values are "en" (English) and "de" (German). If not specified, the widget automatically detects the browser's language preference. This affects all UI text including welcome messages, placeholders, and system messages.
 
 - **error_message_style:**
   - Type: JSON
