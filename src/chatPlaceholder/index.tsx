@@ -32,7 +32,7 @@ export default function ChatMessagePlaceholder({
     "Sortiere meine Gedanken…",
     "Bin gleich soweit…",
     "Bearbeite das gerade…",
-    "Durchgehe die Informationen…",
+    "Informationen werden überprüft…",
     "Stelle das zusammen…",
     "Prüfe die Informationen…",
     "Ordne meine Gedanken…",
