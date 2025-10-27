@@ -47,5 +47,6 @@ customElements.define('punku-chat', r2wc(ChatWidget, {
         widget_id: "string",
         ttl_hours: "number",
         idle_expiration_hours: "number",
+        link_color: "string",
     },
 }));

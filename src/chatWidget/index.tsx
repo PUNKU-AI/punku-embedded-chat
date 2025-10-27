@@ -2760,6 +2760,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           messages={messages}
           updateLastMessage={updateLastMessage}
           open={open}
+          onClose={() => setOpen(false)}
           triggerRef={triggerRef}
           addMessage={addMessage}
           output_type={output_type}

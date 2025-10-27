@@ -1,4 +1,4 @@
-import { Send, MessagesSquare, RefreshCw } from "lucide-react";
+import { Send, MessagesSquare, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -57,7 +57,8 @@ export default function ChatWindow({
   onSessionValidate,
   isRefreshingSession = false,
   language = 'en' as Language,
-  link_color
+  link_color,
+  onClose
 }: {
   api_key?: string;
   output_type: string,
@@ -71,6 +72,7 @@ export default function ChatWindow({
   send_button_style?: React.CSSProperties;
   online?: boolean;
   open: boolean;
+  onClose?: () => void;
   online_message?: string;
   placeholder_sending?: string;
   offline_message?: string;
@@ -456,6 +458,11 @@ export default function ChatWindow({
             .cl-input-element {
               font-size: 16px !important; /* Prevents zoom on iOS */
             }
+
+            /* Show close button on mobile */
+            .cl-close-btn {
+              display: flex !important;
+            }
           }
 
           /* Mobile landscape and small tablets */
@@ -471,19 +478,31 @@ export default function ChatWindow({
               height: 100% !important;
               min-width: unset !important;
             }
+
+            /* Show close button on mobile landscape */
+            .cl-close-btn {
+              display: flex !important;
+            }
           }
 
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {
             .cl-chat-window {
-              width: min(420px, 60vw) !important;
+              width: min(420px, calc(60vw - 10px)) !important;
               height: min(600px, 70vh) !important;
               max-height: 70vh !important;
+              right: 16px !important;
+              left: auto !important;
             }
 
             .cl-window {
               width: 100% !important;
               height: 100% !important;
+            }
+
+            /* Show close button on tablet */
+            .cl-close-btn {
+              display: flex !important;
             }
           }
 
@@ -592,6 +611,37 @@ export default function ChatWindow({
                 />
               </button>
             )}
+            {/* Close button for mobile and tablet */}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="cl-close-btn"
+                title="Close chat"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'none', // Hidden by default, shown on mobile/tablet via CSS
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: 'auto',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <X
+                  size={20}
+                  color={button_text_color || 'white'}
+                />
+              </button>
+            )}
           </div>
           <div className="cl-header-subtitle" style={button_color ? {color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
             {online ? (
@@ -607,7 +657,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -620,7 +670,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -636,7 +686,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
