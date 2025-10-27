@@ -15,7 +15,7 @@ export const translations = {
     welcomeMessage: "Hallo! Wie kann ich Ihnen heute helfen?",
     placeholder: "Nachricht eingeben...",
     placeholderSending: "Denke nach...",
-    onlineMessage: "Unterstützt von PUNKU.AI",
+    onlineMessage: "Angetrieben von PUNKU.AI",
     offlineMessage: "Offline - PUNKU.AI",
     windowTitle: "Chat",
     newSessionConfirm: "Sind Sie sicher, dass Sie ein neues Gespräch beginnen möchten? Dies wird Ihren aktuellen Chat-Verlauf löschen.",

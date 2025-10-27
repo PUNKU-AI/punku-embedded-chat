@@ -56,7 +56,8 @@ export default function ChatWindow({
   onStartNewSession,
   onSessionValidate,
   isRefreshingSession = false,
-  language = 'en' as Language
+  language = 'en' as Language,
+  link_color
 }: {
   api_key?: string;
   output_type: string,
@@ -105,6 +106,7 @@ export default function ChatWindow({
   onSessionValidate?: () => boolean;
   isRefreshingSession?: boolean;
   language?: Language;
+  link_color?: string;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -411,6 +413,121 @@ export default function ChatWindow({
             border-color: transparent !important;
           }
           /* Send button styling is handled inline */
+
+          /* Link color customization - applies to all links in chat messages and header */
+          ${link_color ? `
+          .cl-window a {
+            color: ${link_color} !important;
+          }
+          .cl-window a:hover {
+            color: ${link_color} !important;
+            opacity: 0.8;
+          }
+          .cl-window a:visited {
+            color: ${link_color} !important;
+          }
+          ` : ''}
+
+          /* Responsive sizing for all screen sizes */
+          /* Mobile - Small phones */
+          @media (max-width: 640px) {
+            .cl-chat-window {
+              width: calc(100vw - 16px) !important;
+              height: calc(100vh - 120px) !important;
+              max-height: calc(100vh - 120px) !important;
+              right: 8px !important;
+              bottom: 8px !important;
+              left: 8px !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+              max-height: 100% !important;
+              min-width: unset !important;
+            }
+
+            /* Improve touch targets on mobile */
+            .cl-send-button {
+              width: 44px !important;
+              height: 44px !important;
+            }
+
+            .cl-input-element {
+              font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+          }
+
+          /* Mobile landscape and small tablets */
+          @media (min-width: 641px) and (max-width: 767px) {
+            .cl-chat-window {
+              width: min(420px, 85vw) !important;
+              height: min(600px, 75vh) !important;
+              max-height: 75vh !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+              min-width: unset !important;
+            }
+          }
+
+          /* Tablets */
+          @media (min-width: 768px) and (max-width: 1023px) {
+            .cl-chat-window {
+              width: min(420px, 60vw) !important;
+              height: min(600px, 70vh) !important;
+              max-height: 70vh !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+            }
+          }
+
+          /* Desktop - standard sizes (1024px - 1440px) */
+          @media (min-width: 1024px) and (max-width: 1440px) {
+            .cl-chat-window {
+              max-height: 70vh !important;
+              max-width: 90vw !important;
+            }
+
+            .cl-window {
+              width: ${width || 450}px !important;
+              height: ${height || 650}px !important;
+              max-height: 70vh !important;
+            }
+          }
+
+          /* Large desktop displays */
+          @media (min-width: 1441px) {
+            .cl-chat-window {
+              max-height: 75vh !important;
+              max-width: 90vw !important;
+            }
+
+            .cl-window {
+              width: min(${width || 500}px, 90vw) !important;
+              height: min(${height || 700}px, 75vh) !important;
+              max-height: 75vh !important;
+            }
+          }
+
+          /* Ensure message container scrolls properly at all sizes */
+          .cl-messages_container {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            flex: 1 !important;
+          }
+
+          /* Responsive improvements for animations */
+          @media (prefers-reduced-motion: reduce) {
+            .cl-chat-window {
+              transition: none !important;
+            }
+          }
         `}
       </style>
       
@@ -484,7 +601,7 @@ export default function ChatWindow({
                   online_message
                 ) : theme === 'punku-ai-bookingkit' ? (
                   <>
-                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"
@@ -513,7 +630,7 @@ export default function ChatWindow({
                   </>
                 ) : (
                   <>
-                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"

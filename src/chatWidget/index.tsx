@@ -51,6 +51,7 @@ export default function ChatWidget({
   ttl_hours,
   idle_expiration_hours,
   default_language,
+  link_color,
 }: {
   api_key?: string;
   input_value: string,
@@ -96,6 +97,7 @@ export default function ChatWidget({
   ttl_hours?: number;
   idle_expiration_hours?: number;
   default_language?: string;
+  link_color?: string;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
@@ -2794,6 +2796,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           onSessionValidate={validateSession}
           isRefreshingSession={isRefreshingSession}
           language={currentLanguage}
+          link_color={link_color}
         />
       </div>
     </div>
