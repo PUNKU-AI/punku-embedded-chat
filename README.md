@@ -1,4 +1,4 @@
-# PUNKU.AI Embedded Chat ⛓️
+# PUNKU.AI Embedded Chat
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PUNKU-AI/punku-embedded-chat)
 
