@@ -1,4 +1,4 @@
-import { Send, MessagesSquare, RefreshCw } from "lucide-react";
+import { Send, MessagesSquare, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -56,7 +56,9 @@ export default function ChatWindow({
   onStartNewSession,
   onSessionValidate,
   isRefreshingSession = false,
-  language = 'en' as Language
+  language = 'en' as Language,
+  link_color,
+  onClose
 }: {
   api_key?: string;
   output_type: string,
@@ -70,6 +72,7 @@ export default function ChatWindow({
   send_button_style?: React.CSSProperties;
   online?: boolean;
   open: boolean;
+  onClose?: () => void;
   online_message?: string;
   placeholder_sending?: string;
   offline_message?: string;
@@ -105,6 +108,7 @@ export default function ChatWindow({
   onSessionValidate?: () => boolean;
   isRefreshingSession?: boolean;
   language?: Language;
+  link_color?: string;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -411,6 +415,138 @@ export default function ChatWindow({
             border-color: transparent !important;
           }
           /* Send button styling is handled inline */
+
+          /* Link color customization - applies to all links in chat messages and header */
+          ${link_color ? `
+          .cl-window a {
+            color: ${link_color} !important;
+          }
+          .cl-window a:hover {
+            color: ${link_color} !important;
+            opacity: 0.8;
+          }
+          .cl-window a:visited {
+            color: ${link_color} !important;
+          }
+          ` : ''}
+
+          /* Responsive sizing for all screen sizes */
+          /* Mobile - Small phones */
+          @media (max-width: 640px) {
+            .cl-chat-window {
+              width: calc(100vw - 16px) !important;
+              height: calc(100vh - 120px) !important;
+              max-height: calc(100vh - 120px) !important;
+              right: 8px !important;
+              bottom: 8px !important;
+              left: 8px !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+              max-height: 100% !important;
+              min-width: unset !important;
+            }
+
+            /* Improve touch targets on mobile */
+            .cl-send-button {
+              width: 44px !important;
+              height: 44px !important;
+            }
+
+            .cl-input-element {
+              font-size: 16px !important; /* Prevents zoom on iOS */
+            }
+
+            /* Show close button on mobile */
+            .cl-close-btn {
+              display: flex !important;
+            }
+          }
+
+          /* Mobile landscape and small tablets */
+          @media (min-width: 641px) and (max-width: 767px) {
+            .cl-chat-window {
+              width: min(420px, 85vw) !important;
+              height: min(600px, 75vh) !important;
+              max-height: 75vh !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+              min-width: unset !important;
+            }
+
+            /* Show close button on mobile landscape */
+            .cl-close-btn {
+              display: flex !important;
+            }
+          }
+
+          /* Tablets */
+          @media (min-width: 768px) and (max-width: 1023px) {
+            .cl-chat-window {
+              width: min(420px, calc(60vw - 10px)) !important;
+              height: min(600px, 70vh) !important;
+              max-height: 70vh !important;
+              right: 16px !important;
+              left: auto !important;
+            }
+
+            .cl-window {
+              width: 100% !important;
+              height: 100% !important;
+            }
+
+            /* Show close button on tablet */
+            .cl-close-btn {
+              display: flex !important;
+            }
+          }
+
+          /* Desktop - standard sizes (1024px - 1440px) */
+          @media (min-width: 1024px) and (max-width: 1440px) {
+            .cl-chat-window {
+              max-height: 70vh !important;
+              max-width: 90vw !important;
+            }
+
+            .cl-window {
+              width: ${width || 450}px !important;
+              height: ${height || 650}px !important;
+              max-height: 70vh !important;
+            }
+          }
+
+          /* Large desktop displays */
+          @media (min-width: 1441px) {
+            .cl-chat-window {
+              max-height: 75vh !important;
+              max-width: 90vw !important;
+            }
+
+            .cl-window {
+              width: min(${width || 500}px, 90vw) !important;
+              height: min(${height || 700}px, 75vh) !important;
+              max-height: 75vh !important;
+            }
+          }
+
+          /* Ensure message container scrolls properly at all sizes */
+          .cl-messages_container {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            flex: 1 !important;
+          }
+
+          /* Responsive improvements for animations */
+          @media (prefers-reduced-motion: reduce) {
+            .cl-chat-window {
+              transition: none !important;
+            }
+          }
         `}
       </style>
       
@@ -475,6 +611,37 @@ export default function ChatWindow({
                 />
               </button>
             )}
+            {/* Close button for mobile and tablet */}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="cl-close-btn"
+                title="Close chat"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'none', // Hidden by default, shown on mobile/tablet via CSS
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginLeft: 'auto',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                <X
+                  size={20}
+                  color={button_text_color || 'white'}
+                />
+              </button>
+            )}
           </div>
           <div className="cl-header-subtitle" style={button_color ? {color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
             {online ? (
@@ -484,13 +651,13 @@ export default function ChatWindow({
                   online_message
                 ) : theme === 'punku-ai-bookingkit' ? (
                   <>
-                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -503,7 +670,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -513,13 +680,13 @@ export default function ChatWindow({
                   </>
                 ) : (
                   <>
-                    {language === 'de' ? 'Unterstützt von ' : 'Supported by '}
+                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: 'inherit',
+                        color: link_color || 'inherit',
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
