@@ -68,6 +68,7 @@ The chat widget provides simple color properties for easy customization of the i
 | bot_message_text_color | string | Text color of bot messages (hex code) |
 | user_message_color | string | Background color of user message bubbles (hex code) |
 | user_message_text_color | string | Text color of user messages (hex code) |
+| link_color | string | Color of all hyperlinks in the chat (hex code) |
 
 These simple properties make it easy for non-technical users to customize the appearance:
 
@@ -80,9 +81,37 @@ These simple properties make it easy for non-technical users to customize the ap
   bot_message_text_color="#333333"
   user_message_color="#9A8747"
   user_message_text_color="#FFFFFF"
+  link_color="#0066CC"
   welcome_message="Hello! How can I help you today?"
 ></punku-chat>
 ```
+
+### Link Color Customization
+
+The `link_color` property allows you to customize the color of all hyperlinks that appear in the chat interface. This includes:
+- Links in bot messages (e.g., URLs, references, resources)
+- Links in the chat header (e.g., "Powered by PUNKU.AI" branding)
+- Any clickable links throughout the chat interface
+
+**Usage Example:**
+```html
+<punku-chat
+  host_url="https://your-punku-instance.com"
+  flow_id="your-flow-id"
+  link_color="#FF5733"
+></punku-chat>
+```
+
+**How it works:**
+- Accepts any valid CSS color format (hex codes like `#FF5733`, RGB, color names)
+- Applies to all link states: normal, hover, and visited
+- Automatically adjusts opacity on hover for better user interaction
+- Works seamlessly with all themes and custom color schemes
+
+**Color recommendations:**
+- Ensure sufficient contrast with the background for accessibility
+- Use colors that complement your brand or theme
+- Test visibility against both light and dark backgrounds if using multiple themes
 
 For more advanced customization, you can still use the style properties:
 
@@ -174,6 +203,7 @@ Use the widget API to customize your widget:
 | session_id            | string    | No       |
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
+| link_color            | string    | No       |
 
 - **background_color:**
   - Type: String
@@ -365,3 +395,8 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: false
   - Description: Controls whether to display feedback buttons (thumbs up/down) for bot messages. When enabled, users can provide feedback on responses.
+
+- **link_color:**
+  - Type: String
+  - Required: No
+  - Description: Customizes the color of all hyperlinks throughout the chat interface (hex code or CSS color). This includes links in bot messages, header branding links, and any other clickable links. The color is applied to all link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
