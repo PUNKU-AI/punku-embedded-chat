@@ -1,5 +1,7 @@
 # PUNKU.AI Embedded Chat ⛓️
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PUNKU-AI/punku-embedded-chat)
+
 Welcome to the PUNKU.AI Embedded Chat repository! 🎉
 
 The PUNKU.AI Embedded Chat is a powerful web component that enables seamless communication with the [PUNKU.AI app](https://app.punku.ai). This widget provides a chat interface, allowing you to integrate PUNKU.AI into your web applications effortlessly.
