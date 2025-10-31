@@ -651,7 +651,7 @@ export default function ChatWindow({
                   online_message
                 ) : theme === 'punku-ai-bookingkit' ? (
                   <>
-                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
+                    Powered by{' '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"
@@ -680,7 +680,7 @@ export default function ChatWindow({
                   </>
                 ) : (
                   <>
-                    {language === 'de' ? 'Angetrieben von ' : 'Supported by '}
+                    Powered by{' '}
                     <a
                       href="https://www.punku.ai/"
                       target="_blank"
