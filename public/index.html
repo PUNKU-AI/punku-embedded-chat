@@ -3,31 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punku Chat Widget Demo</title>
+    <title>Punku Chat Widget - Swarovski Theme Demo</title>
 </head>
-<body style="width: 100vh; height: 100vh; background-color: #f5f5f5;">
-    <h1>Punku Chat Widget with Custom Colors</h1>
-    <p>This demonstrates the chat widget with customized colors.</p>
-    
-    <punku-chat 
-        window_title="Customized Chat" 
-        flow_id="8c4fa1c8-4222-417a-9c1f-7c03de4f8c26"
-        host_url="http://localhost:7860"
-        button_color="#9A8747"
-        button_text_color="#FFFFFF"
-        background_color="#F9F6EA"
-        bot_message_color="#EDEADD"
-        user_message_color="#9A8747"
-        theme=""
-        api_key="sk-Zp3fM6anGBPOlS4p_l8H2GE5tdAhvmRxOsH46nAsJOk"
-        start_open="true"
+<body style="width: 100vh; height: 100vh; background-color: #ffffff;">
+    <h1 style="color: #1a1a1a; font-family: 'Didot', 'Bodoni MT', system-ui, serif; padding: 20px; font-weight: 300; letter-spacing: 1px;">Punku Chat Widget - Swarovski Theme</h1>
+    <p style="color: #4a4a4a; font-family: system-ui, -apple-system, sans-serif; padding: 0 20px; max-width: 600px; line-height: 1.6;">This demonstrates the chat widget with the elegant Swarovski theme featuring a clean, monochromatic aesthetic inspired by the Swarovski Crystal Worlds.</p>
+
+    <punku-chat
+        window_title="Crystal (AI)"
+        welcome_message="Welcome to Swarovski Kristallwelten ✨ I am Crystal, your AI assistant. How can I help you today?"
+        flow_id="3d85092c-4447-4f43-aa08-b13a27904108"
+        host_url="https://app.punku.ai"
+        theme="swarovski"
+        api_key="sk-X_TRC6qSCS0bjkW3Nhpni-O_Vs3UFa4Q3uZbWM_DjkM"
+        start_open="false"
+        link_color="black"
     ></punku-chat>
-    <!-- <punku-chat
-        window_title="Vector Store RAG"
-        flow_id="8c4fa1c8-4222-417a-9c1f-7c03de4f8c26"
-        host_url="http://localhost:3000"
-        api_key="sk-Zp3fM6anGBPOlS4p_l8H2GE5tdAhvmRxOsH46nAsJOk">
-    </punku-chat> -->
+    
     
     <script>
         // Wait for the widget to load

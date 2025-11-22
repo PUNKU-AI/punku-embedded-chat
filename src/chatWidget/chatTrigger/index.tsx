@@ -1,18 +1,20 @@
-import { MessageSquare, X } from "lucide-react"
-export default function ChatTrigger({ 
-    style, 
-    open, 
-    setOpen, 
+import { MessageSquare, X, Sparkles } from "lucide-react"
+export default function ChatTrigger({
+    style,
+    open,
+    setOpen,
     triggerRef,
     buttonColor,
-    buttonTextColor
-}: { 
-    style?: React.CSSProperties, 
-    open: boolean, 
-    setOpen: Function, 
+    buttonTextColor,
+    theme = "default"
+}: {
+    style?: React.CSSProperties,
+    open: boolean,
+    setOpen: Function,
     triggerRef: React.RefObject<HTMLButtonElement> | null,
     buttonColor?: string,
-    buttonTextColor?: string
+    buttonTextColor?: string,
+    theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski"
 }) {
     const customStyles = {
         ...style,
@@ -20,15 +22,22 @@ export default function ChatTrigger({
         ...(buttonTextColor && { color: `${buttonTextColor} !important` })
     };
 
+    // For Swarovski theme, show diamond icon instead of chat bubble
+    const isSwarovski = theme === "swarovski";
+
     return (
         <button ref={triggerRef} style={customStyles}
             onClick={() => { setOpen(!open) }}
             onMouseDown={(e) => {
                 e.preventDefault()
             }}
-            className="cl-trigger">
+            className={`cl-trigger ${theme ? `theme-${theme}` : ""}`}>
             <X className={"cl-trigger-icon " + (open ? "cl-scale-100" : "cl-scale-0")} />
-            <MessageSquare className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
+            {isSwarovski ? (
+                <Sparkles className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
+            ) : (
+                <MessageSquare className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
+            )}
         </button>
     )
 }

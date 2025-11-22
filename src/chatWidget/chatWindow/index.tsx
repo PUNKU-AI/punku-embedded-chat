@@ -92,7 +92,7 @@ export default function ChatWindow({
   height?: number;
   sessionId: React.MutableRefObject<string>;
   additional_headers?: { [key: string]: string };
-  theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit";
+  theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;
@@ -649,7 +649,7 @@ export default function ChatWindow({
                 <div className="cl-online-message"></div>
                 {online_message ? (
                   online_message
-                ) : theme === 'punku-ai-bookingkit' ? (
+                ) : theme === 'punku-ai-bookingkit' || theme === 'swarovski' ? (
                   <>
                     Powered by{' '}
                     <a
@@ -657,7 +657,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: link_color || 'inherit',
+                        color: theme === 'swarovski' ? '#FFFFFF' : (link_color || 'inherit'),
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -670,7 +670,7 @@ export default function ChatWindow({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: link_color || 'inherit',
+                        color: theme === 'swarovski' ? '#FFFFFF' : (link_color || 'inherit'),
                         textDecoration: 'underline',
                         cursor: 'pointer'
                       }}
@@ -771,7 +771,11 @@ export default function ChatWindow({
             />
           ))}
           {sendingMessage && !isStreaming && (
-            <ChatMessagePlaceholder bot_message_style={bot_message_style} />
+            <ChatMessagePlaceholder
+              bot_message_style={bot_message_style}
+              theme={theme}
+              language={language}
+            />
           )}
           <div ref={lastMessage}></div>
         </div>
