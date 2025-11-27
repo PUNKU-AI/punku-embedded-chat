@@ -161,13 +161,19 @@ export default function ChatMessage({
           }} 
           className={"cl-bot_message"}
         >
-          <Markdown 
+          <Markdown
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeMathjax]}
           >
             {parsedMessage}
           </Markdown>
+          <style>{`
+            .cl-bot_message .markdown-body,
+            .cl-bot_message .markdown-body * {
+              font-family: inherit !important;
+            }
+          `}</style>
           
           {/* Simple thumbs up/down feedback - hide for welcome message */}
           {!isSend && !error && message_id !== "welcome-message" && (

@@ -56,14 +56,48 @@ export default function ChatMessagePlaceholder({
     return () => clearInterval(interval);
   }, [messages.length]);
 
-  // For Swarovski theme, use special crystalline styling
+  // For Swarovski theme, use special crystalline styling with crystal image
   if (isCrystalline) {
     return (
       <div className="cl-chat-message cl-justify-start">
-        <div className="cl-thinking-message">
-          <span className="cl-thinking-icon">💎</span>
+        <div className="cl-thinking-message cl-swarovski-thinking">
+          <img
+            src="/SKW_2408_Pictograms_crystal.png"
+            alt="Crystal"
+            className="cl-crystal-loader"
+          />
           <span>{messages[currentMessageIndex]}</span>
         </div>
+        <style>{`
+          .cl-crystal-loader {
+            width: 32px;
+            height: 32px;
+            animation: crystalRotate 3s linear infinite;
+            filter: brightness(1.2) drop-shadow(0 0 8px rgba(100, 149, 237, 0.6));
+          }
+
+          @keyframes crystalRotate {
+            0% {
+              transform: rotateY(0deg);
+            }
+            100% {
+              transform: rotateY(360deg);
+            }
+          }
+
+          .cl-swarovski-thinking {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #f5f5f5;
+            border-radius: 2px;
+            color: #666666;
+            font-style: italic;
+            font-size: 14px;
+            font-family: "Euclid Circular B", Arial, sans-serif;
+          }
+        `}</style>
       </div>
     );
   }

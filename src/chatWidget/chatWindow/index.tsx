@@ -559,7 +559,7 @@ export default function ChatWindow({
           ...(background_color ? {backgroundColor: `${background_color} !important`} : {})
         }}
         ref={ref}
-        className={`cl-window ${(button_color || background_color || bot_message_color || user_message_color) ? "custom-theme" : (theme ? `theme-${theme}` : "")}`}
+        className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color) ? "custom-theme" : ""}`}
       >
         <div className="cl-header" style={button_color ? {backgroundColor: `${button_color} !important`, color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
           <div className="cl-header-content">
