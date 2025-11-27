@@ -12,11 +12,19 @@
     <punku-chat
         window_title="Support Assistant"
         welcome_message="Hello! How can I help you today?"
-        flow_id="YOUR_FLOW_ID"
+        flow_id=""
         host_url="https://app.punku.ai"
-        theme="punku-ai-bookingkit"
-        api_key="YOUR_API_KEY"
+        theme="swarovski"
+        api_key=""
         start_open="false"
+        background_color="#0F172A"
+        button_color="#0F172A"
+        button_text_color="#FFFFFF"
+        link_color="#2563EB"
+        user_message_color="#0F172A" 
+        send_button_style='{"backgroundColor": "#0F172A"}'
+        bot_message_color="#F1F5F9"
+ 
     ></punku-chat>
     
     
@@ -76,41 +84,6 @@
                 updateStatus('❌ Error checking status: ' + error.message);
             }
         }
-        
-        // Auto-test when page loads
-        window.addEventListener('load', async function() {
-            updateStatus('🚀 Page loaded - testing widget connection...');
-            
-            try {
-                const widget = await waitForWidget();
-                updateStatus('✅ Widget API loaded successfully! Ready to test programmatic control.');
-
-                checkStatus();
-                
-                // Test sequence: Open -> Wait -> Close -> Wait -> Open again
-                setTimeout(() => {
-                    updateStatus('🔄 Auto-opening chat in 2 seconds...');
-                }, 1000);
-                
-                setTimeout(() => {
-                    widget.open();
-                    updateStatus('✅ Auto-opened chat successfully!');
-                }, 3000);
-                
-                // Close after 5 seconds
-                setTimeout(() => {
-                    updateStatus('🔄 Auto-closing chat in 2 seconds...');
-                }, 5000);
-                
-                setTimeout(() => {
-                    widget.close();
-                    updateStatus('✅ Auto-closed chat successfully!');
-                }, 7000);
-                
-            } catch (error) {
-                updateStatus('❌ Error loading widget API: ' + error.message);
-            }
-        });
         
     </script>
 </body>

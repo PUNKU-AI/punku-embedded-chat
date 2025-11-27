@@ -18,8 +18,8 @@ export default function ChatTrigger({
 }) {
     const customStyles = {
         ...style,
-        ...(buttonColor && { backgroundColor: `${buttonColor} !important` }),
-        ...(buttonTextColor && { color: `${buttonTextColor} !important` })
+        ...(buttonColor && { backgroundColor: buttonColor }),
+        ...(buttonTextColor && { color: buttonTextColor })
     };
 
     // For Swarovski theme, show diamond icon instead of chat bubble

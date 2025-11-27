@@ -951,6 +951,39 @@ video {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Crystal Loader for Swarovski Theme */
+.cl-crystal-loader {
+  width: 24px;
+  height: 24px;
+  animation: rotateVertical 3s linear infinite;
+  perspective: 1000px;
+}
+
+.cl-crystal-loader img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(1.2) drop-shadow(0 0 10px rgba(74, 144, 226, 0.6));
+}
+
+@keyframes rotateVertical {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+.cl-thinking-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 8px 16px;
+  background: #f5f5f5;
+  border-radius: 12px;
+  color: #666666;
+  font-style: italic;
+  font-size: 14px;
+}
+
 .cl-justify-start {
   justify-content: flex-start;
 }
@@ -1270,194 +1303,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: rgba(255,255,255,0.6);
 }
 
-/* Theme: Swarovski - Crystal Prism Design - Refined */
-.theme-swarovski .cl-window {
-  background: #ffffff;
-  color: #1a1a1a;
-  border-radius: 4px;
-  border: 1px solid #e5e5e5;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  font-family: "Didot", "Bodoni MT", "Times New Roman", serif;
-}
-
-.theme-swarovski .cl-header {
-  background: #ffffff;
-  color: #1a1a1a;
-  border-bottom: 1px solid #f0f0f0;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
-}
-
-.theme-swarovski .cl-header-logo path {
-  fill: #1a1a1a;
-}
-
-.theme-swarovski .cl-header-subtitle {
-  color: #666666;
-  font-weight: 300;
-  letter-spacing: 0.5px;
-  text-shadow: none;
-}
-
-.theme-swarovski .cl-messages_container {
-  background: #ffffff;
-  position: relative;
-  overflow: hidden;
-}
-
-.theme-swarovski .cl-messages_container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  /* Stronger crystal facet pattern */
-  background-image: 
-    linear-gradient(135deg, transparent 0%, transparent 45%, rgba(180, 180, 190, 0.2) 50%, transparent 55%, transparent 100%),
-    linear-gradient(45deg, transparent 0%, transparent 45%, rgba(180, 180, 190, 0.2) 50%, transparent 55%, transparent 100%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5) 0%, transparent 90%),
-    linear-gradient(60deg, rgba(235, 236, 240, 0.8) 25%, transparent 26%, transparent 74%, rgba(235, 236, 240, 0.8) 75%),
-    linear-gradient(120deg, rgba(235, 236, 240, 0.8) 25%, transparent 26%, transparent 74%, rgba(235, 236, 240, 0.8) 75%);
-  background-size: 40px 40px, 40px 40px, 100% 100%, 60px 60px, 60px 60px;
-  opacity: 0.9;
-  z-index: 0;
-}
-
-.theme-swarovski .cl-messages_container > * {
-  position: relative;
-  z-index: 1;
-}
-
-/* User Message - Black background, White text - High Contrast */
-.theme-swarovski .cl-user_message {
-  background: #1a1a1a;
-  color: #ffffff;
-  border-radius: 2px;
-  border-top-right-radius: 0;
-  border-bottom-left-radius: 0;
-  font-weight: 300;
-  box-shadow: none;
-  border: none;
-}
-
-/* Bot Message - Light Grey background, Black text */
-.theme-swarovski .cl-bot_message,
-.theme-swarovski .cl-bot-message {
-  background: #f5f5f5 !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  color: #1a1a1a !important;
-  border-radius: 2px;
-  border: none !important;
-  font-weight: 300;
-  box-shadow: none !important;
-}
-
-/* Input Container */
-.theme-swarovski .cl-input_container {
-  background: #ffffff;
-  border-top: 1px solid #f0f0f0;
-}
-
-.theme-swarovski .cl-input-element {
-  background: #ffffff;
-  color: #1a1a1a;
-  border: 1px solid #e5e5e5;
-  font-weight: 300;
-}
-
-.theme-swarovski .cl-input-element::placeholder {
-  color: #999999;
-}
-
-/* Send Button */
-.theme-swarovski .cl-send-button {
-  background: #1a1a1a !important;
-  border-radius: 50%;
-  box-shadow: none !important;
-  border: none !important;
-  transition: opacity 0.2s ease;
-}
-
-.theme-swarovski .cl-send-button:hover {
-  opacity: 0.8;
-}
-
-.theme-swarovski .cl-send-icon {
-  stroke: #ffffff !important;
-  color: #ffffff !important;
-}
-
-/* Header Icons (Refresh, Close) */
-.theme-swarovski .cl-new-session-btn svg,
-.theme-swarovski .cl-close-btn svg {
-  stroke: #1a1a1a !important;
-  color: #1a1a1a !important;
-}
-
-.theme-swarovski .cl-new-session-btn:hover,
-.theme-swarovski .cl-close-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
-}
-
-/* Chat Trigger */
-.cl-trigger.theme-swarovski {
-  background: #1a1a1a !important;
-  background-color: #1a1a1a !important;
-  border-radius: 50%;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-  border: none !important;
-}
-
-.cl-trigger.theme-swarovski .cl-trigger-icon {
-  color: #ffffff !important;
-  stroke: #ffffff !important;
-}
-
-.cl-trigger.theme-swarovski::before {
-  display: none;
-}
-
-/* Links */
-.theme-swarovski .cl-window a {
-  color: #1a1a1a !important;
-  text-decoration: underline !important;
-  font-weight: 500;
-}
-
-.theme-swarovski .cl-window a:hover {
-  opacity: 0.7;
-}
-
-/* Thinking state */
-.theme-swarovski .cl-thinking-message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  margin: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 2px;
-  color: #666666;
-  font-style: italic;
-  font-size: 14px;
-}
-
-.theme-swarovski .cl-thinking-icon {
-  display: inline-block;
-  animation: rotate-diamond 2s linear infinite;
-}
-
-@keyframes rotate-diamond {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
 
 /* Logo colors for themes */
 .theme-dark .cl-header-logo path,
@@ -1775,11 +1620,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   -ms-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
   margin: 0;
-  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  font-family: inherit;
   font-size: 16px;
   line-height: 1.5;
   word-wrap: break-word;
   scroll-behavior: auto;
+}
+
+/* Fallback font for themes without custom font-family */
+.cl-bot_message:not([style*="font-family"]):not([style*="fontFamily"]) .markdown-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
 }
 
 .markdown-body .octicon {
@@ -2927,8 +2777,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     ...(user_message_text_color ? { color: `${user_message_text_color}` } : {})
   } : user_message_style;
 
-  // Override theme if custom colors are provided
-  const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = (button_color || background_color || bot_message_color || user_message_color) ? "default" : (theme || "default");
+  // Always use the specified theme - custom colors will be applied as inline style overrides
+  const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
     <div style={{ 
@@ -2987,6 +2837,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           welcome_message={welcome_message}
           show_feedback={show_feedback}
           header_icon={header_icon}
+          button_color={button_color}
+          button_text_color={button_text_color}
+          background_color={background_color}
+          bot_message_color={bot_message_color}
+          user_message_color={user_message_color}
           bot_message_text_color={bot_message_text_color}
           user_message_text_color={user_message_text_color}
           enable_streaming={true}
