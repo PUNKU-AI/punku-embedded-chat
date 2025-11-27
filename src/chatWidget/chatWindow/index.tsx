@@ -556,12 +556,12 @@ export default function ChatWindow({
           width, 
           height, 
           minWidth: width,
-          ...(background_color ? {backgroundColor: `${background_color} !important`} : {})
+          ...(background_color ? {backgroundColor: background_color} : {})
         }}
         ref={ref}
         className={`cl-window ${(button_color || background_color || bot_message_color || user_message_color) ? "custom-theme" : (theme ? `theme-${theme}` : "")}`}
       >
-        <div className="cl-header" style={button_color ? {backgroundColor: `${button_color} !important`, color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
+        <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
           <div className="cl-header-content">
             {header_icon ? (
               <img 
@@ -643,7 +643,7 @@ export default function ChatWindow({
               </button>
             )}
           </div>
-          <div className="cl-header-subtitle" style={button_color ? {color: `${button_text_color || '#FFFFFF'} !important`} : undefined}>
+          <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
             {online ? (
               <>
                 <div className="cl-online-message"></div>
@@ -705,7 +705,7 @@ export default function ChatWindow({
           </div>
         </div>
         
-        <div className="cl-messages_container" style={background_color ? { backgroundColor: `${background_color} !important` } : undefined}>
+        <div className="cl-messages_container" style={background_color ? { backgroundColor: background_color } : undefined}>
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">
@@ -726,8 +726,8 @@ export default function ChatWindow({
                 bot_message_style ||
                 (bot_message_color || bot_message_text_color ?
                   {
-                    ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
-                    ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
+                    ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
+                    ...(bot_message_text_color ? {color: bot_message_text_color} : {})
                   } : undefined)
               }
               user_message_style={undefined}
@@ -747,16 +747,16 @@ export default function ChatWindow({
                 bot_message_style || 
                 (bot_message_color || bot_message_text_color ? 
                   {
-                    ...(bot_message_color ? {backgroundColor: `${bot_message_color} !important`} : {}),
-                    ...(bot_message_text_color ? {color: `${bot_message_text_color} !important`} : {})
+                    ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
+                    ...(bot_message_text_color ? {color: bot_message_text_color} : {})
                   } : undefined)
               }
               user_message_style={
                 user_message_style || 
                 (user_message_color || user_message_text_color ? 
                   {
-                    ...(user_message_color ? {backgroundColor: `${user_message_color} !important`} : {}),
-                    ...(user_message_text_color ? {color: `${user_message_text_color} !important`} : {})
+                    ...(user_message_color ? {backgroundColor: user_message_color} : {}),
+                    ...(user_message_text_color ? {color: user_message_text_color} : {})
                   } : undefined)
               }
               error_message_style={error_message_style}
