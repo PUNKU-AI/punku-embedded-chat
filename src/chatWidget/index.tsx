@@ -1645,9 +1645,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   scroll-behavior: auto;
 }
 
-/* Fallback font for themes without custom font-family */
-.cl-bot_message:not([style*="font-family"]):not([style*="fontFamily"]) .markdown-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+/* Swarovski theme uses Euclid Circular B font */
+.theme-swarovski .markdown-body,
+.theme-swarovski .cl-bot_message,
+.theme-swarovski .cl-user_message {
+  font-family: 'Euclid Circular B', Arial, sans-serif;
+  font-weight: 300;
 }
 
 .markdown-body .octicon {
