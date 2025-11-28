@@ -163,6 +163,23 @@ export default function ChatWidget({
     };
   }, [open, widget_id]);
 
+
+  // Inject Euclid font into document.head for Shadow DOM compatibility
+  useEffect(() => {
+    const FONT_STYLE_ID = 'punku-euclid-font';
+    if (document.getElementById(FONT_STYLE_ID)) return;
+
+    // Extract @font-face rules from styles and inject into document head
+    const fontFaceRegex = /@font-face\s*\{[^}]+\}/g;
+    const fontFaces = styles.match(fontFaceRegex);
+
+    if (fontFaces && fontFaces.length > 0) {
+      const fontStyle = document.createElement('style');
+      fontStyle.id = FONT_STYLE_ID;
+      fontStyle.textContent = fontFaces.join('\n');
+      document.head.appendChild(fontStyle);
+    }
+  }, []);
   // Auto-save messages to localStorage whenever they change
   useEffect(() => {
     // Don't auto-save if we're in the middle of clearing a session

@@ -382,38 +382,50 @@ export default function ChatWindow({
       {/* Custom style overrides for when custom colors are provided */}
       <style>
         {`
+          /* Only apply background overrides when background_color is explicitly set */
+          ${background_color ? `
           .cl-window.custom-theme {
-            background-color: ${background_color || '#FFFFFF'} !important;
+            background-color: ${background_color} !important;
             background-image: none !important;
           }
           .cl-window.custom-theme * {
             background-image: none !important;
           }
           .cl-window.custom-theme .cl-messages_container {
-            background-color: ${background_color || '#FFFFFF'} !important;
+            background-color: ${background_color} !important;
             background-image: none !important;
-          }
-          .cl-window.custom-theme .cl-bot_message,
-          .cl-window.custom-theme .cl-bot-message {
-            background-color: ${bot_message_color || '#EDEADD'} !important;
-            color: ${bot_message_text_color || '#333333'} !important;
-          }
-          .cl-window.custom-theme .cl-user_message {
-            background-color: ${user_message_color || '#4A90E2'} !important;
-            color: ${user_message_text_color || '#FFFFFF'} !important;
-          }
-          .cl-window.custom-theme .cl-messages_container {
-            background-color: ${background_color || '#FFFFFF'} !important;
-            background-image: none !important;
-          }
-          .cl-window.custom-theme .cl-header {
-            background-color: ${button_color || '#4A90E2'} !important;
-            color: ${button_text_color || '#FFFFFF'} !important;
           }
           .cl-window.custom-theme .cl-input_container {
-            background-color: ${background_color || '#FFFFFF'} !important;
+            background-color: ${background_color} !important;
             border-color: transparent !important;
           }
+          ` : ''}
+
+          /* Only apply bot message color overrides when explicitly set */
+          ${bot_message_color || bot_message_text_color ? `
+          .cl-window.custom-theme .cl-bot_message,
+          .cl-window.custom-theme .cl-bot-message {
+            ${bot_message_color ? `background-color: ${bot_message_color} !important;` : ''}
+            ${bot_message_text_color ? `color: ${bot_message_text_color} !important;` : ''}
+          }
+          ` : ''}
+
+          /* Only apply user message color overrides when explicitly set */
+          ${user_message_color || user_message_text_color ? `
+          .cl-window.custom-theme .cl-user_message {
+            ${user_message_color ? `background-color: ${user_message_color} !important;` : ''}
+            ${user_message_text_color ? `color: ${user_message_text_color} !important;` : ''}
+          }
+          ` : ''}
+
+          /* Only apply header color overrides when button_color is explicitly set */
+          ${button_color ? `
+          .cl-window.custom-theme .cl-header {
+            background-color: ${button_color} !important;
+            color: ${button_text_color || '#FFFFFF'} !important;
+          }
+          ` : ''}
+
           /* Send button styling is handled inline */
 
           /* Link color customization - applies to all links in chat messages and header */
@@ -559,7 +571,7 @@ export default function ChatWindow({
           ...(background_color ? {backgroundColor: background_color} : {})
         }}
         ref={ref}
-        className={`cl-window ${(button_color || background_color || bot_message_color || user_message_color) ? "custom-theme" : (theme ? `theme-${theme}` : "")}`}
+        className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
       >
         <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
           <div className="cl-header-content">
