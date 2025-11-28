@@ -63,7 +63,7 @@ export default function ChatMessagePlaceholder({
   if (isCrystalline) {
     return (
       <div className="cl-chat-message cl-justify-start">
-        <div className="cl-thinking-message">
+        <div style={bot_message_style} className="cl-thinking-message">
           <div className="cl-crystal-loader">
             <img src={crystalLoaderBase64} alt="Loading..." />
           </div>

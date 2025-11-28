@@ -784,7 +784,14 @@ export default function ChatWindow({
           ))}
           {sendingMessage && !isStreaming && (
             <ChatMessagePlaceholder
-              bot_message_style={bot_message_style}
+              bot_message_style={
+                bot_message_style ||
+                (bot_message_color || bot_message_text_color ?
+                  {
+                    ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
+                    ...(bot_message_text_color ? {color: bot_message_text_color} : {})
+                  } : undefined)
+              }
               theme={theme}
               language={language}
             />
