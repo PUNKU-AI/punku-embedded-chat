@@ -76,6 +76,11 @@ npm test -- sessionStorage.test.ts # Specific file
 
 ## Development Guidelines
 
+### Security
+- **NEVER** commit sensitive information to `index.html` or any other file (API keys, flow IDs, host URLs with credentials)
+- Use placeholder values like `your-flow-id` or `https://api.example.com` in examples and documentation
+- Real configuration values should only exist in deployment environments, not in the repository
+
 ### Adding New Components
 1. Create component in appropriate directory
 2. Add corresponding `.test.tsx` file
