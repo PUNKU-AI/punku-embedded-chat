@@ -58,7 +58,8 @@ export default function ChatWindow({
   isRefreshingSession = false,
   language = 'en' as Language,
   link_color,
-  onClose
+  onClose,
+  mobile_chat_window_style
 }: {
   api_key?: string;
   output_type: string,
@@ -109,6 +110,7 @@ export default function ChatWindow({
   isRefreshingSession?: boolean;
   language?: Language;
   link_color?: string;
+  mobile_chat_window_style?: React.CSSProperties;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -446,12 +448,13 @@ export default function ChatWindow({
           /* Mobile - Small phones */
           @media (max-width: 640px) {
             .cl-chat-window {
-              width: calc(100vw - 16px) !important;
-              height: calc(100vh - 120px) !important;
-              max-height: calc(100vh - 120px) !important;
-              right: 8px !important;
-              bottom: 8px !important;
-              left: 8px !important;
+              width: ${mobile_chat_window_style?.width || 'calc(100vw - 16px)'} !important;
+              height: ${mobile_chat_window_style?.height || 'calc(100vh - 120px)'} !important;
+              max-height: ${mobile_chat_window_style?.maxHeight || mobile_chat_window_style?.height || 'calc(100vh - 120px)'} !important;
+              right: ${mobile_chat_window_style?.right || '8px'} !important;
+              bottom: ${mobile_chat_window_style?.bottom || '8px'} !important;
+              left: ${mobile_chat_window_style?.left || '8px'} !important;
+              ${mobile_chat_window_style?.top ? `top: ${mobile_chat_window_style.top} !important;` : ''}
             }
 
             .cl-window {

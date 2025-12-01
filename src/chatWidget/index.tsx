@@ -52,6 +52,7 @@ export default function ChatWidget({
   idle_expiration_hours,
   default_language,
   link_color,
+  mobile_chat_window_style,
 }: {
   api_key?: string;
   input_value: string,
@@ -98,6 +99,7 @@ export default function ChatWidget({
   idle_expiration_hours?: number;
   default_language?: string;
   link_color?: string;
+  mobile_chat_window_style?: React.CSSProperties;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
@@ -2888,6 +2890,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           isRefreshingSession={isRefreshingSession}
           language={currentLanguage}
           link_color={link_color}
+          mobile_chat_window_style={mobile_chat_window_style}
         />
       </div>
     </div>
