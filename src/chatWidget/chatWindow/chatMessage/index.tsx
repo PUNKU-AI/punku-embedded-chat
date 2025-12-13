@@ -161,10 +161,17 @@ export default function ChatMessage({
           }} 
           className={"cl-bot_message"}
         >
-          <Markdown 
+          <Markdown
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeMathjax]}
+            components={{
+              a: ({ href, children, ...props }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                  {children}
+                </a>
+              ),
+            }}
           >
             {parsedMessage}
           </Markdown>
