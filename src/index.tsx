@@ -28,6 +28,7 @@ customElements.define('punku-chat', r2wc(ChatWidget, {
         send_icon_style:"json",
         placeholder:"string",
         placeholder_sending:"string",
+        loading_messages:"json",
         input_style:"json",
         input_container_style:"json",
         chat_position:"string",

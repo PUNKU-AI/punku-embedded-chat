@@ -58,6 +58,7 @@ export default function ChatWindow({
   isRefreshingSession = false,
   language = 'en' as Language,
   link_color,
+  loading_messages,
   onClose
 }: {
   api_key?: string;
@@ -109,6 +110,7 @@ export default function ChatWindow({
   isRefreshingSession?: boolean;
   language?: Language;
   link_color?: string;
+  loading_messages?: string[];
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -794,6 +796,7 @@ export default function ChatWindow({
               }
               theme={theme}
               language={language}
+              loading_messages={loading_messages}
             />
           )}
           <div ref={lastMessage}></div>
