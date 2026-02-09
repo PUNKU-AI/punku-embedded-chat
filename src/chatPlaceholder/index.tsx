@@ -6,6 +6,7 @@ export default function ChatMessagePlaceholder({
   bot_message_style,
   theme = "default",
   language = "en" as Language,
+  loading_messages,
 }: ChatMessagePlaceholderType) {
   const defaultThinkingMessages = [
     "Überlege…",
@@ -40,15 +41,22 @@ export default function ChatMessagePlaceholder({
     "Ordne meine Gedanken…",
   ];
 
+  const normalizedCustomMessages = (loading_messages || [])
+    .map((m) => (typeof m === "string" ? m.trim() : ""))
+    .filter(Boolean);
+
   // Use crystalline messages for Swarovski theme, otherwise use default
   const isCrystalline = theme === "swarovski";
-  const messages = isCrystalline
-    ? crystallineThinkingMessages.map(msg => (language === 'de' ? msg.de : msg.en))
+  const fallbackMessages = isCrystalline
+    ? crystallineThinkingMessages.map((msg) => (language === "de" ? msg.de : msg.en))
     : defaultThinkingMessages;
+
+  const messages = (normalizedCustomMessages.length > 0 ? normalizedCustomMessages : fallbackMessages) as string[];
 
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   useEffect(() => {
+    if (messages.length === 0) return;
     const interval = setInterval(() => {
       setCurrentMessageIndex(Math.floor(Math.random() * messages.length));
     }, 2500);

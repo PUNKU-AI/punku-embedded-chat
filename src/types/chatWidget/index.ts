@@ -15,4 +15,5 @@ export type ChatMessageType = {
     bot_message_style?: React.CSSProperties;
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
     language?: "en" | "de";
+    loading_messages?: string[];
   };

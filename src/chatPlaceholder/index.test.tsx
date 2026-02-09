@@ -41,6 +41,11 @@ describe('ChatMessagePlaceholder', () => {
       const botMessage = document.querySelector('.cl-bot_message');
       expect(botMessage).toHaveStyle({ backgroundColor: 'blue', color: 'white' });
     });
+
+    it('should render custom loading messages when provided', () => {
+      render(<ChatMessagePlaceholder loading_messages={['Custom loading 1', 'Custom loading 2']} />);
+      expect(screen.getByText('Custom loading 1')).toBeInTheDocument();
+    });
   });
 
   describe('Swarovski Theme (Crystalline)', () => {
