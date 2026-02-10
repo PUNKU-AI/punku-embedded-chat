@@ -1,4 +1,5 @@
-import { Send, MessagesSquare, RefreshCw, X } from "lucide-react";
+import { Send, MessagesSquare, RefreshCw, X, type LucideIcon } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -8,6 +9,16 @@ import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { translations, Language } from "../../translations";
+
+const getLucideIconByName = (name?: string): LucideIcon | undefined => {
+  if (!name) return undefined;
+  const icon = (LucideIcons as unknown as Record<string, unknown>)[name];
+  if (!icon) return undefined;
+  if (typeof icon === "function") return icon as LucideIcon;
+  // lucide-react icons are typically React.forwardRef components (typeof === 'object')
+  if (typeof icon === "object" && "$$typeof" in (icon as object)) return icon as LucideIcon;
+  return undefined;
+};
 
 export default function ChatWindow({
   api_key,
@@ -45,6 +56,7 @@ export default function ChatWindow({
   welcome_message,
   show_feedback = false,
   header_icon,
+  header_icon_name,
   background_color,
   bot_message_color,
   user_message_color,
@@ -97,6 +109,7 @@ export default function ChatWindow({
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;
+  header_icon_name?: string;
   background_color?: string;
   bot_message_color?: string;
   user_message_color?: string;
@@ -112,6 +125,9 @@ export default function ChatWindow({
   link_color?: string;
   loading_messages?: string[];
 }) {
+  const HeaderLucideIcon =
+    getLucideIconByName(header_icon_name) ?? MessagesSquare;
+
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
@@ -587,7 +603,7 @@ export default function ChatWindow({
               />
             ) : (
               <div className="cl-default-header-icon">
-                <MessagesSquare 
+                <HeaderLucideIcon 
                   className="cl-header-logo" 
                   color="white" 
                   size={24}

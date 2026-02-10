@@ -447,6 +447,14 @@ describe('ChatWindow', () => {
       expect(headerIcon).toBeInTheDocument();
       expect(headerIcon?.tagName.toLowerCase()).toBe('img');
     });
+
+    it('should render header with custom lucide icon name', () => {
+      render(<ChatWindow {...defaultProps} header_icon_name="Bot" />);
+
+      const headerIcon = document.querySelector('.cl-header-logo');
+      expect(headerIcon).toBeInTheDocument();
+      expect(headerIcon?.tagName.toLowerCase()).toBe('svg');
+    });
   });
 
   describe('Online/Offline Status', () => {

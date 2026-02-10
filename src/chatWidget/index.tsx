@@ -41,6 +41,7 @@ export default function ChatWidget({
   welcome_message,
   show_feedback = false,
   header_icon,
+  header_icon_name,
   button_color,
   button_text_color,
   background_color,
@@ -88,6 +89,7 @@ export default function ChatWidget({
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;
+  header_icon_name?: string;
   button_color?: string;
   button_text_color?: string;
   background_color?: string;
@@ -2878,6 +2880,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           welcome_message={welcome_message}
           show_feedback={show_feedback}
           header_icon={header_icon}
+          header_icon_name={header_icon_name}
           button_color={button_color}
           button_text_color={button_text_color}
           background_color={background_color}
