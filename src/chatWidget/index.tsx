@@ -54,6 +54,7 @@ export default function ChatWidget({
   idle_expiration_hours,
   default_language,
   link_color,
+  bottom_offset,
 }: {
   api_key?: string;
   input_value: string,
@@ -102,6 +103,7 @@ export default function ChatWidget({
   idle_expiration_hours?: number;
   default_language?: string;
   link_color?: string;
+  bottom_offset?: number;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
@@ -2762,17 +2764,19 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   border-radius: 4px;
 }`
   // Get position styles for the chat trigger based on chat_position prop
+  const effectiveBottomOffset = bottom_offset ?? 20;
+
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
         return { top: "20px", left: "20px", bottom: "auto", right: "auto" };
-      case "top-right": 
+      case "top-right":
         return { top: "20px", right: "20px", bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: "20px", left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, left: "20px", top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: "20px", right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, right: "20px", top: "auto", left: "auto" };
     }
   };
 
@@ -2781,13 +2785,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     switch(position) {
       case "top-left":
         return { top: "70px", left: "20px", bottom: "auto", right: "auto" };
-      case "top-right": 
+      case "top-right":
         return { top: "70px", right: "20px", bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: "70px", left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, left: "20px", top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: "70px", right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, right: "20px", top: "auto", left: "auto" };
     }
   };
   
@@ -2894,6 +2898,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           isRefreshingSession={isRefreshingSession}
           language={currentLanguage}
           link_color={link_color}
+          bottom_offset={effectiveBottomOffset}
         />
       </div>
     </div>

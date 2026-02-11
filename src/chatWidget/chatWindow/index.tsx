@@ -71,7 +71,8 @@ export default function ChatWindow({
   language = 'en' as Language,
   link_color,
   loading_messages,
-  onClose
+  onClose,
+  bottom_offset,
 }: {
   api_key?: string;
   output_type: string,
@@ -124,6 +125,7 @@ export default function ChatWindow({
   language?: Language;
   link_color?: string;
   loading_messages?: string[];
+  bottom_offset?: number;
 }) {
   const HeaderLucideIcon =
     getLucideIconByName(header_icon_name) ?? MessagesSquare;
@@ -387,7 +389,7 @@ export default function ChatWindow({
       }
       style={{
         position: "fixed",
-        bottom: "100px",
+        bottom: `${(bottom_offset ?? 20) + 80}px`,
         right: "20px",
         maxHeight: "70vh",
         maxWidth: "90vw",
