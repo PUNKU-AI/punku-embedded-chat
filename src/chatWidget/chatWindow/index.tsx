@@ -688,7 +688,7 @@ export default function ChatWindow({
                   border: 'none',
                   cursor: 'pointer',
                   padding: '4px',
-                  display: 'flex',
+                  display: 'none', // Hidden by default, shown on mobile/tablet via CSS
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginLeft: 'auto',
