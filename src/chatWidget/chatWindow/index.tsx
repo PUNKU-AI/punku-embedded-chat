@@ -16,7 +16,8 @@ const getLucideIconByName = (name?: string): LucideIcon | undefined => {
   if (!icon) return undefined;
   if (typeof icon === "function") return icon as LucideIcon;
   // lucide-react icons are typically React.forwardRef components (typeof === 'object')
-  if (typeof icon === "object" && "$$typeof" in (icon as object)) return icon as LucideIcon;
+  if (typeof icon === "object" && "$$typeof" in (icon as object))
+    return icon as LucideIcon;
   return undefined;
 };
 
@@ -362,6 +363,39 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
+  const statusBranding = (
+    <>
+      Powered by{" "}
+      <a
+        href="https://www.punku.ai/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: button_text_color || link_color || "inherit",
+          fontWeight: 700,
+          textDecoration: "underline",
+          cursor: "pointer"
+        }}
+      >
+        PUNKU.AI
+      </a>
+      {" & "}
+      <a
+        href="https://bookingkit.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: button_text_color || link_color || "inherit",
+          fontWeight: 700,
+          textDecoration: "underline",
+          cursor: "pointer"
+        }}
+      >
+        bookingKit
+      </a>
+    </>
+  );
+
   // Handle new session with confirmation
   const handleNewSession = () => {
     if (onStartNewSession) {
@@ -607,7 +641,7 @@ export default function ChatWindow({
               <div className="cl-default-header-icon">
                 <HeaderLucideIcon 
                   className="cl-header-logo" 
-                  color="white" 
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")} 
                   size={24}
                 />
               </div>
@@ -639,7 +673,7 @@ export default function ChatWindow({
               >
                 <RefreshCw
                   size={16}
-                  color={button_text_color || 'white'}
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                 />
               </button>
             )}
@@ -670,7 +704,7 @@ export default function ChatWindow({
               >
                 <X
                   size={20}
-                  color={button_text_color || 'white'}
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                 />
               </button>
             )}
@@ -679,54 +713,7 @@ export default function ChatWindow({
             {online ? (
               <>
                 <div className="cl-online-message"></div>
-                {online_message ? (
-                  online_message
-                ) : theme === 'punku-ai-bookingkit' || theme === 'swarovski' ? (
-                  <>
-                    Powered by{' '}
-                    <a
-                      href="https://www.punku.ai/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: theme === 'swarovski' ? '#FFFFFF' : (link_color || 'inherit'),
-                        textDecoration: 'underline',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      PUNKU.AI
-                    </a>
-                    {' & '}
-                    <a
-                      href="https://bookingkit.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: theme === 'swarovski' ? '#FFFFFF' : (link_color || 'inherit'),
-                        textDecoration: 'underline',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      bookingkit
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    Powered by{' '}
-                    <a
-                      href="https://www.punku.ai/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: link_color || 'inherit',
-                        textDecoration: 'underline',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      PUNKU.AI
-                    </a>
-                  </>
-                )}
+                {online_message || statusBranding}
               </>
             ) : (
               <>
@@ -829,23 +816,10 @@ export default function ChatWindow({
             type="text"
             disabled={sendingMessage}
             placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
-            style={{
-              ...input_style, 
-              ...(button_color ? {
-                backgroundColor: 'rgba(255,255,255,0.1) !important', 
-                color: `${button_text_color || '#FFFFFF'} !important`
-              } : {})
-            }}
+            style={input_style}
             ref={inputRef}
             className="cl-input-element"
           />
-          {button_color && (
-            <style>
-              {`.cl-input-element::placeholder { 
-                color: rgba(255,255,255,0.6) !important; 
-              }`}
-            </style>
-          )}
           <button
             className="cl-send-button"
             style={{
@@ -859,8 +833,8 @@ export default function ChatWindow({
               border: 'none',
               margin: '8px',
               cursor: 'pointer',
-              // Always set button color directly if provided
-              backgroundColor: button_color || (send_button_style && send_button_style.backgroundColor) || '#3b82f6',
+              // Only set button color if explicitly provided (otherwise CSS theme handles it)
+              ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
               // Apply remaining styles from send_button_style (if any)
               ...(send_button_style || {})
             }}
