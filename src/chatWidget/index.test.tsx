@@ -97,6 +97,7 @@ import ChatWidget from './index';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
+  const defaultClosedHintText = "Hi, I am your AI assistant. How can I help you?";
   const defaultProps = {
     host_url: 'http://localhost:3000',
     flow_id: 'test-flow-id',
@@ -136,6 +137,56 @@ describe('ChatWidget', () => {
 
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
     });
+
+    it('should not show closed widget hint by default when widget is closed', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      expect(screen.queryByText(defaultClosedHintText)).not.toBeInTheDocument();
+    });
+
+    it('should use custom closed widget hint text', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text="Need assistance?" />);
+
+      expect(screen.getByText('Need assistance?')).toBeInTheDocument();
+    });
+
+    it('should support multiline closed widget hint text', () => {
+      const hintText = "Hi, I am your AI assistant.\nHow can I help you?";
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text={hintText} />);
+
+      const hint = screen.getByText((content, element) => {
+        return Boolean(element && element.classList.contains('cl-closed-widget-hint') && content.includes('How can I help you?'));
+      });
+      expect(hint.textContent).toBe(hintText);
+    });
+
+    it('should position closed widget hint on the left by default', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-left');
+    });
+
+    it('should position closed widget hint at top when configured', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_position="top" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-top');
+    });
+
+    it('should apply custom closed widget hint background color', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_background_color="#123456" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveStyle({ backgroundColor: '#123456' });
+    });
+
+    it('should apply custom closed widget hint text color', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text_color="#abcdef" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveStyle({ color: '#abcdef' });
+    });
   });
 
   describe('Open/Close Behavior', () => {
@@ -165,6 +216,32 @@ describe('ChatWidget', () => {
       fireEvent.click(closeButton);
 
       expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should hide closed widget hint when widget is open', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+
+      expect(screen.getByText(defaultClosedHintText)).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('chat-trigger'));
+      expect(screen.queryByText(defaultClosedHintText)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Closed Widget Hint Timing', () => {
+    it('should fade closed widget hint automatically after configured timeout', () => {
+      jest.useFakeTimers();
+
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />);
+
+      const hint = screen.getByText(defaultClosedHintText);
+      expect(hint).toHaveClass('cl-visible');
+
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      expect(hint).not.toHaveClass('cl-visible');
+      jest.useRealTimers();
     });
   });
 

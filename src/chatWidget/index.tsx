@@ -1,8 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
-import { useEffect } from "react";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
@@ -55,6 +54,12 @@ export default function ChatWidget({
   default_language,
   link_color,
   bottom_offset,
+  closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
+  show_closed_widget_hint = false,
+  closed_widget_hint_auto_hide_ms,
+  closed_widget_hint_position = "left",
+  closed_widget_hint_background_color,
+  closed_widget_hint_text_color,
 }: {
   api_key?: string;
   input_value: string,
@@ -104,6 +109,12 @@ export default function ChatWidget({
   default_language?: string;
   link_color?: string;
   bottom_offset?: number;
+  closed_widget_hint_text?: string;
+  show_closed_widget_hint?: boolean;
+  closed_widget_hint_auto_hide_ms?: number;
+  closed_widget_hint_position?: "left" | "top";
+  closed_widget_hint_background_color?: string;
+  closed_widget_hint_text_color?: string;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = {
@@ -117,6 +128,7 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
+  const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(!start_open);
 
   // Initialize language based on browser detection or default_language prop
   const getInitialLanguage = (): Language => {
@@ -193,6 +205,25 @@ export default function ChatWidget({
       SessionStorage.updateMessages(flow_id, messages);
     }
   }, [messages, flow_id, isClearing]);
+
+  useEffect(() => {
+    if (open || !show_closed_widget_hint || !closed_widget_hint_text.trim()) {
+      setShowClosedWidgetHint(false);
+      return;
+    }
+
+    setShowClosedWidgetHint(true);
+
+    if (typeof closed_widget_hint_auto_hide_ms !== "number" || closed_widget_hint_auto_hide_ms <= 0) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setShowClosedWidgetHint(false);
+    }, closed_widget_hint_auto_hide_ms);
+
+    return () => clearTimeout(timeout);
+  }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms]);
 
   // Function to start a new session
   const startNewSession = () => {
@@ -808,6 +839,63 @@ video {
 .cl-trigger:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(29 78 216 / var(--tw-bg-opacity));
+}
+
+.cl-closed-widget-hint {
+  --cl-closed-hint-bg: #ffffff;
+  position: absolute;
+  z-index: 1;
+  width: max-content;
+  max-width: none;
+  border-radius: 10px;
+  background: var(--cl-closed-hint-bg);
+  color: #111827;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.3;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
+  white-space: pre;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+.cl-closed-widget-hint.cl-visible {
+  opacity: 1;
+}
+
+.cl-closed-widget-hint.cl-hint-left {
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.cl-closed-widget-hint.cl-hint-top {
+  bottom: calc(100% + 12px);
+  right: 0;
+}
+
+.cl-closed-widget-hint-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.cl-closed-widget-hint.cl-hint-left .cl-closed-widget-hint-arrow {
+  top: 50%;
+  right: -7px;
+  transform: translateY(-50%);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 7px solid var(--cl-closed-hint-bg);
+}
+
+.cl-closed-widget-hint.cl-hint-top .cl-closed-widget-hint-arrow {
+  bottom: -7px;
+  right: 18px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid var(--cl-closed-hint-bg);
 }
 
 .cl-window {
@@ -2888,6 +2976,17 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const cornerPosition = chat_position || "bottom-right";
   const triggerStyle = getCornerStyle(cornerPosition);
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
+  const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
+
+  const getClosedHintPositionClass = () => {
+    switch (closed_widget_hint_position) {
+      case "top":
+        return "cl-hint-top";
+      case "left":
+      default:
+        return "cl-hint-left";
+    }
+  };
 
   // Create style objects from simple color props if provided
   const chatTriggerStyleFromProps = button_color || button_text_color ? {
@@ -2925,6 +3024,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     }}>
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
       <div style={{ position: "relative" }}>
+        {shouldRenderClosedWidgetHint && (
+          <div
+            className={`cl-closed-widget-hint ${getClosedHintPositionClass()} ${showClosedWidgetHint ? "cl-visible" : ""}`}
+            aria-hidden={!showClosedWidgetHint}
+            style={{
+              ...(closed_widget_hint_background_color ? { ["--cl-closed-hint-bg" as any]: closed_widget_hint_background_color } : {}),
+              ...(closed_widget_hint_background_color ? { backgroundColor: closed_widget_hint_background_color } : {}),
+              ...(closed_widget_hint_text_color ? { color: closed_widget_hint_text_color } : {}),
+            }}
+          >
+            {closed_widget_hint_text}
+            <span className="cl-closed-widget-hint-arrow" />
+          </div>
+        )}
         <ChatTrigger
           style={chatTriggerStyleFromProps}
           open={open}

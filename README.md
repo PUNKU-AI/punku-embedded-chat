@@ -173,6 +173,11 @@ Use the widget API to customize your widget:
 | bot_message_text_color| string    | No       |
 | button_color          | string    | No       |
 | button_text_color     | string    | No       |
+| closed_widget_hint_auto_hide_ms | number | No   |
+| closed_widget_hint_background_color | string | No |
+| closed_widget_hint_position | string | No      |
+| closed_widget_hint_text_color | string | No |
+| closed_widget_hint_text | string  | No       |
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
@@ -205,6 +210,7 @@ Use the widget API to customize your widget:
 | session_id            | string    | No       |
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
+| show_closed_widget_hint | boolean | No       |
 | link_color            | string    | No       |
 
 - **background_color:**
@@ -371,6 +377,39 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
+
+- **closed_widget_hint_text:**
+  - Type: String
+  - Required: No
+  - Default: "Hi, I am your AI assistant. How can I help you?"
+  - Description: Text displayed next to the closed chat launcher, pointing at the widget trigger.
+
+- **show_closed_widget_hint:**
+  - Type: Boolean
+  - Required: No
+  - Default: false
+  - Description: Controls whether the closed-widget hint is shown when the chat is closed.
+
+- **closed_widget_hint_auto_hide_ms:**
+  - Type: Number
+  - Required: No
+  - Description: Optional auto-hide timeout for the closed-widget hint in milliseconds. If omitted or set to 0/negative, the hint stays visible until the widget opens.
+
+- **closed_widget_hint_position:**
+  - Type: String
+  - Required: No
+  - Default: "left"
+  - Description: Position of the closed-widget hint relative to the trigger. Supported values: "left", "top".
+
+- **closed_widget_hint_background_color:**
+  - Type: String
+  - Required: No
+  - Description: Background color of the closed-widget hint textbox (any valid CSS color value).
+
+- **closed_widget_hint_text_color:**
+  - Type: String
+  - Required: No
+  - Description: Text color of the closed-widget hint textbox (any valid CSS color value).
 
 - **width:**
   - Type: Number

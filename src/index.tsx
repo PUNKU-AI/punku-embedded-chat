@@ -52,6 +52,12 @@ if (!customElements.get('punku-chat')) {
             idle_expiration_hours: "number",
             link_color: "string",
             bottom_offset: "number",
+            closed_widget_hint_text: "string",
+            show_closed_widget_hint: "boolean",
+            closed_widget_hint_auto_hide_ms: "number",
+            closed_widget_hint_position: "string",
+            closed_widget_hint_background_color: "string",
+            closed_widget_hint_text_color: "string",
         },
     }));
 }
