@@ -44,7 +44,11 @@ export const translations = {
     newSessionConfirm: "Are you sure you want to start a new conversation? This will clear your current chat history.",
     newSessionTitle: "Start New Conversation",
     confirmButton: "Yes, Start New",
-    cancelButton: "Cancel"
+    cancelButton: "Cancel",
+    errorNetworkBlocked: "Unable to connect. Your network may be blocking this service. Please try disabling your ad blocker or using a different network.",
+    errorTimeout: "The request timed out. Please check your connection and try again.",
+    errorServerError: "The server encountered an error. Please try again in a moment.",
+    errorGeneric: "Something went wrong. Please try again.",
   },
   de: {
     welcomeMessage: "Hallo! Wie kann ich Ihnen heute helfen?",
@@ -56,7 +60,11 @@ export const translations = {
     newSessionConfirm: "Sind Sie sicher, dass Sie ein neues Gespräch beginnen möchten? Dies wird Ihren aktuellen Chat-Verlauf löschen.",
     newSessionTitle: "Neues Gespräch beginnen",
     confirmButton: "Ja, Neu beginnen",
-    cancelButton: "Abbrechen"
+    cancelButton: "Abbrechen",
+    errorNetworkBlocked: "Verbindung nicht möglich. Ihr Netzwerk blockiert möglicherweise diesen Dienst. Bitte deaktivieren Sie Ihren Werbeblocker oder verwenden Sie ein anderes Netzwerk.",
+    errorTimeout: "Die Anfrage hat das Zeitlimit überschritten. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    errorServerError: "Der Server hat einen Fehler festgestellt. Bitte versuchen Sie es in einem Moment erneut.",
+    errorGeneric: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
   }
 };
 

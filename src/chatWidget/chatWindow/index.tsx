@@ -4,7 +4,7 @@ import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from ".
 import React, { useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
-import { sendMessage, streamMessage } from "../../controllers";
+import { sendMessage, streamMessage, ChatNetworkError } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
@@ -227,26 +227,31 @@ export default function ChatWindow({
             setSendingMessage(false);
           })
           .catch((err) => {
-            const response = err.response;
-            if (err.code === "ERR_NETWORK") {
-              updateLastMessage({
-                message: "Network error",
-                isSend: false,
-                error: true,
-              });
-            } else if (
-              response &&
-              response.status === 500 &&
-              response.data &&
-              response.data.detail
-            ) {
-              updateLastMessage({
-                message: response.data.detail,
-                isSend: false,
-                error: true,
-              });
+            let errorMessage: string;
+            if (err instanceof ChatNetworkError) {
+              switch (err.errorType) {
+                case 'network_blocked':
+                case 'cors_error':
+                  errorMessage = t.errorNetworkBlocked;
+                  break;
+                case 'timeout':
+                  errorMessage = t.errorTimeout;
+                  break;
+                case 'server_error':
+                  errorMessage = t.errorServerError;
+                  break;
+                default:
+                  errorMessage = t.errorGeneric;
+              }
+            } else {
+              errorMessage = t.errorGeneric;
             }
-            console.error(err);
+            updateLastMessage({
+              message: errorMessage,
+              isSend: false,
+              error: true,
+            });
+            console.error('Chat request failed:', err);
             setSendingMessage(false);
           });
       } else {
@@ -328,9 +333,30 @@ export default function ChatWindow({
             // Stream error
             console.error('Streaming error:', error);
             setSendingMessage(false);
-            
+            setIsStreaming(false);
+
+            let errorMessage: string;
+            if (error instanceof ChatNetworkError) {
+              switch (error.errorType) {
+                case 'network_blocked':
+                case 'cors_error':
+                  errorMessage = t.errorNetworkBlocked;
+                  break;
+                case 'timeout':
+                  errorMessage = t.errorTimeout;
+                  break;
+                case 'server_error':
+                  errorMessage = t.errorServerError;
+                  break;
+                default:
+                  errorMessage = t.errorGeneric;
+              }
+            } else {
+              errorMessage = t.errorGeneric;
+            }
+
             updateLastMessage({
-              message: error.message || "Streaming error occurred",
+              message: errorMessage,
               isSend: false,
               error: true,
             });
