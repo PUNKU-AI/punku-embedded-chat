@@ -1010,8 +1010,8 @@ video {
 }
 
 .cl-header-logo {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   margin-right: 12px;
 }
 
@@ -1594,8 +1594,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-header-logo {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
 }
 
@@ -2936,8 +2936,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 
 .cl-header-logo {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
   border-radius: 4px;
 }`
