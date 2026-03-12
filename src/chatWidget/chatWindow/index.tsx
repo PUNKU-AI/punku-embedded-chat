@@ -74,7 +74,7 @@ export default function ChatWindow({
   loading_messages,
   onClose,
   bottom_offset,
-  top_offset = 0,
+  top_offset = 60,
 }: {
   api_key?: string;
   output_type: string,

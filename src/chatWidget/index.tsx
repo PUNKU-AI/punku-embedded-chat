@@ -2945,7 +2945,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }`
   // Get position styles for the chat trigger based on chat_position prop
   const effectiveBottomOffset = bottom_offset ?? 20;
-  const effectiveTopOffset = top_offset ?? 0;
+  const effectiveTopOffset = top_offset ?? 60;
 
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
