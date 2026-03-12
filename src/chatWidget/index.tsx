@@ -54,6 +54,7 @@ export default function ChatWidget({
   default_language,
   link_color,
   bottom_offset,
+  top_offset,
   closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
   show_closed_widget_hint = false,
   closed_widget_hint_auto_hide_ms,
@@ -109,6 +110,7 @@ export default function ChatWidget({
   default_language?: string;
   link_color?: string;
   bottom_offset?: number;
+  top_offset?: number;
   closed_widget_hint_text?: string;
   show_closed_widget_hint?: boolean;
   closed_widget_hint_auto_hide_ms?: number;
@@ -2943,6 +2945,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }`
   // Get position styles for the chat trigger based on chat_position prop
   const effectiveBottomOffset = bottom_offset ?? 20;
+  const effectiveTopOffset = top_offset ?? 60;
 
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
@@ -3102,6 +3105,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           language={currentLanguage}
           link_color={link_color}
           bottom_offset={effectiveBottomOffset}
+          top_offset={effectiveTopOffset}
         />
       </div>
     </div>

@@ -74,6 +74,7 @@ export default function ChatWindow({
   loading_messages,
   onClose,
   bottom_offset,
+  top_offset = 60,
 }: {
   api_key?: string;
   output_type: string,
@@ -127,6 +128,7 @@ export default function ChatWindow({
   link_color?: string;
   loading_messages?: string[];
   bottom_offset?: number;
+  top_offset?: number;
 }) {
   const HeaderLucideIcon =
     getLucideIconByName(header_icon_name) ?? MessagesSquare;
@@ -423,6 +425,7 @@ export default function ChatWindow({
       }
       style={{
         "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
+        "--cl-top-offset": `${Number(top_offset) || 0}px`,
         position: "fixed",
         bottom: `calc(var(--cl-bottom-offset) + 80px)`,
         right: "20px",
@@ -501,13 +504,13 @@ export default function ChatWindow({
           /* Mobile - Small phones */
           @media (max-width: 640px) {
             .cl-chat-window {
-              top: 0 !important;
+              top: var(--cl-top-offset, 0px) !important;
               left: 0 !important;
               right: 0 !important;
               bottom: 80px !important;
               width: 100% !important;
-              height: calc(100% - 80px) !important;
-              max-height: calc(100% - 80px) !important;
+              height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
+              max-height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
               max-width: 100% !important;
               padding-top: env(safe-area-inset-top, 0px);
             }
