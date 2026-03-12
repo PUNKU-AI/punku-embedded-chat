@@ -630,12 +630,12 @@ export default function ChatWindow({
         <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
           <div className="cl-header-content">
             {header_icon ? (
-              <img 
-                src={header_icon} 
-                alt="Chat icon" 
-                className="cl-header-logo" 
-                width="24" 
-                height="24"
+              <img
+                src={header_icon}
+                alt="Chat icon"
+                className="cl-header-logo"
+                width="36"
+                height="36"
               />
             ) : (
               <div className="cl-default-header-icon">
