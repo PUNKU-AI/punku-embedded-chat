@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resi &amp; Pauli — Tiroler Abend Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --tyrolean: #791f0d;
+      --tyrolean-light: #a32a10;
+      --tyrolean-dark: #5a1609;
+      --gold: #c9a227;
+      --gold-light: #e8c05a;
+
+      --bg-deep: #faf7f2;
+      --bg-main: #f2ebe0;
+      --bg-card: #1a0e08;
+      --bg-elevated: #2a1a10;
+      --border: #2a1a10;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --text: #e2d8cc;
+      --text-bright: #fdf8f0;
+      --text-muted: #a89880;
+      --text-dim: #7a6a58;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: var(--bg-deep);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 24px 120px;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 40%, rgba(121, 31, 13, 0.30) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 70% 70%, rgba(201, 162, 39, 0.10) 0%, transparent 60%),
+        linear-gradient(180deg, #0d0503 0%, #1a0e08 60%, #0d0503 100%);
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 80%, rgba(201, 162, 39, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(255, 255, 255, 0.02) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 100px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      margin-bottom: 32px;
+      backdrop-filter: blur(12px);
+    }
+
+    .hero-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    .hero h1 {
+      font-family: "Playfair Display", Georgia, serif;
+      font-size: clamp(42px, 6vw, 72px);
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1.1;
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-muted);
+      line-height: 1.6;
+      max-width: 540px;
+      margin: 0 auto 40px;
+      font-weight: 300;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 36px;
+      background: var(--tyrolean);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      box-shadow: 0 4px 24px rgba(121, 31, 13, 0.35);
+    }
+
+    .hero-cta:hover {
+      background: var(--tyrolean-light);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(121, 31, 13, 0.45);
+    }
+
+    .hero-cta svg {
+      width: 18px;
+      height: 18px;
+      transition: transform 0.3s ease;
+    }
+
+    .hero-cta:hover svg {
+      transform: translateX(3px);
+    }
+
+    /* ── Wave divider ── */
+    .wave {
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 100%;
+      overflow: hidden;
+      line-height: 0;
+    }
+
+    .wave svg {
+      display: block;
+      width: 100%;
+      height: 80px;
+    }
+
+    /* ── Features Section ── */
+    .features {
+      padding: 100px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+      background: transparent;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-header h2 {
+      font-family: "Playfair Display", Georgia, serif;
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 600;
+      color: var(--bg-card);
+      margin-bottom: 12px;
+    }
+
+    .section-header p {
+      font-size: 17px;
+      color: var(--text-dim);
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+    }
+
+    @media (max-width: 800px) {
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
+    .feature-card {
+      padding: 36px 28px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(201, 162, 39, 0.25);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .feature-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .feature-icon.tyrolean-bg {
+      background: linear-gradient(135deg, var(--tyrolean), var(--tyrolean-light));
+      color: #fff;
+    }
+
+    .feature-icon.gold-bg {
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: #fff;
+    }
+
+    .feature-icon.mixed-bg {
+      background: linear-gradient(135deg, var(--tyrolean-dark), var(--gold));
+      color: #fff;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-bright);
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ── Demo Section ── */
+    .demo-section {
+      padding: 80px 24px 120px;
+      background: linear-gradient(180deg, var(--bg-deep) 0%, #0d0503 100%);
+    }
+
+    .demo-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .demo-wrapper h2 {
+      font-family: "Playfair Display", Georgia, serif;
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 600;
+      color: var(--bg-card);
+      margin-bottom: 12px;
+    }
+
+    .demo-wrapper > p {
+      font-size: 17px;
+      color: var(--text-dim);
+      margin-bottom: 48px;
+      line-height: 1.6;
+    }
+
+    .demo-frame {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.2),
+        0 24px 80px rgba(0, 0, 0, 0.4);
+    }
+
+    .demo-browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 20px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .demo-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .demo-dot:nth-child(1) { background: #ef4444; }
+    .demo-dot:nth-child(2) { background: #eab308; }
+    .demo-dot:nth-child(3) { background: #22c55e; }
+
+    .demo-url {
+      flex: 1;
+      margin-left: 12px;
+      padding: 6px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-dim);
+      font-family: "Inter", monospace;
+    }
+
+    .demo-body {
+      position: relative;
+      min-height: 600px;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 30%, rgba(121, 31, 13, 0.10) 0%, transparent 70%),
+        linear-gradient(180deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+      padding: 48px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .demo-placeholder-logo {
+      font-family: "Playfair Display", Georgia, serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 4px;
+    }
+
+    .demo-placeholder-subtitle {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .demo-placeholder-tagline {
+      font-size: 15px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+
+    .demo-placeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    @media (max-width: 600px) {
+      .demo-placeholder-grid { grid-template-columns: 1fr; }
+    }
+
+    .demo-placeholder-card {
+      background: var(--bg-elevated);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 20px 16px;
+      text-align: left;
+      transition: border-color 0.3s ease;
+    }
+
+    .demo-placeholder-card:hover {
+      border-color: rgba(201, 162, 39, 0.25);
+    }
+
+    .demo-placeholder-card .swatch {
+      width: 100%;
+      height: 80px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    .demo-placeholder-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-bright);
+    }
+
+    .demo-placeholder-card p {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      background: var(--bg-deep);
+      border-top: 1px solid rgba(42, 26, 16, 0.2);
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    footer a {
+      color: var(--tyrolean);
+      text-decoration: none;
+    }
+
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        Resi &amp; Pauli sind online
+      </div>
+      <h1>Dein Tiroler Abend,<br/><span>Unvergesslich</span></h1>
+      <p>
+        Resi &amp; Pauli begleiten dich durch ein echtes Tiroler Erlebnis bei der Familie Gundolf —
+        mit Tradition, Gemütlichkeit und jeder Menge Gaudi.
+      </p>
+      <a href="#demo" class="hero-cta">
+        Jetzt Tickets reservieren
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+    </div>
+    <div class="wave">
+      <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
+        <path fill="#faf7f2" d="M0,48 C360,80 720,16 1080,48 C1260,64 1380,56 1440,48 L1440,80 L0,80 Z"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="features">
+    <div class="section-header">
+      <h2>Was Resi &amp; Pauli für dich tun</h2>
+      <p>Powered by Punku AI, maßgeschneidert für den Tiroler Abend bei Familie Gundolf.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon tyrolean-bg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <h3>Tiroler Gastfreundschaft</h3>
+        <p>Erlebe echte alpine Tradition mit Musik, Tanz und kulinarischen Köstlichkeiten direkt bei der Familie.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon gold-bg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
+        </div>
+        <h3>Tickets reservieren</h3>
+        <p>Buche ganz einfach per Chat — Resi &amp; Pauli helfen dir, die perfekten Plätze für deinen Abend zu finden.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon mixed-bg">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>Sofortige Antworten</h3>
+        <p>Fragen zu Programm, Anreise oder Menü? Resi &amp; Pauli antworten rund um die Uhr auf Deutsch.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Live Demo ── -->
+  <section class="demo-section" id="demo">
+    <div class="demo-wrapper">
+      <h2>Probier's gleich aus</h2>
+      <p>Klick auf den Chat-Button rechts unten und starte dein Gespräch mit Resi &amp; Pauli.</p>
+
+      <div class="demo-frame">
+        <div class="demo-browser-bar">
+          <span class="demo-dot"></span>
+          <span class="demo-dot"></span>
+          <span class="demo-dot"></span>
+          <span class="demo-url">tiroler-abend-gundolf.at</span>
+        </div>
+        <div class="demo-body">
+          <div class="demo-placeholder-logo">Familie Gundolf</div>
+          <div class="demo-placeholder-subtitle">🇦🇹 Tiroler Abend</div>
+          <div class="demo-placeholder-tagline">Echte Tradition, unvergessliche Gaudi</div>
+          <div class="demo-placeholder-grid">
+            <div class="demo-placeholder-card">
+              <div class="swatch" style="background: linear-gradient(135deg, #791f0d, #a32a10);">🎺</div>
+              <h4>Tiroler Musik</h4>
+              <p>Live-Musik mit Volksmusik, Jodeln und traditionellen Tänzen.</p>
+            </div>
+            <div class="demo-placeholder-card">
+              <div class="swatch" style="background: linear-gradient(135deg, #c9a227, #8b6914);">🥩</div>
+              <h4>Tiroler Küche</h4>
+              <p>Authentische Spezialitäten aus der Region — Gröstl, Speck &amp; mehr.</p>
+            </div>
+            <div class="demo-placeholder-card">
+              <div class="swatch" style="background: linear-gradient(135deg, #4a7c59, #2d5a3d);">⛰️</div>
+              <h4>Alpine Atmosphäre</h4>
+              <p>Ein Abend mitten in den Tiroler Bergen — Natur pur.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>Demo powered by <a href="https://punku.ai" target="_blank" rel="noopener">Punku AI</a> &middot; Resi &amp; Pauli für den Tiroler Abend bei Familie Gundolf</p>
+  </footer>
+
+  <!-- ── Chat Widget ── -->
+  <script src="./dist/build/static/js/bundle.min.js"></script>
+  <punku-chat
+    window_title="Resi &amp; Pauli"
+    flow_id="3da92280-1564-48e1-a06d-4a062185aa68"
+    host_url="https://app.punku.ai"
+    api_key="sk-M2AH-GrLGmXTrCCsNsPUMXKTl_8RRGsd1oMY4aFju5E"
+    theme="default"
+    chat_position="bottom-right"
+    placeholder="Type your message..."
+    welcome_message="Griaß di! Wir sind Resi &amp; Pauli, deine Guides für einen unvergesslichen Tiroler Abend bei der Familie Gundolf. 🇦🇹 Bereit für echte Tradition und jede Menge Gaudi? Für wie viele Personen darf ich Tickets reservieren?"
+    loading_messages='["Resi &amp; Pauli schauen kurz in den Kalender...","Einen Moment, wir rücken kurz die Tracht zurecht...","Gleich geht&#39;s los, wir suchen die besten Plätze für dich raus!","Resi &amp; Pauli bereiten alles für deinen Tiroler Abend vor...","Einen Augenblick Geduld, wir schauen gleich nach..."]'
+    height="500"
+    width="400"
+    bottom_offset="80"
+    start_open="false"
+    bot_message_color="#791f0d"
+    bot_message_text_color="#ffffff"
+    user_message_color="#ffffff"
+    user_message_text_color="#000000"
+    chat_trigger_style="{&quot;backgroundColor&quot;:&quot;#791f0d&quot;}"
+    send_button_style="{&quot;backgroundColor&quot;:&quot;#791f0d&quot;}"
+    bot_message_style="{&quot;backgroundColor&quot;:&quot;#791f0d&quot;,&quot;color&quot;:&quot;#ffffff&quot;}"
+    user_message_style="{&quot;backgroundColor&quot;:&quot;#ffffff&quot;,&quot;color&quot;:&quot;#000000&quot;}"
+    header_icon_name="MountainSnow">
+  </punku-chat>
+
+</body>
+</html>
