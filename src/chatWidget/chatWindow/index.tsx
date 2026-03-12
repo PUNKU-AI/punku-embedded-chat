@@ -422,14 +422,15 @@ export default function ChatWindow({
         (open ? " cl-scale-100" : " cl-scale-0")
       }
       style={{
+        "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
         position: "fixed",
-        bottom: `${(bottom_offset ?? 20) + 80}px`,
+        bottom: `calc(var(--cl-bottom-offset) + 80px)`,
         right: "20px",
         maxHeight: "70vh",
         maxWidth: "90vw",
         transform: "none !important", // Override any transforms with !important
         zIndex: 9999
-      }}
+      } as React.CSSProperties}
     >
       {/* Relative positioning wrapper for modal overlay */}
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -500,12 +501,15 @@ export default function ChatWindow({
           /* Mobile - Small phones */
           @media (max-width: 640px) {
             .cl-chat-window {
-              width: calc(100vw - 16px) !important;
-              height: calc(100vh - 120px) !important;
-              max-height: calc(100vh - 120px) !important;
-              right: 8px !important;
-              bottom: 8px !important;
-              left: 8px !important;
+              top: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              bottom: 80px !important;
+              width: 100% !important;
+              height: calc(100% - 80px) !important;
+              max-height: calc(100% - 80px) !important;
+              max-width: 100% !important;
+              padding-top: env(safe-area-inset-top, 0px);
             }
 
             .cl-window {
