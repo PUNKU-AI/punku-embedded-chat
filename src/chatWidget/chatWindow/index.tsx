@@ -373,7 +373,7 @@ export default function ChatWindow({
         target="_blank"
         rel="noopener noreferrer"
         style={{
-          color: button_text_color || link_color || "inherit",
+          color: "inherit",
           fontWeight: 700,
           textDecoration: "underline",
           cursor: "pointer"
@@ -387,7 +387,7 @@ export default function ChatWindow({
         target="_blank"
         rel="noopener noreferrer"
         style={{
-          color: button_text_color || link_color || "inherit",
+          color: "inherit",
           fontWeight: 700,
           textDecoration: "underline",
           cursor: "pointer"
@@ -486,16 +486,25 @@ export default function ChatWindow({
 
           /* Send button styling is handled inline */
 
-          /* Link color customization - applies to all links in chat messages and header */
+          /* Always underline links in chat messages */
+          .cl-window .cl-bot_message a,
+          .cl-window .markdown-body a {
+            text-decoration: underline !important;
+          }
+
+          /* Link color customization - scoped to chat messages only, not footer */
           ${link_color ? `
-          .cl-window a {
+          .cl-window .cl-bot_message a,
+          .cl-window .markdown-body a {
             color: ${link_color} !important;
           }
-          .cl-window a:hover {
+          .cl-window .cl-bot_message a:hover,
+          .cl-window .markdown-body a:hover {
             color: ${link_color} !important;
             opacity: 0.8;
           }
-          .cl-window a:visited {
+          .cl-window .cl-bot_message a:visited,
+          .cl-window .markdown-body a:visited {
             color: ${link_color} !important;
           }
           ` : ''}
