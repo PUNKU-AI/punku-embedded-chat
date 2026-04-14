@@ -393,7 +393,7 @@ export default function ChatWindow({
           cursor: "pointer"
         }}
       >
-        bookingKit
+        bookingkit
       </a>
     </>
   );
