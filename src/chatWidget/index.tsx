@@ -848,7 +848,8 @@ video {
   position: absolute;
   z-index: 1;
   width: max-content;
-  max-width: none;
+  max-width: min(320px, calc(100vw - 96px));
+  box-sizing: border-box;
   border-radius: 10px;
   background: var(--cl-closed-hint-bg);
   color: #111827;
@@ -856,7 +857,8 @@ video {
   font-size: 14px;
   line-height: 1.3;
   box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
   opacity: 0;
   transition: opacity 220ms ease;
   pointer-events: none;
@@ -877,6 +879,17 @@ video {
   right: 0;
 }
 
+.cl-closed-widget-hint.cl-hint-right {
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.cl-closed-widget-hint.cl-hint-top-left {
+  bottom: calc(100% + 12px);
+  left: 0;
+}
+
 .cl-closed-widget-hint-arrow {
   position: absolute;
   width: 0;
@@ -895,6 +908,23 @@ video {
 .cl-closed-widget-hint.cl-hint-top .cl-closed-widget-hint-arrow {
   bottom: -7px;
   right: 18px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid var(--cl-closed-hint-bg);
+}
+
+.cl-closed-widget-hint.cl-hint-right .cl-closed-widget-hint-arrow {
+  top: 50%;
+  left: -7px;
+  transform: translateY(-50%);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 7px solid var(--cl-closed-hint-bg);
+}
+
+.cl-closed-widget-hint.cl-hint-top-left .cl-closed-widget-hint-arrow {
+  bottom: -7px;
+  left: 18px;
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
   border-top: 7px solid var(--cl-closed-hint-bg);
@@ -2979,15 +3009,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const cornerPosition = chat_position || "bottom-right";
   const triggerStyle = getCornerStyle(cornerPosition);
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
+  const isLeftEdgePosition = cornerPosition.endsWith("-left");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
       case "top":
-        return "cl-hint-top";
+        return isLeftEdgePosition ? "cl-hint-top-left" : "cl-hint-top";
       case "left":
       default:
-        return "cl-hint-left";
+        return isLeftEdgePosition ? "cl-hint-right" : "cl-hint-left";
     }
   };
 

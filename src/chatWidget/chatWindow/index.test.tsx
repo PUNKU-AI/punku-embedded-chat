@@ -120,6 +120,20 @@ describe('ChatWindow', () => {
       expect(chatWindow).toHaveClass('cl-scale-0');
     });
 
+    it('should anchor to the bottom right by default', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ left: 'auto', right: '20px' });
+    });
+
+    it('should anchor to the bottom left for bottom-left position', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ left: '20px', right: 'auto' });
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 
