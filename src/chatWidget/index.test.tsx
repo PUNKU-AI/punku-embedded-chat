@@ -167,11 +167,34 @@ describe('ChatWidget', () => {
       expect(hint).toHaveClass('cl-hint-left');
     });
 
+    it('should keep the default left hint placement for bottom-right widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-right" show_closed_widget_hint={true} closed_widget_hint_position="left" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-left');
+    });
+
+    it('should position closed widget hint to the right for bottom-left widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-left" show_closed_widget_hint={true} closed_widget_hint_position="left" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-right');
+      expect(hint).not.toHaveClass('cl-hint-left');
+    });
+
     it('should position closed widget hint at top when configured', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_position="top" />);
 
       const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
       expect(hint).toHaveClass('cl-hint-top');
+    });
+
+    it('should align top closed widget hint from the left for left-side widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-left" show_closed_widget_hint={true} closed_widget_hint_position="top" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-top-left');
+      expect(hint).not.toHaveClass('cl-hint-top');
     });
 
     it('should apply custom closed widget hint background color', () => {

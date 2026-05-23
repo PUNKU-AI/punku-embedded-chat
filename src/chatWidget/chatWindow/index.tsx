@@ -155,6 +155,10 @@ export default function ChatWindow({
       );
   }, [triggerRef, width, height, position]);
 
+  const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
+    ? { left: "20px", right: "auto" }
+    : { left: "auto", right: "20px" };
+
   /* Initial listener for loss of focus that refocuses User input after a small delay */
 
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -428,7 +432,7 @@ export default function ChatWindow({
         "--cl-top-offset": `${Number(top_offset) || 0}px`,
         position: "fixed",
         bottom: `calc(var(--cl-bottom-offset) + 80px)`,
-        right: "20px",
+        ...fixedWindowHorizontalStyle,
         maxHeight: "70vh",
         maxWidth: "90vw",
         transform: "none !important", // Override any transforms with !important
