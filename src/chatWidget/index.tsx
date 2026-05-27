@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
+
+type ProgrammaticMessage = {
+  id: number;
+  message: string;
+};
 
 export default function ChatWidget({
   api_key,
@@ -119,10 +124,10 @@ export default function ChatWidget({
   closed_widget_hint_text_color?: string;
 }) {
   // Initialize session with persistence
-  const sessionConfig: SessionConfig = {
+  const sessionConfig: SessionConfig = useMemo(() => ({
     expiryHours: ttl_hours,
     idleExpiryHours: idle_expiration_hours
-  };
+  }), [ttl_hours, idle_expiration_hours]);
 
   const sessionData = SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig);
 
@@ -131,6 +136,7 @@ export default function ChatWidget({
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(!start_open);
+  const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
 
   // Initialize language based on browser detection or default_language prop
   const getInitialLanguage = (): Language => {
@@ -150,6 +156,7 @@ export default function ChatWidget({
 
   const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
   const sessionId = useRef(sessionData.sessionId);
+  const programmaticMessageId = useRef(0);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   function updateLastMessage(message: ChatMessageType) {
@@ -161,28 +168,6 @@ export default function ChatWidget({
   function addMessage(message: ChatMessageType) {
     setMessages((prev) => [...prev, message]);
   }
-
-  // Programmatic control functions
-  const openWidget = () => setOpen(true);
-  const closeWidget = () => setOpen(false);
-
-  // Expose widget control methods globally
-  useEffect(() => {
-    const globalWidgetId = widget_id || "punku-chat-widget";
-    
-    // Create global API object
-    (window as any)[`${globalWidgetId}_api`] = {
-      open: openWidget,
-      close: closeWidget,
-      isOpen: () => open,
-    };
-
-    // Cleanup function
-    return () => {
-      delete (window as any)[`${globalWidgetId}_api`];
-    };
-  }, [open, widget_id]);
-
 
   // Inject Euclid font into document.head for Shadow DOM compatibility
   useEffect(() => {
@@ -228,7 +213,7 @@ export default function ChatWidget({
   }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms]);
 
   // Function to start a new session
-  const startNewSession = () => {
+  const startNewSession = useCallback(() => {
     // Set refreshing flag to show loading message
     setIsRefreshingSession(true);
 
@@ -251,10 +236,10 @@ export default function ChatWidget({
       setIsClearing(false);
       setIsRefreshingSession(false);
     }, 500); // Show loading message for at least 500ms for better UX
-  };
+  }, [flow_id, sessionConfig]);
 
   // Function to validate if current session is still valid
-  const validateSession = (): boolean => {
+  const validateSession = useCallback((): boolean => {
     const storedSession = SessionStorage.getStoredSession(flow_id);
     if (!storedSession) {
       return false; // No session found
@@ -262,15 +247,57 @@ export default function ChatWidget({
 
     // Check if session is expired
     return !SessionStorage.isSessionExpired(storedSession, sessionConfig);
-  };
+  }, [flow_id, sessionConfig]);
 
-  const setOpenWithSessionValidation = (isOpen: boolean) => {
+  const setOpenWithSessionValidation = useCallback((isOpen: boolean) => {
     const isValid = validateSession();
     if (!isValid) {
       startNewSession();
     }
     setOpen(isOpen);
-  };
+  }, [startNewSession, validateSession]);
+
+  const queueProgrammaticMessage = useCallback((message: unknown) => {
+    if (typeof message !== "string" || message.trim() === "") {
+      return;
+    }
+
+    programmaticMessageId.current += 1;
+    setProgrammaticMessage({
+      id: programmaticMessageId.current,
+      message,
+    });
+  }, []);
+
+  const openWidget = useCallback((userMessage?: string) => {
+    setOpenWithSessionValidation(true);
+    queueProgrammaticMessage(userMessage);
+  }, [queueProgrammaticMessage, setOpenWithSessionValidation]);
+
+  const closeWidget = useCallback(() => setOpen(false), []);
+
+  const handleProgrammaticMessageHandled = useCallback((id: number) => {
+    setProgrammaticMessage((current) => (
+      current?.id === id ? null : current
+    ));
+  }, []);
+
+  // Expose widget control methods globally
+  useEffect(() => {
+    const globalWidgetId = widget_id || "punku-chat-widget";
+
+    // Create global API object
+    (window as any)[`${globalWidgetId}_api`] = {
+      open: openWidget,
+      close: closeWidget,
+      isOpen: () => open,
+    };
+
+    // Cleanup function
+    return () => {
+      delete (window as any)[`${globalWidgetId}_api`];
+    };
+  }, [closeWidget, open, openWidget, widget_id]);
 
   const styles = `
 /* Euclid Circular B Font - Embedded for Swarovski theme */
@@ -3137,6 +3164,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           link_color={link_color}
           bottom_offset={effectiveBottomOffset}
           top_offset={effectiveTopOffset}
+          programmaticMessage={programmaticMessage}
+          onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
         />
       </div>
     </div>

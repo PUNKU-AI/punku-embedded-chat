@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 
 // Mock the child components before importing ChatWidget
 jest.mock('./chatTrigger', () => {
@@ -25,13 +25,17 @@ jest.mock('./chatTrigger', () => {
 });
 
 jest.mock('./chatWindow', () => {
+  const mockReact = require('react');
+
   return function MockChatWindow({
     open,
     messages,
     addMessage,
     onStartNewSession,
     onClose,
-    language
+    language,
+    programmaticMessage,
+    onProgrammaticMessageHandled
   }: {
     open: boolean;
     messages: any[];
@@ -39,7 +43,16 @@ jest.mock('./chatWindow', () => {
     onStartNewSession?: () => void;
     onClose?: () => void;
     language?: string;
+    programmaticMessage?: { id: number; message: string } | null;
+    onProgrammaticMessageHandled?: (id: number) => void;
   }) {
+    mockReact.useEffect(() => {
+      if (!open || !programmaticMessage) return;
+
+      addMessage({ message: programmaticMessage.message, isSend: true });
+      onProgrammaticMessageHandled?.(programmaticMessage.id);
+    }, [addMessage, onProgrammaticMessageHandled, open, programmaticMessage]);
+
     if (!open) return null;
     return (
       <div data-testid="chat-window">
@@ -387,6 +400,21 @@ describe('ChatWidget', () => {
       });
 
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+    });
+
+    it('should open widget and queue a message via API open argument', async () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+
+      act(() => {
+        api.open('Prefilled question');
+      });
+
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('message-count').textContent).toBe('1');
+      });
     });
 
     it('should close widget via API', () => {

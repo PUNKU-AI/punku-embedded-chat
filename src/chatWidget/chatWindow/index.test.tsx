@@ -355,6 +355,47 @@ describe('ChatWindow', () => {
         expect(mockedSendMessage).toHaveBeenCalled();
       });
     });
+
+    it('should send a programmatic message', async () => {
+      const addMessage = jest.fn();
+      const onProgrammaticMessageHandled = jest.fn();
+      mockedSendMessage.mockResolvedValueOnce({
+        data: { outputs: [], session_id: 'new-session' },
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers()
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+          addMessage={addMessage}
+          programmaticMessage={{ id: 1, message: 'Prefilled question' }}
+          onProgrammaticMessageHandled={onProgrammaticMessageHandled}
+        />
+      );
+
+      await waitFor(() => {
+        expect(mockedSendMessage).toHaveBeenCalledWith(
+          'http://localhost:3000',
+          'test-flow-id',
+          'Prefilled question',
+          'chat',
+          'chat',
+          expect.any(Object),
+          undefined,
+          undefined,
+          'test-api-key',
+          undefined
+        );
+      });
+      expect(addMessage).toHaveBeenCalledWith({
+        message: 'Prefilled question',
+        isSend: true
+      });
+      expect(onProgrammaticMessageHandled).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('Streaming Messages', () => {
