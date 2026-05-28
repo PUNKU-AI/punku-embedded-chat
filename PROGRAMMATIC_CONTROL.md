@@ -6,6 +6,7 @@ This document explains how to control the Punku Chat Widget programmatically usi
 
 The chat widget now supports programmatic control, allowing you to:
 - Open/close the widget from external JavaScript
+- Open the widget with a prefilled user message that is sent immediately
 - Check widget state
 
 ## Setup
@@ -35,6 +36,9 @@ const chatWidget = window['my-chat-widget_api'];
 
 // Open the widget
 chatWidget.open();
+
+// Open the widget and send the first user message immediately
+chatWidget.open('Hello there, tell me details for experience Fly me to the moon');
 
 // Close the widget
 chatWidget.close();

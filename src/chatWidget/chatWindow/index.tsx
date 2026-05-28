@@ -1,7 +1,7 @@
 import { Send, MessagesSquare, RefreshCw, X, type LucideIcon } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import { sendMessage, streamMessage } from "../../controllers";
@@ -75,6 +75,8 @@ export default function ChatWindow({
   onClose,
   bottom_offset,
   top_offset = 60,
+  programmaticMessage,
+  onProgrammaticMessageHandled,
 }: {
   api_key?: string;
   output_type: string,
@@ -129,6 +131,8 @@ export default function ChatWindow({
   loading_messages?: string[];
   bottom_offset?: number;
   top_offset?: number;
+  programmaticMessage?: { id: number; message: string } | null;
+  onProgrammaticMessageHandled?: (id: number) => void;
 }) {
   const HeaderLucideIcon =
     getLucideIconByName(header_icon_name) ?? MessagesSquare;
@@ -136,11 +140,11 @@ export default function ChatWindow({
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
-  const [windowPosition, setWindowPosition] = useState<{ 
-    left: string; 
-    top: string; 
-    bottom?: string; 
-    right?: string; 
+  const [windowPosition, setWindowPosition] = useState<{
+    left: string;
+    top: string;
+    bottom?: string;
+    right?: string;
   }>({ left: "0", top: "0" });
   const inputRef = useRef<HTMLInputElement>(null); /* User input Ref */
   useEffect(() => {
@@ -164,187 +168,239 @@ export default function ChatWindow({
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
 
-  function handleClick() {
-    if (value && value.trim() !== "") {
-      // Check if session is still valid before sending message
-      if (onSessionValidate && !onSessionValidate()) {
-        // console.log('Session expired, clearing messages and starting new session');
-        // Session expired, clear messages and start new session
-        if (onStartNewSession) {
-          onStartNewSession();
-        }
-        // Note: Don't return here, continue with sending the message after session is cleared
+  const sendUserMessage = useCallback((message: string): boolean => {
+    if (!message || message.trim() === "" || sendingMessage) {
+      return false;
+    }
+
+    // Check if session is still valid before sending message
+    if (onSessionValidate && !onSessionValidate()) {
+      // console.log('Session expired, clearing messages and starting new session');
+      // Session expired, clear messages and start new session
+      if (onStartNewSession) {
+        onStartNewSession();
       }
+      // Note: Don't return here, continue with sending the message after session is cleared
+    }
 
-      addMessage({ message: value, isSend: true });
-      setSendingMessage(true);
-      setValue("");
-  
-      if (!enable_streaming) {
-        sendMessage(hostUrl, flowId, value, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
-          .then((res) => {
-            if (
-              res.data &&
-              res.data.outputs &&
-              Object.keys(res.data.outputs).length > 0 &&
-              res.data.outputs[0].outputs && res.data.outputs[0].outputs.length > 0
+    addMessage({ message, isSend: true });
+    setSendingMessage(true);
+
+    if (!enable_streaming) {
+      sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
+        .then((res) => {
+          if (
+            res.data &&
+            res.data.outputs &&
+            Object.keys(res.data.outputs).length > 0 &&
+            res.data.outputs[0].outputs && res.data.outputs[0].outputs.length > 0
+          ) {
+            const flowOutputs: Array<any> = res.data.outputs[0].outputs;
+            if (output_component &&
+              flowOutputs.map(e => e.component_id).includes(output_component)) {
+              Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
+                addMessage({
+                  message: extractMessageFromOutput(output),
+                  message_id: output.id || output.component_id,
+                  isSend: false,
+                });
+              })
+            } else if (
+              flowOutputs.length === 1
             ) {
-              const flowOutputs: Array<any> = res.data.outputs[0].outputs;
-              if (output_component &&
-                flowOutputs.map(e => e.component_id).includes(output_component)) {
-                Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
+              Object.values(flowOutputs[0].outputs).forEach((output: any) => {
+                addMessage({
+                  message: extractMessageFromOutput(output),
+                  message_id: flowOutputs[0].results.message.data.id,
+                  isSend: false,
+                });
+              })
+            } else {
+              flowOutputs
+              .sort((a, b) => {
+                const aTimestamp = Math.min(...Object.values(a.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
+                const bTimestamp = Math.min(...Object.values(b.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
+                return aTimestamp - bTimestamp;
+              })
+              .forEach((flowOutput) => {
+                Object.values(flowOutput.outputs).forEach((output: any) => {
                   addMessage({
                     message: extractMessageFromOutput(output),
-                    message_id: output.id || output.component_id,
                     isSend: false,
-                  });
-                })
-              } else if (
-                flowOutputs.length === 1
-              ) {
-                Object.values(flowOutputs[0].outputs).forEach((output: any) => {
-                  addMessage({
-                    message: extractMessageFromOutput(output),
-                    message_id: flowOutputs[0].results.message.data.id,
-                    isSend: false,
-                  });
-                })
-              } else {
-                flowOutputs
-                .sort((a, b) => {
-                  const aTimestamp = Math.min(...Object.values(a.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                  const bTimestamp = Math.min(...Object.values(b.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                  return aTimestamp - bTimestamp;
-                })
-                .forEach((flowOutput) => {
-                  Object.values(flowOutput.outputs).forEach((output: any) => {
-                    addMessage({
-                      message: extractMessageFromOutput(output),
-                      isSend: false,
-                    });
                   });
                 });
-              }
-            }
-            if (res.data && res.data.session_id) {
-              sessionId.current = res.data.session_id;
-            }
-            setSendingMessage(false);
-          })
-          .catch((err) => {
-            const response = err.response;
-            if (err.code === "ERR_NETWORK") {
-              updateLastMessage({
-                message: "Network error",
-                isSend: false,
-                error: true,
-              });
-            } else if (
-              response &&
-              response.status === 500 &&
-              response.data &&
-              response.data.detail
-            ) {
-              updateLastMessage({
-                message: response.data.detail,
-                isSend: false,
-                error: true,
               });
             }
-            console.error(err);
-            setSendingMessage(false);
-          });
-      } else {
-        // Streaming version
-        let currentMessageId: string | null = null;
-        let message_to_add = "";
-        
-        streamMessage(
-          hostUrl, 
-          flowId, 
-          value, 
-          input_type, 
-          output_type, 
-          sessionId, 
-          output_component, 
-          tweaks, 
-          api_key, 
-          additional_headers,
-          (data) => {
-            // Handle streaming data as it arrives
-            if (data.event === 'add_message' && data.data.sender==="Machine") {
-              // console.log('Data from :', data.data.sender);
-              // console.log('Streaming text:', data.data.text);
-              const new_message = data.data.text;
-              if (new_message) {
-                setIsStreaming(true);
-                message_to_add = new_message;
-                if (currentMessageId) {
-                  updateLastMessage({
-                    message: message_to_add,
-                    message_id: currentMessageId,
-                    isSend: false,
-                    streaming: true
-                  });
-                } else {
-                  currentMessageId = data.data.id;
-                  addMessage({
-                    message: message_to_add,
-                    message_id: currentMessageId,
-                    isSend: false,
-                    streaming: true
-                  });
-                }
-              }
-            } else if (data.event === "end") {
-              // Final result - might contain session_id or final data
-              if (data.data.result.session_id) {
-                sessionId.current = data.data.result.session_id;
-              }
-              
-              // Mark message as complete (remove streaming flag)
+          }
+          if (res.data && res.data.session_id) {
+            sessionId.current = res.data.session_id;
+          }
+          setSendingMessage(false);
+        })
+        .catch((err) => {
+          const response = err.response;
+          if (err.code === "ERR_NETWORK") {
+            updateLastMessage({
+              message: "Network error",
+              isSend: false,
+              error: true,
+            });
+          } else if (
+            response &&
+            response.status === 500 &&
+            response.data &&
+            response.data.detail
+          ) {
+            updateLastMessage({
+              message: response.data.detail,
+              isSend: false,
+              error: true,
+            });
+          }
+          console.error(err);
+          setSendingMessage(false);
+        });
+    } else {
+      // Streaming version
+      let currentMessageId: string | null = null;
+      let message_to_add = "";
+
+      streamMessage(
+        hostUrl,
+        flowId,
+        message,
+        input_type,
+        output_type,
+        sessionId,
+        output_component,
+        tweaks,
+        api_key,
+        additional_headers,
+        (data) => {
+          // Handle streaming data as it arrives
+          if (data.event === 'add_message' && data.data.sender==="Machine") {
+            // console.log('Data from :', data.data.sender);
+            // console.log('Streaming text:', data.data.text);
+            const new_message = data.data.text;
+            if (new_message) {
+              setIsStreaming(true);
+              message_to_add = new_message;
               if (currentMessageId) {
                 updateLastMessage({
                   message: message_to_add,
                   message_id: currentMessageId,
                   isSend: false,
-                  streaming: false // Mark as complete
+                  streaming: true
+                });
+              } else {
+                currentMessageId = data.data.id;
+                addMessage({
+                  message: message_to_add,
+                  message_id: currentMessageId,
+                  isSend: false,
+                  streaming: true
                 });
               }
             }
-          },
-          () => {
-            // Stream ended
-            // console.log('Stream completed');
-            setSendingMessage(false);
-            setIsStreaming(false);
-            
-            // Ensure final message is marked as complete
+          } else if (data.event === "end") {
+            // Final result - might contain session_id or final data
+            if (data.data.result.session_id) {
+              sessionId.current = data.data.result.session_id;
+            }
+
+            // Mark message as complete (remove streaming flag)
             if (currentMessageId) {
               updateLastMessage({
                 message: message_to_add,
                 message_id: currentMessageId,
                 isSend: false,
-                streaming: false
+                streaming: false // Mark as complete
               });
             }
-          },
-          (error) => {
-            // Stream error
-            console.error('Streaming error:', error);
-            setSendingMessage(false);
-            
+          }
+        },
+        () => {
+          // Stream ended
+          // console.log('Stream completed');
+          setSendingMessage(false);
+          setIsStreaming(false);
+
+          // Ensure final message is marked as complete
+          if (currentMessageId) {
             updateLastMessage({
-              message: error.message || "Streaming error occurred",
+              message: message_to_add,
+              message_id: currentMessageId,
               isSend: false,
-              error: true,
+              streaming: false
             });
           }
-        );
-      }
+        },
+        (error) => {
+          // Stream error
+          console.error('Streaming error:', error);
+          setSendingMessage(false);
+
+          updateLastMessage({
+            message: error.message || "Streaming error occurred",
+            isSend: false,
+            error: true,
+          });
+        }
+      );
+    }
+    return true;
+  }, [
+    additional_headers,
+    addMessage,
+    api_key,
+    enable_streaming,
+    flowId,
+    hostUrl,
+    input_type,
+    onSessionValidate,
+    onStartNewSession,
+    output_component,
+    output_type,
+    sendingMessage,
+    sessionId,
+    tweaks,
+    updateLastMessage,
+  ]);
+
+  function handleClick() {
+    if (sendUserMessage(value)) {
+      setValue("");
     }
   }
+
+  useEffect(() => {
+    if (!programmaticMessage) return;
+
+    if (handledProgrammaticMessageIds.current.has(programmaticMessage.id)) {
+      return;
+    }
+
+    if (!programmaticMessage.message.trim()) {
+      handledProgrammaticMessageIds.current.add(programmaticMessage.id);
+      onProgrammaticMessageHandled?.(programmaticMessage.id);
+      return;
+    }
+
+    if (!open || sendingMessage) return;
+
+    if (sendUserMessage(programmaticMessage.message)) {
+      handledProgrammaticMessageIds.current.add(programmaticMessage.id);
+      onProgrammaticMessageHandled?.(programmaticMessage.id);
+    }
+  }, [
+    onProgrammaticMessageHandled,
+    open,
+    programmaticMessage,
+    sendUserMessage,
+    sendingMessage,
+  ]);
 
   useEffect(() => {
     if (lastMessage.current)
@@ -635,12 +691,12 @@ export default function ChatWindow({
           }
         `}
       </style>
-      
+
       <div
-        style={{ 
-          ...chat_window_style, 
-          width, 
-          height, 
+        style={{
+          ...chat_window_style,
+          width,
+          height,
           minWidth: width,
           ...(background_color ? {backgroundColor: background_color} : {})
         }}
@@ -659,9 +715,9 @@ export default function ChatWindow({
               />
             ) : (
               <div className="cl-default-header-icon">
-                <HeaderLucideIcon 
-                  className="cl-header-logo" 
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")} 
+                <HeaderLucideIcon
+                  className="cl-header-logo"
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                   size={24}
                 />
               </div>
@@ -743,7 +799,7 @@ export default function ChatWindow({
             )}
           </div>
         </div>
-        
+
         <div className="cl-messages_container" style={background_color ? { backgroundColor: background_color } : undefined}>
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
@@ -783,16 +839,16 @@ export default function ChatWindow({
           {messages.map((message, index) => (
             <ChatMessage
               bot_message_style={
-                bot_message_style || 
-                (bot_message_color || bot_message_text_color ? 
+                bot_message_style ||
+                (bot_message_color || bot_message_text_color ?
                   {
                     ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
                     ...(bot_message_text_color ? {color: bot_message_text_color} : {})
                   } : undefined)
               }
               user_message_style={
-                user_message_style || 
-                (user_message_color || user_message_text_color ? 
+                user_message_style ||
+                (user_message_color || user_message_text_color ?
                   {
                     ...(user_message_color ? {backgroundColor: user_message_color} : {}),
                     ...(user_message_text_color ? {color: user_message_text_color} : {})
