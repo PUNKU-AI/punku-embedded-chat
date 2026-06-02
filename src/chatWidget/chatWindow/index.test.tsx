@@ -147,6 +147,25 @@ describe('ChatWindow', () => {
       expect(input).toBeInTheDocument();
     });
 
+    it('should set a readable default input text size', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const input = document.querySelector('.cl-input-element');
+      expect(input).toHaveStyle({ fontSize: '16px', lineHeight: '1.5' });
+    });
+
+    it('should allow custom input text size overrides', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          input_style={{ fontSize: '18px', lineHeight: '1.8' }}
+        />
+      );
+
+      const input = document.querySelector('.cl-input-element');
+      expect(input).toHaveStyle({ fontSize: '18px', lineHeight: '1.8' });
+    });
+
     it('should render send button', () => {
       render(<ChatWindow {...defaultProps} />);
 

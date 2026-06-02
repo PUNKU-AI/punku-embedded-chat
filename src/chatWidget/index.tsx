@@ -683,6 +683,20 @@ video {
   display: none;
 }
 
+:host {
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.cl-widget-root,
+.cl-chat-window,
+.cl-window {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
 *, ::before, ::after {
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
@@ -1059,8 +1073,8 @@ video {
   padding-bottom: 1rem;
   padding-left: 1.5rem;
   padding-right: 1.5rem;
-  font-size: 1.125rem;
-  line-height: 1.75rem;
+  font-size: 18px;
+  line-height: 28px;
   font-weight: 400;
   color: rgb(17 24 39);
   --tw-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -1170,6 +1184,7 @@ video {
   color: #666666;
   font-style: italic;
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .cl-justify-start {
@@ -1188,6 +1203,8 @@ video {
   padding-top: 1.25rem;
   padding-bottom: 1.25rem;
   font-weight: 300;
+  font-size: 16px;
+  line-height: 1.5;
   background-color: rgb(255 255 255);
   color: rgb(17 24 39);
 }
@@ -1213,6 +1230,8 @@ video {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   text-align: right;
+  font-size: 16px;
+  line-height: 1.5;
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }
@@ -1233,6 +1252,8 @@ video {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   text-align: left;
+  font-size: 16px;
+  line-height: 1.5;
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }
@@ -1253,6 +1274,8 @@ video {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
   text-align: left;
+  font-size: 16px;
+  line-height: 1.5;
   --tw-text-opacity: 1;
   color: rgb(31 41 55 / var(--tw-text-opacity));
 }
@@ -1718,6 +1741,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background-color: rgb(229 231 235);
   padding: 0.5rem 1rem;
   text-align: left;
+  font-size: 16px;
+  line-height: 1.5;
   color: rgb(31 41 55);
 }
 
@@ -3077,8 +3102,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
-    <div style={{ 
-      position: "fixed", 
+    <div className="cl-widget-root" style={{
+      position: "fixed",
       ...triggerStyle,
       transform: "none",
       zIndex: 9998

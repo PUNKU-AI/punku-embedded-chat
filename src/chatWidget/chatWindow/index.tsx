@@ -10,6 +10,11 @@ import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { translations, Language } from "../../translations";
 
+const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
+  fontSize: "16px",
+  lineHeight: 1.5,
+};
+
 const getLucideIconByName = (name?: string): LucideIcon | undefined => {
   if (!name) return undefined;
   const icon = (LucideIcons as unknown as Record<string, unknown>)[name];
@@ -892,7 +897,10 @@ export default function ChatWindow({
             type="text"
             disabled={sendingMessage}
             placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
-            style={input_style}
+            style={{
+              ...DEFAULT_INPUT_TEXT_STYLE,
+              ...(input_style || {}),
+            }}
             ref={inputRef}
             className="cl-input-element"
           />

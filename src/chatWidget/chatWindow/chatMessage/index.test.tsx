@@ -66,12 +66,44 @@ describe('ChatMessage', () => {
       expect(messageElement).toHaveStyle({ backgroundColor: 'red' });
     });
 
+    it('should set a readable default user message text size', () => {
+      render(<ChatMessage {...defaultProps} isSend={true} />);
+
+      const messageElement = document.querySelector('.cl-user_message');
+      expect(messageElement).toHaveStyle({ fontSize: '16px', lineHeight: '1.5' });
+    });
+
+    it('should allow custom user message text size overrides', () => {
+      const customStyle = { fontSize: '18px', lineHeight: '1.8' };
+      render(
+        <ChatMessage {...defaultProps} isSend={true} user_message_style={customStyle} />
+      );
+
+      const messageElement = document.querySelector('.cl-user_message');
+      expect(messageElement).toHaveStyle({ fontSize: '18px', lineHeight: '1.8' });
+    });
+
     it('should apply custom bot message style', () => {
       const customStyle = { backgroundColor: 'blue' };
       render(<ChatMessage {...defaultProps} bot_message_style={customStyle} />);
 
       const messageElement = document.querySelector('.cl-bot_message');
       expect(messageElement).toHaveStyle({ backgroundColor: 'blue' });
+    });
+
+    it('should set a readable default bot message text size', () => {
+      render(<ChatMessage {...defaultProps} />);
+
+      const messageElement = document.querySelector('.cl-bot_message');
+      expect(messageElement).toHaveStyle({ fontSize: '16px', lineHeight: '1.5' });
+    });
+
+    it('should allow custom bot message text size overrides', () => {
+      const customStyle = { fontSize: '18px', lineHeight: '1.8' };
+      render(<ChatMessage {...defaultProps} bot_message_style={customStyle} />);
+
+      const messageElement = document.querySelector('.cl-bot_message');
+      expect(messageElement).toHaveStyle({ fontSize: '18px', lineHeight: '1.8' });
     });
 
     it('should apply custom error message style', () => {
