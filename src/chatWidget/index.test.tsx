@@ -139,6 +139,17 @@ describe('ChatWidget', () => {
       expect(screen.getByTestId('chat-trigger')).toBeInTheDocument();
     });
 
+    it('should define widget-level base text sizing inside the shadow stylesheet', () => {
+      const { container } = render(<ChatWidget {...defaultProps} />);
+
+      expect(container.querySelector('.cl-widget-root')).toBeInTheDocument();
+
+      const styleElement = container.querySelector('style');
+      expect(styleElement?.textContent).toContain(':host');
+      expect(styleElement?.textContent).toContain('font-size: 16px');
+      expect(styleElement?.textContent).toContain('.cl-widget-root');
+    });
+
     it('should not show chat window by default', () => {
       render(<ChatWidget {...defaultProps} />);
 

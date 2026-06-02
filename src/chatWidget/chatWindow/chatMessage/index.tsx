@@ -6,6 +6,15 @@ import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 
+// Pins a readable base text size on every message. The widget renders inside a
+// closed shadow root, so without this the font-size inherits from the host page
+// and shrinks on deployments whose body/root font-size is small. Spread first so
+// consumer *_message_style props (which spread after) can still override it.
+const DEFAULT_MESSAGE_TEXT_STYLE: React.CSSProperties = {
+  fontSize: "16px",
+  lineHeight: 1.5,
+};
+
 function findMessageInObject(obj: any): string | null {
   // If obj is a string, return it
   if (typeof obj === "string") return obj;
@@ -144,6 +153,7 @@ export default function ChatMessage({
       {isSend ? (
         <div 
           style={{
+            ...DEFAULT_MESSAGE_TEXT_STYLE,
             ...(user_message_style || {}),
           }} 
           className="cl-user_message"
@@ -151,12 +161,19 @@ export default function ChatMessage({
           {parsedMessage}
         </div>
       ) : error ? (
-        <div style={error_message_style} className={"cl-error_message"}>
+        <div
+          style={{
+            ...DEFAULT_MESSAGE_TEXT_STYLE,
+            ...(error_message_style || {}),
+          }}
+          className={"cl-error_message"}
+        >
           {parsedMessage}
         </div>
       ) : (
         <div 
           style={{
+            ...DEFAULT_MESSAGE_TEXT_STYLE,
             ...(bot_message_style || {}),
           }} 
           className={"cl-bot_message"}
