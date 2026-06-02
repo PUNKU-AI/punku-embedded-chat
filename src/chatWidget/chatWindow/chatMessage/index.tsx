@@ -6,6 +6,10 @@ import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 
+// Pins a readable base text size on every message. The widget renders inside a
+// closed shadow root, so without this the font-size inherits from the host page
+// and shrinks on deployments whose body/root font-size is small. Spread first so
+// consumer *_message_style props (which spread after) can still override it.
 const DEFAULT_MESSAGE_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,

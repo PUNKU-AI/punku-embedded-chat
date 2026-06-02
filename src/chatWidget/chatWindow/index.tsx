@@ -10,6 +10,10 @@ import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { translations, Language } from "../../translations";
 
+// Same rationale as DEFAULT_MESSAGE_TEXT_STYLE: pin a readable input text size so
+// it doesn't inherit a small host-page font through the closed shadow root. 16px
+// also avoids iOS Safari's zoom-on-focus (triggered only below 16px). Spread first
+// so a consumer's input_style can override it.
 const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,

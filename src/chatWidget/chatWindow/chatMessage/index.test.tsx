@@ -115,6 +115,32 @@ describe('ChatMessage', () => {
       const messageElement = document.querySelector('.cl-error_message');
       expect(messageElement).toHaveStyle({ backgroundColor: 'orange' });
     });
+
+    it('should set a readable default error message text size', () => {
+      render(<ChatMessage {...defaultProps} error={true} />);
+
+      const messageElement = document.querySelector('.cl-error_message');
+      expect(messageElement).toHaveStyle({ fontSize: '16px', lineHeight: '1.5' });
+    });
+
+    it('should allow custom error message text size overrides', () => {
+      const customStyle = { fontSize: '18px', lineHeight: '1.8' };
+      render(
+        <ChatMessage {...defaultProps} error={true} error_message_style={customStyle} />
+      );
+
+      const messageElement = document.querySelector('.cl-error_message');
+      expect(messageElement).toHaveStyle({ fontSize: '18px', lineHeight: '1.8' });
+    });
+
+    it('should keep the default line height when only the font size is overridden', () => {
+      render(
+        <ChatMessage {...defaultProps} isSend={true} user_message_style={{ fontSize: '20px' }} />
+      );
+
+      const messageElement = document.querySelector('.cl-user_message');
+      expect(messageElement).toHaveStyle({ fontSize: '20px', lineHeight: '1.5' });
+    });
   });
 
   describe('Message Parsing', () => {
