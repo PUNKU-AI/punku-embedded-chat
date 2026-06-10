@@ -172,6 +172,13 @@ describe('ChatWindow', () => {
       const sendButton = document.querySelector('.cl-send-button');
       expect(sendButton).toBeInTheDocument();
     });
+
+    it('should keep the send button circular by preventing flex shrinking', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const sendButton = document.querySelector('.cl-send-button');
+      expect(sendButton).toHaveStyle({ width: '40px', height: '40px', flexShrink: '0' });
+    });
   });
 
   describe('Welcome Message', () => {

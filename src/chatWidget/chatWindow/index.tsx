@@ -915,6 +915,7 @@ export default function ChatWindow({
               borderRadius: '50%',
               width: '40px',
               height: '40px',
+              flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

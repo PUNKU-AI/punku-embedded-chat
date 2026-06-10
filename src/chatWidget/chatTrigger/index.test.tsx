@@ -69,6 +69,54 @@ describe('ChatTrigger', () => {
     });
   });
 
+  describe('Custom Trigger Icon', () => {
+    const iconUrl = 'https://example.com/mascot.png';
+
+    it('should render a custom image instead of the chat bubble icon when triggerIcon is provided', () => {
+      render(<ChatTrigger {...defaultProps} triggerIcon={iconUrl} />);
+
+      const img = document.querySelector('img.cl-trigger-img');
+      expect(img).toBeInTheDocument();
+      expect(img).toHaveAttribute('src', iconUrl);
+      expect(img).toHaveClass('cl-trigger-icon');
+      // Only the X icon remains as an svg
+      expect(document.querySelectorAll('svg.cl-trigger-icon').length).toBe(1);
+    });
+
+    it('should not render a custom image when triggerIcon is not provided', () => {
+      render(<ChatTrigger {...defaultProps} />);
+
+      expect(document.querySelector('img.cl-trigger-img')).not.toBeInTheDocument();
+    });
+
+    it('should show the custom image when closed and hide it when open', () => {
+      const { rerender } = render(
+        <ChatTrigger {...defaultProps} triggerIcon={iconUrl} open={false} />
+      );
+
+      expect(document.querySelector('img.cl-trigger-img')).toHaveClass('cl-scale-100');
+
+      rerender(<ChatTrigger {...defaultProps} triggerIcon={iconUrl} open={true} />);
+
+      expect(document.querySelector('img.cl-trigger-img')).toHaveClass('cl-scale-0');
+    });
+
+    it('should still show the X close icon when open', () => {
+      render(<ChatTrigger {...defaultProps} triggerIcon={iconUrl} open={true} />);
+
+      const closeIcon = document.querySelector('svg.cl-trigger-icon');
+      expect(closeIcon).toHaveClass('cl-scale-100');
+    });
+
+    it('should take precedence over the swarovski theme icon', () => {
+      render(<ChatTrigger {...defaultProps} triggerIcon={iconUrl} theme="swarovski" />);
+
+      expect(document.querySelector('img.cl-trigger-img')).toBeInTheDocument();
+      // Only the X icon remains as an svg (no Sparkles)
+      expect(document.querySelectorAll('svg.cl-trigger-icon').length).toBe(1);
+    });
+  });
+
   describe('Interactions', () => {
     it('should call setOpen with true when clicked while closed', () => {
       const setOpen = jest.fn();
