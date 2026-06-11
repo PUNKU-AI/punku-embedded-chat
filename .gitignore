@@ -24,3 +24,6 @@ yarn-error.log*
 
 # Local demo files
 /demos
+
+# Local client working folders (may contain real client configs/keys)
+/working_folder_dialogue_impact

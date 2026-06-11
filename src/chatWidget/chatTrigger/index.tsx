@@ -6,7 +6,8 @@ export default function ChatTrigger({
     triggerRef,
     buttonColor,
     buttonTextColor,
-    theme = "default"
+    theme = "default",
+    triggerIcon
 }: {
     style?: React.CSSProperties,
     open: boolean,
@@ -14,7 +15,8 @@ export default function ChatTrigger({
     triggerRef: React.RefObject<HTMLButtonElement> | null,
     buttonColor?: string,
     buttonTextColor?: string,
-    theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski"
+    theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski",
+    triggerIcon?: string
 }) {
     const customStyles = {
         ...style,
@@ -33,7 +35,13 @@ export default function ChatTrigger({
             }}
             className={`cl-trigger ${theme ? `theme-${theme}` : ""}`}>
             <X className={"cl-trigger-icon " + (open ? "cl-scale-100" : "cl-scale-0")} />
-            {isSwarovski ? (
+            {triggerIcon ? (
+                <img
+                    src={triggerIcon}
+                    alt="Chat icon"
+                    className={"cl-trigger-icon cl-trigger-img " + (open ? "cl-scale-0" : "cl-scale-100")}
+                />
+            ) : isSwarovski ? (
                 <Sparkles className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
             ) : (
                 <MessageSquare className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />

@@ -143,6 +143,8 @@ For more advanced customization, you can still use the style properties:
 </html>
 ```
 
+> **Note:** The widget is registered under two tag names: `<punku-chat>` (primary) and `<punku-chat-widget>` (alias). Both accept the same attributes.
+
 ### on React
  Import the js bundle in the index.html of your react project
 ```html
@@ -200,6 +202,7 @@ Use the widget API to customize your widget:
 | send_button_style     | json      | No       |
 | send_icon_style       | json      | No       |
 | theme                 | string    | No       |
+| trigger_icon          | string    | No       |
 | tweaks                | json      | No       |
 | user_message_color    | string    | No       |
 | user_message_style    | json      | No       |
@@ -352,6 +355,11 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", and "punku-ai-bookingkit".
+
+- **trigger_icon:**
+  - Type: String
+  - Required: No
+  - Description: URL of a custom icon to display on the floating chat trigger button instead of the default chat bubble icon. The close (X) icon is still shown while the chat window is open.
 
 - **tweaks:**
   - Type: JSON

@@ -46,6 +46,7 @@ export default function ChatWidget({
   show_feedback = false,
   header_icon,
   header_icon_name,
+  trigger_icon,
   button_color,
   button_text_color,
   background_color,
@@ -102,6 +103,7 @@ export default function ChatWidget({
   show_feedback?: boolean;
   header_icon?: string;
   header_icon_name?: string;
+  trigger_icon?: string;
   button_color?: string;
   button_text_color?: string;
   background_color?: string;
@@ -870,6 +872,7 @@ video {
   border-radius: 50%;
   width: 40px;
   height: 40px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1002,6 +1005,12 @@ video {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 500ms;
+}
+
+.cl-trigger-img {
+  height: 65%;
+  width: 65%;
+  object-fit: contain;
 }
 
 .cl-chat-window {
@@ -3132,6 +3141,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           buttonColor={button_color}
           buttonTextColor={button_text_color}
           theme={effectiveTheme}
+          triggerIcon={trigger_icon}
         />
       </div>
       <div style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}>
