@@ -29,6 +29,7 @@ The PUNKU.AI Chat Widget supports various visual themes to match your applicatio
 | ocean              | Beautiful ocean background with translucent message bubbles           |
 | aurora             | Northern lights inspired theme with colorful gradient backgrounds     |
 | punku-ai-bookingkit| Same as default theme, but with "Powered by PUNKU.AI & bookingkit" branding |
+| swarovski          | Crystal-inspired theme (Euclid Circular B font, sparkle trigger icon, German default) |
 
 ### How to Use Themes
 
@@ -169,10 +170,12 @@ Use the widget API to customize your widget:
 
 | Prop                  | Type      | Required |
 |-----------------------|-----------|----------|
+| api_key               | string    | No       |
 | background_color      | string    | No       |
 | bot_message_color     | string    | No       |
 | bot_message_style     | json      | No       |
 | bot_message_text_color| string    | No       |
+| bottom_offset         | number    | No       |
 | button_color          | string    | No       |
 | button_text_color     | string    | No       |
 | closed_widget_hint_auto_hide_ms | number | No   |
@@ -190,10 +193,13 @@ Use the widget API to customize your widget:
 | error_message_style   | json      | No       |
 | flow_id               | string    | Yes      |
 | header_icon           | string    | No       |
+| header_icon_name      | string    | No       |
 | height                | number    | No       |
 | host_url              | string    | Yes      |
+| idle_expiration_hours | number    | No       |
 | input_container_style | json      | No       |
 | input_style           | json      | No       |
+| loading_messages      | json      | No       |
 | online                | boolean   | No       |
 | start_open            | boolean   | No       |
 | online_message        | string    | No       |
@@ -202,12 +208,15 @@ Use the widget API to customize your widget:
 | send_button_style     | json      | No       |
 | send_icon_style       | json      | No       |
 | theme                 | string    | No       |
+| top_offset            | number    | No       |
 | trigger_icon          | string    | No       |
+| ttl_hours             | number    | No       |
 | tweaks                | json      | No       |
 | user_message_color    | string    | No       |
 | user_message_style    | json      | No       |
 | user_message_text_color| string   | No       |
 | welcome_message       | string    | No       |
+| widget_id             | string    | No       |
 | width                 | number    | No       |
 | window_title          | string    | No       |
 | session_id            | string    | No       |
@@ -291,6 +300,51 @@ Use the widget API to customize your widget:
   - Required: Yes
   - Description: Identifier for the flow associated with the component.
 
+- **api_key:**
+  - Type: String
+  - Required: No
+  - Description: API key sent as the `x-api-key` header on every request to the backend. Only set this when your PUNKU.AI deployment requires key-based authentication.
+
+- **header_icon_name:**
+  - Type: String
+  - Required: No
+  - Description: Name of a built-in [Lucide](https://lucide.dev/) icon to show in the chat header. Ignored if `header_icon` (a custom image URL) is provided; unknown names fall back to the default chat icon (`MessagesSquare`). Supported names: `Bell`, `BookOpen`, `Bot`, `Briefcase`, `Building2`, `Calendar`, `CalendarDays`, `Camera`, `Car`, `Clock`, `Coffee`, `Compass`, `CreditCard`, `Gift`, `Globe`, `GraduationCap`, `Headphones`, `Heart`, `HelpCircle`, `Home`, `Hotel`, `Info`, `Leaf`, `LifeBuoy`, `Mail`, `Map`, `MapPin`, `MessageCircle`, `MessageSquare`, `MessagesSquare`, `Mountain`, `MountainSnow`, `Music`, `Package`, `Phone`, `Plane`, `Search`, `Send`, `Settings`, `ShoppingBag`, `ShoppingCart`, `Smile`, `Snowflake`, `Sparkles`, `Star`, `Sun`, `Tag`, `Ticket`, `Truck`, `User`, `Users`, `Utensils`, `Wine`, `Zap`. To add another icon, import it and register it in `HEADER_ICONS` in `src/chatWidget/chatWindow/index.tsx`.
+
+- **widget_id:**
+  - Type: String
+  - Required: No
+  - Default: "punku-chat-widget"
+  - Description: Identifier used to namespace the global control API exposed on `window` (`window['<widget_id>_api']`). Set a unique value when embedding more than one widget on the same page. See [PROGRAMMATIC_CONTROL.md](./PROGRAMMATIC_CONTROL.md).
+
+- **loading_messages:**
+  - Type: JSON
+  - Required: No
+  - Description: Array of strings shown (rotating) in the loading placeholder while a response is being generated. Overrides the built-in localized "thinking" messages.
+
+- **ttl_hours:**
+  - Type: Number
+  - Required: No
+  - Default: 24
+  - Description: Absolute session lifetime in hours. After this many hours the stored conversation is discarded and a new session begins.
+
+- **idle_expiration_hours:**
+  - Type: Number
+  - Required: No
+  - Default: 0.5
+  - Description: Idle session timeout in hours. If no message is sent within this window, the stored conversation expires.
+
+- **bottom_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 20
+  - Description: Vertical offset (in pixels) of the trigger/window from the bottom edge. Useful for clearing fixed footers or cookie banners.
+
+- **top_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 60
+  - Description: Top offset (in pixels) used for the full-screen mobile chat window so it clears fixed navbars.
+
 - **height:**
   - Type: Number
   - Required: No
@@ -354,7 +408,7 @@ Use the widget API to customize your widget:
 - **theme:**
   - Type: String
   - Required: No
-  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", and "punku-ai-bookingkit".
+  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", "punku-ai-bookingkit", and "swarovski".
 
 - **trigger_icon:**
   - Type: String

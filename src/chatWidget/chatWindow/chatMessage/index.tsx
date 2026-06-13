@@ -92,11 +92,13 @@ export default function ChatMessage({
   bot_message_style,
   error_message_style,
   feedback,
+  show_feedback = false,
   api_key,
   additional_headers,
   host_url,
   onFeedbackUpdate,
 }: ChatMessageType & {
+  show_feedback?: boolean;
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
@@ -193,8 +195,8 @@ export default function ChatMessage({
             {parsedMessage}
           </Markdown>
           
-          {/* Simple thumbs up/down feedback - hide for welcome message */}
-          {!isSend && !error && message_id !== "welcome-message" && (
+          {/* Simple thumbs up/down feedback - opt-in via show_feedback, hidden for welcome message */}
+          {show_feedback && !isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">
               <div className="feedback-buttons">
                 <button 

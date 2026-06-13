@@ -5,8 +5,7 @@ import ChatTrigger from './index';
 describe('ChatTrigger', () => {
   const defaultProps = {
     open: false,
-    setOpen: jest.fn(),
-    triggerRef: React.createRef<HTMLButtonElement>()
+    setOpen: jest.fn()
   };
 
   beforeEach(() => {
@@ -191,22 +190,6 @@ describe('ChatTrigger', () => {
         backgroundColor: '#ff0000',
         color: '#ffffff'
       });
-    });
-  });
-
-  describe('Ref', () => {
-    it('should forward ref to button element', () => {
-      const ref = React.createRef<HTMLButtonElement>();
-      render(<ChatTrigger {...defaultProps} triggerRef={ref} />);
-
-      expect(ref.current).toBeInstanceOf(HTMLButtonElement);
-    });
-
-    it('should handle null ref gracefully', () => {
-      render(<ChatTrigger {...defaultProps} triggerRef={null} />);
-
-      const button = screen.getByRole('button');
-      expect(button).toBeInTheDocument();
     });
   });
 

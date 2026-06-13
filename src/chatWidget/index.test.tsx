@@ -5,16 +5,13 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 jest.mock('./chatTrigger', () => {
   return function MockChatTrigger({
     open,
-    setOpen,
-    triggerRef
+    setOpen
   }: {
     open: boolean;
     setOpen: (open: boolean) => void;
-    triggerRef: React.RefObject<HTMLButtonElement>;
   }) {
     return (
       <button
-        ref={triggerRef}
         data-testid="chat-trigger"
         onClick={() => setOpen(!open)}
       >
@@ -114,7 +111,6 @@ describe('ChatWidget', () => {
   const defaultProps = {
     host_url: 'http://localhost:3000',
     flow_id: 'test-flow-id',
-    input_value: 'test',
     input_type: 'chat',
     output_type: 'chat'
   };

@@ -1,14 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './index';
-import { sendMessage, streamMessage } from '../../controllers';
+import { streamMessage } from '../../controllers';
 
 // Mock scrollIntoView
 Element.prototype.scrollIntoView = jest.fn();
 
 // Mock the controllers
 jest.mock('../../controllers', () => ({
-  sendMessage: jest.fn(),
   streamMessage: jest.fn()
 }));
 
@@ -23,10 +22,27 @@ jest.mock('react-markdown', () => {
 jest.mock('remark-gfm', () => () => {});
 jest.mock('rehype-mathjax', () => () => {});
 
-// Mock the components
+// Mock the components. Surface show_feedback so tests can assert the prop is
+// threaded from ChatWindow into ChatMessage (the actual gating behavior is
+// covered in chatMessage/index.test.tsx).
 jest.mock('./chatMessage', () => {
-  return function MockChatMessage({ message, isSend }: { message: string; isSend: boolean }) {
-    return <div data-testid={isSend ? 'user-message' : 'bot-message'}>{message}</div>;
+  return function MockChatMessage({
+    message,
+    isSend,
+    show_feedback
+  }: {
+    message: string;
+    isSend: boolean;
+    show_feedback?: boolean;
+  }) {
+    return (
+      <div
+        data-testid={isSend ? 'user-message' : 'bot-message'}
+        data-show-feedback={String(Boolean(show_feedback))}
+      >
+        {message}
+      </div>
+    );
   };
 });
 
@@ -59,26 +75,9 @@ jest.mock('../components/ConfirmationModal', () => {
   };
 });
 
-const mockedSendMessage = sendMessage as jest.MockedFunction<typeof sendMessage>;
 const mockedStreamMessage = streamMessage as jest.MockedFunction<typeof streamMessage>;
 
 describe('ChatWindow', () => {
-  const mockTriggerRef = {
-    current: {
-      getBoundingClientRect: () => ({
-        top: 100,
-        left: 100,
-        width: 50,
-        height: 50,
-        bottom: 150,
-        right: 150,
-        x: 100,
-        y: 100,
-        toJSON: () => ({})
-      })
-    }
-  } as React.RefObject<HTMLButtonElement>;
-
   const mockSessionId = { current: 'test-session-id' };
 
   const defaultProps = {
@@ -91,12 +90,13 @@ describe('ChatWindow', () => {
     input_type: 'chat',
     open: true,
     addMessage: jest.fn(),
-    triggerRef: mockTriggerRef,
     sessionId: mockSessionId as React.MutableRefObject<string>
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: a stream that resolves immediately with no events
+    mockedStreamMessage.mockImplementation(() => Promise.resolve());
   });
 
   describe('Rendering', () => {
@@ -246,9 +246,9 @@ describe('ChatWindow', () => {
     });
 
     it('should show different placeholder when sending', async () => {
-      mockedSendMessage.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockedStreamMessage.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      render(<ChatWindow {...defaultProps} enable_streaming={false} placeholder_sending="Sending..." />);
+      render(<ChatWindow {...defaultProps} placeholder_sending="Sending..." />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -262,16 +262,9 @@ describe('ChatWindow', () => {
     });
   });
 
-  describe('Sending Messages (Non-Streaming)', () => {
-    it('should call sendMessage when send button is clicked', async () => {
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
-
-      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+  describe('Sending Messages', () => {
+    it('should call streamMessage when send button is clicked', async () => {
+      render(<ChatWindow {...defaultProps} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -280,7 +273,7 @@ describe('ChatWindow', () => {
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(mockedSendMessage).toHaveBeenCalledWith(
+        expect(mockedStreamMessage).toHaveBeenCalledWith(
           'http://localhost:3000',
           'test-flow-id',
           'Hello',
@@ -290,21 +283,18 @@ describe('ChatWindow', () => {
           undefined,
           undefined,
           'test-api-key',
-          undefined
+          undefined,
+          expect.any(Function),
+          expect.any(Function),
+          expect.any(Function)
         );
       });
     });
 
     it('should call addMessage with user message', async () => {
       const addMessage = jest.fn();
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
 
-      render(<ChatWindow {...defaultProps} enable_streaming={false} addMessage={addMessage} />);
+      render(<ChatWindow {...defaultProps} addMessage={addMessage} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -321,14 +311,7 @@ describe('ChatWindow', () => {
     });
 
     it('should clear input after sending', async () => {
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
-
-      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+      render(<ChatWindow {...defaultProps} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -345,7 +328,6 @@ describe('ChatWindow', () => {
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
       fireEvent.click(sendButton);
 
-      expect(mockedSendMessage).not.toHaveBeenCalled();
       expect(mockedStreamMessage).not.toHaveBeenCalled();
     });
 
@@ -358,19 +340,11 @@ describe('ChatWindow', () => {
       fireEvent.change(input, { target: { value: '   ' } });
       fireEvent.click(sendButton);
 
-      expect(mockedSendMessage).not.toHaveBeenCalled();
       expect(mockedStreamMessage).not.toHaveBeenCalled();
     });
 
     it('should send message on Enter key press', async () => {
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
-
-      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+      render(<ChatWindow {...defaultProps} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
 
@@ -378,24 +352,17 @@ describe('ChatWindow', () => {
       fireEvent.keyDown(input, { key: 'Enter' });
 
       await waitFor(() => {
-        expect(mockedSendMessage).toHaveBeenCalled();
+        expect(mockedStreamMessage).toHaveBeenCalled();
       });
     });
 
     it('should send a programmatic message', async () => {
       const addMessage = jest.fn();
       const onProgrammaticMessageHandled = jest.fn();
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
 
       render(
         <ChatWindow
           {...defaultProps}
-          enable_streaming={false}
           addMessage={addMessage}
           programmaticMessage={{ id: 1, message: 'Prefilled question' }}
           onProgrammaticMessageHandled={onProgrammaticMessageHandled}
@@ -403,7 +370,7 @@ describe('ChatWindow', () => {
       );
 
       await waitFor(() => {
-        expect(mockedSendMessage).toHaveBeenCalledWith(
+        expect(mockedStreamMessage).toHaveBeenCalledWith(
           'http://localhost:3000',
           'test-flow-id',
           'Prefilled question',
@@ -413,7 +380,10 @@ describe('ChatWindow', () => {
           undefined,
           undefined,
           'test-api-key',
-          undefined
+          undefined,
+          expect.any(Function),
+          expect.any(Function),
+          expect.any(Function)
         );
       });
       expect(addMessage).toHaveBeenCalledWith({
@@ -422,13 +392,32 @@ describe('ChatWindow', () => {
       });
       expect(onProgrammaticMessageHandled).toHaveBeenCalledWith(1);
     });
-  });
 
-  describe('Streaming Messages', () => {
-    it('should call streamMessage when enable_streaming is true', async () => {
-      mockedStreamMessage.mockImplementation(() => Promise.resolve());
+    it('should append a new error message when the stream fails before any reply', async () => {
+      const addMessage = jest.fn();
+      // Simulate a stream that errors before any bot token arrives
+      mockedStreamMessage.mockImplementation(
+        (
+          _baseUrl,
+          _flowId,
+          _message,
+          _input_type,
+          _output_type,
+          _sessionId,
+          _output_component,
+          _tweaks,
+          _api_key,
+          _additional_headers,
+          _onStreamData,
+          _onStreamEnd,
+          onStreamError
+        ) => {
+          onStreamError?.(new Error('Boom'));
+          return Promise.resolve();
+        }
+      );
 
-      render(<ChatWindow {...defaultProps} enable_streaming={true} />);
+      render(<ChatWindow {...defaultProps} addMessage={addMessage} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -437,8 +426,39 @@ describe('ChatWindow', () => {
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(mockedStreamMessage).toHaveBeenCalled();
+        // The user's message is added, and the error is appended as its OWN
+        // message (not via updateLastMessage, which would overwrite the user's).
+        expect(addMessage).toHaveBeenCalledWith({ message: 'Hello', isSend: true });
+        expect(addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'Boom', isSend: false, error: true })
+        );
       });
+      expect(defaultProps.updateLastMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Feedback visibility', () => {
+    it('should thread show_feedback=false to messages by default', () => {
+      render(<ChatWindow {...defaultProps} messages={[{ message: 'Bot', isSend: false }]} />);
+
+      // The non-welcome bot message should receive show_feedback=false
+      const botMessages = screen.getAllByTestId('bot-message');
+      const rendered = botMessages.find((el) => el.textContent === 'Bot');
+      expect(rendered).toHaveAttribute('data-show-feedback', 'false');
+    });
+
+    it('should thread show_feedback=true to messages when enabled', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          show_feedback={true}
+          messages={[{ message: 'Bot', isSend: false }]}
+        />
+      );
+
+      const botMessages = screen.getAllByTestId('bot-message');
+      const rendered = botMessages.find((el) => el.textContent === 'Bot');
+      expect(rendered).toHaveAttribute('data-show-feedback', 'true');
     });
   });
 
@@ -536,6 +556,30 @@ describe('ChatWindow', () => {
       expect(headerIcon).toBeInTheDocument();
       expect(headerIcon?.tagName.toLowerCase()).toBe('svg');
     });
+
+    it('should fall back to the default header icon for an unknown icon name', () => {
+      render(<ChatWindow {...defaultProps} header_icon_name="ThisIconDoesNotExist" />);
+
+      const headerIcon = document.querySelector('.cl-header-logo');
+      expect(headerIcon).toBeInTheDocument();
+      expect(headerIcon?.tagName.toLowerCase()).toBe('svg');
+    });
+  });
+
+  describe('Branding', () => {
+    it('should show only PUNKU.AI branding by default', () => {
+      render(<ChatWindow {...defaultProps} online={true} />);
+
+      expect(screen.getByText('PUNKU.AI')).toBeInTheDocument();
+      expect(screen.queryByText('bookingkit')).not.toBeInTheDocument();
+    });
+
+    it('should show bookingkit co-branding only for the punku-ai-bookingkit theme', () => {
+      render(<ChatWindow {...defaultProps} online={true} theme="punku-ai-bookingkit" />);
+
+      expect(screen.getByText('PUNKU.AI')).toBeInTheDocument();
+      expect(screen.getByText('bookingkit')).toBeInTheDocument();
+    });
   });
 
   describe('Online/Offline Status', () => {
@@ -596,10 +640,10 @@ describe('ChatWindow', () => {
   });
 
   describe('Placeholder Display', () => {
-    it('should show placeholder when sending message (non-streaming)', async () => {
-      mockedSendMessage.mockImplementation(() => new Promise(() => {})); // Never resolves
+    it('should show placeholder while sending before the first streamed token', async () => {
+      mockedStreamMessage.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+      render(<ChatWindow {...defaultProps} />);
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
