@@ -23,7 +23,6 @@ function createChatElement() {
             height:"number",
             width:"number",
             session_id:"string",
-            chat_output_key:"string",
             error_message_style:"json",
             send_button_style:"json",
             send_icon_style:"json",

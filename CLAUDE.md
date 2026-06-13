@@ -97,7 +97,7 @@ Key widget props:
 - `flow_id` (required): Flow identifier
 - `input_type` / `output_type` (required): Message types
 - `theme`: Visual theme
-- `default_language`: UI language (en, de, es, fr, it, pt)
+- `default_language`: UI language (en, de)
 - `start_open`: Open widget on load
 - `session_id`: Override session ID
 - `ttl_hours` / `idle_expiration_hours`: Session expiration config

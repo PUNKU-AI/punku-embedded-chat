@@ -131,8 +131,9 @@ export class SessionStorage {
    */
   static isSessionExpired(session: StoredSession, config: SessionConfig = {}): boolean {
     const now = Date.now();
-    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
-    const idleExpiryHours = config.idleExpiryHours || this.DEFAULT_IDLE_EXPIRY_HOURS;
+    // ?? (not ||) so an explicit 0 is honored instead of falling back to defaults
+    const expiryHours = config.expiryHours ?? this.DEFAULT_EXPIRY_HOURS;
+    const idleExpiryHours = config.idleExpiryHours ?? this.DEFAULT_IDLE_EXPIRY_HOURS;
 
     // Check absolute expiration
     const absoluteExpiry = session.expiresAt || (session.createdAt + (expiryHours * 60 * 60 * 1000));
@@ -160,7 +161,7 @@ export class SessionStorage {
     config: SessionConfig = {}
   ): StoredSession {
     const now = Date.now();
-    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
+    const expiryHours = config.expiryHours ?? this.DEFAULT_EXPIRY_HOURS;
 
     const session: StoredSession = {
       sessionId: providedSessionId || uuidv4(),

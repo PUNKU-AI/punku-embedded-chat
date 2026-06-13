@@ -3,7 +3,6 @@ export default function ChatTrigger({
     style,
     open,
     setOpen,
-    triggerRef,
     buttonColor,
     buttonTextColor,
     theme = "default",
@@ -12,7 +11,6 @@ export default function ChatTrigger({
     style?: React.CSSProperties,
     open: boolean,
     setOpen: Function,
-    triggerRef: React.RefObject<HTMLButtonElement> | null,
     buttonColor?: string,
     buttonTextColor?: string,
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski",
@@ -28,7 +26,7 @@ export default function ChatTrigger({
     const isSwarovski = theme === "swarovski";
 
     return (
-        <button ref={triggerRef} style={customStyles}
+        <button style={customStyles}
             onClick={() => { setOpen(!open) }}
             onMouseDown={(e) => {
                 e.preventDefault()

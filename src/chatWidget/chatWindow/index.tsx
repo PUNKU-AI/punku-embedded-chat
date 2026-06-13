@@ -1,12 +1,67 @@
-import { Send, MessagesSquare, RefreshCw, X, type LucideIcon } from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
+import {
+  Bell,
+  BookOpen,
+  Bot,
+  Briefcase,
+  Building2,
+  Calendar,
+  CalendarDays,
+  Camera,
+  Car,
+  Clock,
+  Coffee,
+  Compass,
+  CreditCard,
+  Gift,
+  Globe,
+  GraduationCap,
+  Headphones,
+  Heart,
+  HelpCircle,
+  Home,
+  Hotel,
+  Info,
+  Leaf,
+  LifeBuoy,
+  Mail,
+  Map,
+  MapPin,
+  MessageCircle,
+  MessageSquare,
+  MessagesSquare,
+  Mountain,
+  MountainSnow,
+  Music,
+  Package,
+  Phone,
+  Plane,
+  RefreshCw,
+  Search,
+  Send,
+  Settings,
+  ShoppingBag,
+  ShoppingCart,
+  Smile,
+  Snowflake,
+  Sparkles,
+  Star,
+  Sun,
+  Tag,
+  Ticket,
+  Truck,
+  User,
+  Users,
+  Utensils,
+  Wine,
+  X,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
-import { sendMessage, streamMessage } from "../../controllers";
+import { streamMessage } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
-import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { translations, Language } from "../../translations";
 
@@ -19,16 +74,71 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const getLucideIconByName = (name?: string): LucideIcon | undefined => {
-  if (!name) return undefined;
-  const icon = (LucideIcons as unknown as Record<string, unknown>)[name];
-  if (!icon) return undefined;
-  if (typeof icon === "function") return icon as LucideIcon;
-  // lucide-react icons are typically React.forwardRef components (typeof === 'object')
-  if (typeof icon === "object" && "$$typeof" in (icon as object))
-    return icon as LucideIcon;
-  return undefined;
+// Named imports keep the bundle small: `import * as LucideIcons` with a
+// computed lookup defeats tree-shaking and bundles the entire icon library
+// (~1400 icons). header_icon_name must resolve to one of these curated names;
+// unknown names fall back to MessagesSquare. To support a new icon, add its
+// named import above and an entry here (keep this list in sync with the
+// header_icon_name docs in README.md).
+const HEADER_ICONS: Record<string, LucideIcon> = {
+  Bell,
+  BookOpen,
+  Bot,
+  Briefcase,
+  Building2,
+  Calendar,
+  CalendarDays,
+  Camera,
+  Car,
+  Clock,
+  Coffee,
+  Compass,
+  CreditCard,
+  Gift,
+  Globe,
+  GraduationCap,
+  Headphones,
+  Heart,
+  HelpCircle,
+  Home,
+  Hotel,
+  Info,
+  Leaf,
+  LifeBuoy,
+  Mail,
+  Map,
+  MapPin,
+  MessageCircle,
+  MessageSquare,
+  MessagesSquare,
+  Mountain,
+  MountainSnow,
+  Music,
+  Package,
+  Phone,
+  Plane,
+  Search,
+  Send,
+  Settings,
+  ShoppingBag,
+  ShoppingCart,
+  Smile,
+  Snowflake,
+  Sparkles,
+  Star,
+  Sun,
+  Tag,
+  Ticket,
+  Truck,
+  User,
+  Users,
+  Utensils,
+  Wine,
+  Zap,
 };
+
+const getLucideIconByName = (name?: string): LucideIcon | undefined =>
+  name ? HEADER_ICONS[name] : undefined;
 
 export default function ChatWindow({
   api_key,
@@ -56,7 +166,6 @@ export default function ChatWindow({
   input_container_style,
   addMessage,
   position,
-  triggerRef,
   width = 450,
   height = 650,
   tweaks,
@@ -74,7 +183,6 @@ export default function ChatWindow({
   button_text_color,
   bot_message_text_color,
   user_message_text_color,
-  enable_streaming = true,
   onStartNewSession,
   onSessionValidate,
   isRefreshingSession = false,
@@ -114,7 +222,6 @@ export default function ChatWindow({
   messages: ChatMessageType[];
   addMessage: Function;
   position?: string;
-  triggerRef: React.RefObject<HTMLButtonElement>;
   width?: number;
   height?: number;
   sessionId: React.MutableRefObject<string>;
@@ -131,7 +238,6 @@ export default function ChatWindow({
   button_text_color?: string;
   bot_message_text_color?: string;
   user_message_text_color?: string;
-  enable_streaming?: boolean;
   onStartNewSession?: () => void;
   onSessionValidate?: () => boolean;
   isRefreshingSession?: boolean;
@@ -147,26 +253,8 @@ export default function ChatWindow({
     getLucideIconByName(header_icon_name) ?? MessagesSquare;
 
   const [value, setValue] = useState<string>("");
-  const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
-  const [windowPosition, setWindowPosition] = useState<{
-    left: string;
-    top: string;
-    bottom?: string;
-    right?: string;
-  }>({ left: "0", top: "0" });
   const inputRef = useRef<HTMLInputElement>(null); /* User input Ref */
-  useEffect(() => {
-    if (triggerRef)
-      setWindowPosition(
-        getChatPosition(
-          triggerRef.current!.getBoundingClientRect(),
-          width,
-          height,
-          position
-        )
-      );
-  }, [triggerRef, width, height, position]);
 
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
     ? { left: "20px", right: "auto" }
@@ -197,174 +285,96 @@ export default function ChatWindow({
     addMessage({ message, isSend: true });
     setSendingMessage(true);
 
-    if (!enable_streaming) {
-      sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
-        .then((res) => {
-          if (
-            res.data &&
-            res.data.outputs &&
-            Object.keys(res.data.outputs).length > 0 &&
-            res.data.outputs[0].outputs && res.data.outputs[0].outputs.length > 0
-          ) {
-            const flowOutputs: Array<any> = res.data.outputs[0].outputs;
-            if (output_component &&
-              flowOutputs.map(e => e.component_id).includes(output_component)) {
-              Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: output.id || output.component_id,
-                  isSend: false,
-                });
-              })
-            } else if (
-              flowOutputs.length === 1
-            ) {
-              Object.values(flowOutputs[0].outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: flowOutputs[0].results.message.data.id,
-                  isSend: false,
-                });
-              })
-            } else {
-              flowOutputs
-              .sort((a, b) => {
-                const aTimestamp = Math.min(...Object.values(a.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                const bTimestamp = Math.min(...Object.values(b.outputs).map((output: any) => Date.parse(output.message?.timestamp)));
-                return aTimestamp - bTimestamp;
-              })
-              .forEach((flowOutput) => {
-                Object.values(flowOutput.outputs).forEach((output: any) => {
-                  addMessage({
-                    message: extractMessageFromOutput(output),
-                    isSend: false,
-                  });
-                });
-              });
-            }
-          }
-          if (res.data && res.data.session_id) {
-            sessionId.current = res.data.session_id;
-          }
-          setSendingMessage(false);
-        })
-        .catch((err) => {
-          const response = err.response;
-          if (err.code === "ERR_NETWORK") {
-            updateLastMessage({
-              message: "Network error",
-              isSend: false,
-              error: true,
-            });
-          } else if (
-            response &&
-            response.status === 500 &&
-            response.data &&
-            response.data.detail
-          ) {
-            updateLastMessage({
-              message: response.data.detail,
-              isSend: false,
-              error: true,
-            });
-          }
-          console.error(err);
-          setSendingMessage(false);
-        });
-    } else {
-      // Streaming version
-      let currentMessageId: string | null = null;
-      let message_to_add = "";
+    let currentMessageId: string | null = null;
+    let message_to_add = "";
 
-      streamMessage(
-        hostUrl,
-        flowId,
-        message,
-        input_type,
-        output_type,
-        sessionId,
-        output_component,
-        tweaks,
-        api_key,
-        additional_headers,
-        (data) => {
-          // Handle streaming data as it arrives
-          if (data.event === 'add_message' && data.data.sender==="Machine") {
-            // console.log('Data from :', data.data.sender);
-            // console.log('Streaming text:', data.data.text);
-            const new_message = data.data.text;
-            if (new_message) {
-              setIsStreaming(true);
-              message_to_add = new_message;
-              if (currentMessageId) {
-                updateLastMessage({
-                  message: message_to_add,
-                  message_id: currentMessageId,
-                  isSend: false,
-                  streaming: true
-                });
-              } else {
-                currentMessageId = data.data.id;
-                addMessage({
-                  message: message_to_add,
-                  message_id: currentMessageId,
-                  isSend: false,
-                  streaming: true
-                });
-              }
-            }
-          } else if (data.event === "end") {
-            // Final result - might contain session_id or final data
-            if (data.data.result.session_id) {
-              sessionId.current = data.data.result.session_id;
-            }
-
-            // Mark message as complete (remove streaming flag)
+    streamMessage(
+      hostUrl,
+      flowId,
+      message,
+      input_type,
+      output_type,
+      sessionId,
+      output_component,
+      tweaks,
+      api_key,
+      additional_headers,
+      (data) => {
+        // Handle streaming data as it arrives
+        if (data.event === 'add_message' && data.data.sender === "Machine") {
+          const new_message = data.data.text;
+          if (new_message) {
+            setIsStreaming(true);
+            message_to_add = new_message;
             if (currentMessageId) {
               updateLastMessage({
                 message: message_to_add,
                 message_id: currentMessageId,
                 isSend: false,
-                streaming: false // Mark as complete
+                streaming: true
+              });
+            } else {
+              currentMessageId = data.data.id;
+              addMessage({
+                message: message_to_add,
+                message_id: currentMessageId,
+                isSend: false,
+                streaming: true
               });
             }
           }
-        },
-        () => {
-          // Stream ended
-          // console.log('Stream completed');
-          setSendingMessage(false);
-          setIsStreaming(false);
+        } else if (data.event === "end") {
+          // Final result - might contain session_id or final data
+          if (data.data.result.session_id) {
+            sessionId.current = data.data.result.session_id;
+          }
 
-          // Ensure final message is marked as complete
+          // Mark message as complete (remove streaming flag)
           if (currentMessageId) {
             updateLastMessage({
               message: message_to_add,
               message_id: currentMessageId,
               isSend: false,
-              streaming: false
+              streaming: false // Mark as complete
             });
           }
-        },
-        (error) => {
-          // Stream error
-          console.error('Streaming error:', error);
-          setSendingMessage(false);
+        }
+      },
+      () => {
+        // Stream ended
+        setSendingMessage(false);
+        setIsStreaming(false);
 
+        // Ensure final message is marked as complete
+        if (currentMessageId) {
           updateLastMessage({
-            message: error.message || "Streaming error occurred",
+            message: message_to_add,
+            message_id: currentMessageId,
             isSend: false,
-            error: true,
+            streaming: false
           });
         }
-      );
-    }
+      },
+      (error) => {
+        console.error('Streaming error:', error);
+        setSendingMessage(false);
+        setIsStreaming(false);
+
+        // Append the error as its own message: replacing the last entry would
+        // overwrite the user's just-sent message when the stream fails before
+        // the first bot token arrives.
+        addMessage({
+          message: error?.message || "Streaming error occurred",
+          isSend: false,
+          error: true,
+        });
+      }
+    );
     return true;
   }, [
     additional_headers,
     addMessage,
     api_key,
-    enable_streaming,
     flowId,
     hostUrl,
     input_type,
@@ -434,6 +444,15 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
+  const brandingLinkStyle: React.CSSProperties = {
+    color: "inherit",
+    fontWeight: 700,
+    textDecoration: "underline",
+    cursor: "pointer"
+  };
+
+  // bookingkit co-branding belongs to its dedicated theme only; every other
+  // theme defaults to PUNKU.AI branding.
   const statusBranding = (
     <>
       Powered by{" "}
@@ -441,29 +460,23 @@ export default function ChatWindow({
         href="https://www.punku.ai/"
         target="_blank"
         rel="noopener noreferrer"
-        style={{
-          color: "inherit",
-          fontWeight: 700,
-          textDecoration: "underline",
-          cursor: "pointer"
-        }}
+        style={brandingLinkStyle}
       >
         PUNKU.AI
       </a>
-      {" & "}
-      <a
-        href="https://bookingkit.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          color: "inherit",
-          fontWeight: 700,
-          textDecoration: "underline",
-          cursor: "pointer"
-        }}
-      >
-        bookingkit
-      </a>
+      {theme === "punku-ai-bookingkit" && (
+        <>
+          {" & "}
+          <a
+            href="https://bookingkit.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={brandingLinkStyle}
+          >
+            bookingkit
+          </a>
+        </>
+      )}
     </>
   );
 
@@ -709,7 +722,6 @@ export default function ChatWindow({
           minWidth: width,
           ...(background_color ? {backgroundColor: background_color} : {})
         }}
-        ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
       >
         <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
@@ -838,6 +850,7 @@ export default function ChatWindow({
               error_message_style={error_message_style}
               message_id="welcome-message"
               feedback={undefined}
+              show_feedback={false}
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}
@@ -869,6 +882,8 @@ export default function ChatWindow({
               message={message.message}
               isSend={message.isSend}
               error={message.error}
+              feedback={message.feedback}
+              show_feedback={show_feedback}
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}

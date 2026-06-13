@@ -27,7 +27,8 @@ describe('ChatMessage', () => {
   const defaultProps = {
     message: 'Hello, world!',
     isSend: false,
-    host_url: 'http://localhost:3000'
+    host_url: 'http://localhost:3000',
+    show_feedback: true
   };
 
   beforeEach(() => {
@@ -194,7 +195,7 @@ describe('ChatMessage', () => {
   });
 
   describe('Feedback System', () => {
-    it('should show feedback buttons for bot messages', () => {
+    it('should show feedback buttons for bot messages when show_feedback is true', () => {
       render(
         <ChatMessage
           {...defaultProps}
@@ -204,6 +205,33 @@ describe('ChatMessage', () => {
 
       expect(screen.getByTitle('Thumbs up')).toBeInTheDocument();
       expect(screen.getByTitle('Thumbs down')).toBeInTheDocument();
+    });
+
+    it('should NOT show feedback buttons when show_feedback is false', () => {
+      render(
+        <ChatMessage
+          {...defaultProps}
+          show_feedback={false}
+          message_id="test-message-id"
+        />
+      );
+
+      expect(screen.queryByTitle('Thumbs up')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Thumbs down')).not.toBeInTheDocument();
+    });
+
+    it('should NOT show feedback buttons by default (show_feedback omitted)', () => {
+      render(
+        <ChatMessage
+          message="Bot reply"
+          isSend={false}
+          host_url="http://localhost:3000"
+          message_id="test-message-id"
+        />
+      );
+
+      expect(screen.queryByTitle('Thumbs up')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Thumbs down')).not.toBeInTheDocument();
     });
 
     it('should NOT show feedback buttons for user messages', () => {

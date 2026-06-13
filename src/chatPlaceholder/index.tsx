@@ -1,6 +1,10 @@
 import { ChatMessagePlaceholderType } from "../types/chatWidget";
 import { useState, useEffect } from "react";
-import { crystallineThinkingMessages, Language } from "../translations";
+import {
+  crystallineThinkingMessages,
+  defaultThinkingMessages,
+  Language,
+} from "../translations";
 
 export default function ChatMessagePlaceholder({
   bot_message_style,
@@ -8,48 +12,15 @@ export default function ChatMessagePlaceholder({
   language = "en" as Language,
   loading_messages,
 }: ChatMessagePlaceholderType) {
-  const defaultThinkingMessages = [
-    "Überlege…",
-    "Durchdenke das…",
-    "Moment, lass mich nachdenken…",
-    "Analysiere gerade…",
-    "Hmm, interessant…",
-    "Verstehe…",
-    "Lass mich das durchgehen…",
-    "Überdenke die Details…",
-    "Arbeite daran…",
-    "Formuliere meine Gedanken…",
-    "Fast da…",
-    "Noch kurz…",
-    "Setze das zusammen…",
-    "Prüfe nochmal…",
-    "Gleich fertig…",
-    "Einen Moment bitte…",
-    "Schaue mir das an…",
-    "Denke nach…",
-    "Verarbeite das…",
-    "Hmm…",
-    "Lass mich überlegen…",
-    "Sammle meine Gedanken…",
-    "Bereite die Antwort vor…",
-    "Sortiere meine Gedanken…",
-    "Bin gleich soweit…",
-    "Bearbeite das gerade…",
-    "Informationen werden überprüft…",
-    "Stelle das zusammen…",
-    "Prüfe die Informationen…",
-    "Ordne meine Gedanken…",
-  ];
-
   const normalizedCustomMessages = (loading_messages || [])
     .map((m) => (typeof m === "string" ? m.trim() : ""))
     .filter(Boolean);
 
-  // Use crystalline messages for Swarovski theme, otherwise use default
+  // Use crystalline messages for Swarovski theme, otherwise the localized defaults
   const isCrystalline = theme === "swarovski";
   const fallbackMessages = isCrystalline
     ? crystallineThinkingMessages.map((msg) => (language === "de" ? msg.de : msg.en))
-    : defaultThinkingMessages;
+    : defaultThinkingMessages[language] || defaultThinkingMessages.en;
 
   const messages = (normalizedCustomMessages.length > 0 ? normalizedCustomMessages : fallbackMessages) as string[];
 
