@@ -80,6 +80,7 @@ export default function ChatWindow({
   isRefreshingSession = false,
   language = 'en' as Language,
   link_color,
+  show_close_button_on_desktop = false,
   loading_messages,
   onClose,
   bottom_offset,
@@ -137,6 +138,7 @@ export default function ChatWindow({
   isRefreshingSession?: boolean;
   language?: Language;
   link_color?: string;
+  show_close_button_on_desktop?: boolean;
   loading_messages?: string[];
   bottom_offset?: number;
   top_offset?: number;
@@ -773,7 +775,7 @@ export default function ChatWindow({
                   border: 'none',
                   cursor: 'pointer',
                   padding: '4px',
-                  display: 'none', // Hidden by default, shown on mobile/tablet via CSS
+                  display: show_close_button_on_desktop ? 'flex' : 'none',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginLeft: 'auto',

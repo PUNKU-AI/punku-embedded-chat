@@ -576,6 +576,24 @@ describe('ChatWindow', () => {
       expect(closeBtn).toBeInTheDocument();
     });
 
+    it('should keep close button hidden by default for desktop screens', () => {
+      const onClose = jest.fn();
+
+      render(<ChatWindow {...defaultProps} onClose={onClose} />);
+
+      const closeBtn = document.querySelector('.cl-close-btn');
+      expect(closeBtn).toHaveStyle({ display: 'none' });
+    });
+
+    it('should show close button on desktop when configured', () => {
+      const onClose = jest.fn();
+
+      render(<ChatWindow {...defaultProps} onClose={onClose} show_close_button_on_desktop={true} />);
+
+      const closeBtn = document.querySelector('.cl-close-btn');
+      expect(closeBtn).toHaveStyle({ display: 'flex' });
+    });
+
     it('should not render close button when onClose is not provided', () => {
       render(<ChatWindow {...defaultProps} />);
 

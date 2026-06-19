@@ -63,6 +63,7 @@ export default function ChatWidget({
   top_offset,
   closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
   show_closed_widget_hint = false,
+  show_close_button_on_desktop = false,
   closed_widget_hint_auto_hide_ms,
   closed_widget_hint_position = "left",
   closed_widget_hint_background_color,
@@ -120,6 +121,7 @@ export default function ChatWidget({
   top_offset?: number;
   closed_widget_hint_text?: string;
   show_closed_widget_hint?: boolean;
+  show_close_button_on_desktop?: boolean;
   closed_widget_hint_auto_hide_ms?: number;
   closed_widget_hint_position?: "left" | "top";
   closed_widget_hint_background_color?: string;
@@ -3197,6 +3199,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           isRefreshingSession={isRefreshingSession}
           language={currentLanguage}
           link_color={link_color}
+          show_close_button_on_desktop={show_close_button_on_desktop}
           bottom_offset={effectiveBottomOffset}
           top_offset={effectiveTopOffset}
           programmaticMessage={programmaticMessage}

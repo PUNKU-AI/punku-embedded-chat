@@ -34,6 +34,7 @@ jest.mock('./chatWindow', () => {
     onStartNewSession,
     onClose,
     language,
+    show_close_button_on_desktop,
     programmaticMessage,
     onProgrammaticMessageHandled
   }: {
@@ -43,6 +44,7 @@ jest.mock('./chatWindow', () => {
     onStartNewSession?: () => void;
     onClose?: () => void;
     language?: string;
+    show_close_button_on_desktop?: boolean;
     programmaticMessage?: { id: number; message: string } | null;
     onProgrammaticMessageHandled?: (id: number) => void;
   }) {
@@ -58,6 +60,7 @@ jest.mock('./chatWindow', () => {
       <div data-testid="chat-window">
         <span data-testid="message-count">{messages?.length || 0}</span>
         <span data-testid="language">{language || 'en'}</span>
+        <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
         <button data-testid="add-message" onClick={() => addMessage({ message: 'Test', isSend: true })}>
           Add Message
         </button>
@@ -160,6 +163,12 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} start_open={true} />);
 
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+    });
+
+    it('should pass desktop close button setting to chat window', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} show_close_button_on_desktop={true} />);
+
+      expect(screen.getByTestId('show-close-button-on-desktop')).toHaveTextContent('true');
     });
 
     it('should not show closed widget hint by default when widget is closed', () => {
