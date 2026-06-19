@@ -214,6 +214,7 @@ Use the widget API to customize your widget:
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
+| show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
 
 - **background_color:**
@@ -397,6 +398,12 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: false
   - Description: Controls whether the closed-widget hint is shown when the chat is closed.
+
+- **show_close_button_on_desktop:**
+  - Type: Boolean
+  - Required: No
+  - Default: false
+  - Description: Controls whether the chat window header close button is shown on desktop screens. If omitted or false, the close button keeps the default behavior and only appears on mobile/tablet.
 
 - **closed_widget_hint_auto_hide_ms:**
   - Type: Number
