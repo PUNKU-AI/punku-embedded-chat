@@ -274,6 +274,32 @@ describe('ChatWidget', () => {
       expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
     });
 
+    it('should close chat window when clicking outside the widget', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+
+      fireEvent.pointerDown(document.body);
+
+      expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should keep chat window open when clicking inside the widget', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      fireEvent.pointerDown(screen.getByTestId('chat-window'));
+
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+    });
+
+    it('should close chat window when Escape is pressed', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
     it('should hide closed widget hint when widget is open', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
 

@@ -161,7 +161,7 @@ export default function ChatWidget({
   const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
-  const ref = useRef<HTMLDivElement>(null);
+  const widgetRootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   function updateLastMessage(message: ChatMessageType) {
     setMessages((prev) => {
@@ -279,6 +279,46 @@ export default function ChatWidget({
   }, [queueProgrammaticMessage, setOpenWithSessionValidation]);
 
   const closeWidget = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const root = widgetRootRef.current;
+      if (!root) return;
+
+      const target = event.target as Node | null;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const rootNode = root.getRootNode();
+      const shadowHost =
+        typeof ShadowRoot !== "undefined" && rootNode instanceof ShadowRoot
+          ? rootNode.host
+          : null;
+
+      const clickedInside =
+        (target && root.contains(target)) ||
+        path.includes(root) ||
+        (shadowHost !== null && path.includes(shadowHost));
+
+      if (!clickedInside) {
+        closeWidget();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeWidget();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [closeWidget, open]);
 
   const handleProgrammaticMessageHandled = useCallback((id: number) => {
     setProgrammaticMessage((current) => (
@@ -3113,7 +3153,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
-    <div className="cl-widget-root" style={{
+    <div ref={widgetRootRef} className="cl-widget-root" style={{
       position: "fixed",
       ...triggerStyle,
       transform: "none",
