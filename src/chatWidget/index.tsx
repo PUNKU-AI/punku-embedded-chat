@@ -61,6 +61,8 @@ export default function ChatWidget({
   link_color,
   bottom_offset,
   top_offset,
+  left_offset,
+  right_offset,
   closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
   show_closed_widget_hint = false,
   show_close_button_on_desktop = false,
@@ -119,6 +121,8 @@ export default function ChatWidget({
   link_color?: string;
   bottom_offset?: number;
   top_offset?: number;
+  left_offset?: number;
+  right_offset?: number;
   closed_widget_hint_text?: string;
   show_closed_widget_hint?: boolean;
   show_close_button_on_desktop?: boolean;
@@ -3079,18 +3083,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   // Get position styles for the chat trigger based on chat_position prop
   const effectiveBottomOffset = bottom_offset ?? 20;
   const effectiveTopOffset = top_offset ?? 60;
+  const effectiveLeftOffset = left_offset ?? 20;
+  const effectiveRightOffset = right_offset ?? 20;
 
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "20px", left: "20px", bottom: "auto", right: "auto" };
+        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "auto", right: "auto" };
       case "top-right":
-        return { top: "20px", right: "20px", bottom: "auto", left: "auto" };
+        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset}px`, left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset}px`, right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "auto", left: "auto" };
     }
   };
 
@@ -3098,14 +3104,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const getChatWindowOffset = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "70px", left: "20px", bottom: "auto", right: "auto" };
+        return { top: "70px", left: `${effectiveLeftOffset}px`, bottom: "auto", right: "auto" };
       case "top-right":
-        return { top: "70px", right: "20px", bottom: "auto", left: "auto" };
+        return { top: "70px", right: `${effectiveRightOffset}px`, bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset + 50}px`, left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, left: `${effectiveLeftOffset}px`, top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset + 50}px`, right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, right: `${effectiveRightOffset}px`, top: "auto", left: "auto" };
     }
   };
   
@@ -3242,6 +3248,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           show_close_button_on_desktop={show_close_button_on_desktop}
           bottom_offset={effectiveBottomOffset}
           top_offset={effectiveTopOffset}
+          left_offset={effectiveLeftOffset}
+          right_offset={effectiveRightOffset}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
         />

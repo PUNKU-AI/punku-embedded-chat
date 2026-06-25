@@ -54,6 +54,8 @@ function createChatElement() {
             link_color: "string",
             bottom_offset: "number",
             top_offset: "number",
+            left_offset: "number",
+            right_offset: "number",
             closed_widget_hint_text: "string",
             show_closed_widget_hint: "boolean",
             show_close_button_on_desktop: "boolean",
