@@ -148,6 +148,16 @@ describe('ChatWindow', () => {
       expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
     });
 
+    it('should not force tablet windows to the right side', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+      const styles = Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+      expect(styles).not.toContain('right: 16px !important');
+      expect(styles).not.toContain('left: auto !important');
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 

@@ -648,8 +648,6 @@ export default function ChatWindow({
               width: min(420px, calc(60vw - 10px)) !important;
               height: min(600px, 70vh) !important;
               max-height: 70vh !important;
-              right: 16px !important;
-              left: auto !important;
             }
 
             .cl-window {
