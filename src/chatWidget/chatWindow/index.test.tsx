@@ -134,6 +134,30 @@ describe('ChatWindow', () => {
       expect(chatWindow).toHaveStyle({ left: '20px', right: 'auto' });
     });
 
+    it('should apply custom left offset for left-side window placement', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ left: '64px', right: 'auto' });
+    });
+
+    it('should apply custom right offset for right-side window placement', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-right" right_offset={52} />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
+    });
+
+    it('should not force tablet windows to the right side', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+      const styles = Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+      expect(styles).not.toContain('right: 16px !important');
+      expect(styles).not.toContain('left: auto !important');
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 

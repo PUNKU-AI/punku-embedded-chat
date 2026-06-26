@@ -85,6 +85,8 @@ export default function ChatWindow({
   onClose,
   bottom_offset,
   top_offset = 60,
+  left_offset = 20,
+  right_offset = 20,
   programmaticMessage,
   onProgrammaticMessageHandled,
 }: {
@@ -142,6 +144,8 @@ export default function ChatWindow({
   loading_messages?: string[];
   bottom_offset?: number;
   top_offset?: number;
+  left_offset?: number;
+  right_offset?: number;
   programmaticMessage?: { id: number; message: string } | null;
   onProgrammaticMessageHandled?: (id: number) => void;
 }) {
@@ -171,8 +175,8 @@ export default function ChatWindow({
   }, [triggerRef, width, height, position]);
 
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
-    ? { left: "20px", right: "auto" }
-    : { left: "auto", right: "20px" };
+    ? { left: `${left_offset}px`, right: "auto" }
+    : { left: "auto", right: `${right_offset}px` };
 
   /* Initial listener for loss of focus that refocuses User input after a small delay */
 
@@ -644,8 +648,6 @@ export default function ChatWindow({
               width: min(420px, calc(60vw - 10px)) !important;
               height: min(600px, 70vh) !important;
               max-height: 70vh !important;
-              right: 16px !important;
-              left: auto !important;
             }
 
             .cl-window {

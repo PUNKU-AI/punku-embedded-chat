@@ -171,6 +171,26 @@ describe('ChatWidget', () => {
       expect(screen.getByTestId('show-close-button-on-desktop')).toHaveTextContent('true');
     });
 
+    it('should apply custom left offset for left-side launcher placement', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-left" left_offset={48} />);
+
+      const widgetRoot = document.querySelector('.cl-widget-root');
+      expect(widgetRoot).toHaveStyle({
+        left: '48px',
+        right: 'auto',
+      });
+    });
+
+    it('should apply custom right offset for right-side launcher placement', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-right" right_offset={36} />);
+
+      const widgetRoot = document.querySelector('.cl-widget-root');
+      expect(widgetRoot).toHaveStyle({
+        right: '36px',
+        left: 'auto',
+      });
+    });
+
     it('should not show closed widget hint by default when widget is closed', () => {
       render(<ChatWidget {...defaultProps} />);
 
