@@ -1,0 +1,79 @@
+name: Publish widget bundle to CDN (S3 + CloudFront)
+
+# Builds the widget and uploads the single self-contained bundle to the
+# PUNKU-controlled CDN origin (S3) so customer embeds never depend on a single
+# third-party CDN (jsDelivr) again. Triggered on version tags — the existing
+# release ritual: `git tag v1.0.7 && git push --tags`.
+#
+# INACTIVE until the AWS resources + repo variables exist: the job is guarded on
+# the CDN_DEPLOY_ROLE_ARN repo *variable*, so tagging before setup is a no-op
+# (no red/failed runs). See SELF_HOSTING.md for the one-time setup.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to (re)publish, e.g. v1.0.7"
+        required: true
+
+permissions:
+  id-token: write # OIDC: assume the deploy role without storing static AWS keys
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ vars.CDN_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.CDN_AWS_REGION }} # e.g. eu-central-1
+      BUCKET: ${{ vars.CDN_BUCKET }} # e.g. punku-cdn
+      DIST_ID: ${{ vars.CDN_CLOUDFRONT_ID }} # CloudFront distribution id
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Build bundle
+        run: npm run build # -> dist/build/static/js/bundle.min.js (single, self-contained ~3MB)
+
+      - name: Resolve version paths
+        id: v
+        run: |
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="${REF#refs/tags/}"
+          MAJOR="v$(printf '%s' "${TAG#v}" | cut -d. -f1)"   # v1.0.7 -> v1
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "Publishing $TAG  (floating alias: chat/$MAJOR/)"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload pinned (immutable) copy -> chat/<tag>/bundle.min.js
+        run: |
+          aws s3 cp dist/build/static/js/bundle.min.js \
+            "s3://$BUCKET/chat/${{ steps.v.outputs.tag }}/bundle.min.js" \
+            --content-type "application/javascript; charset=utf-8" \
+            --cache-control "public, max-age=31536000, immutable"
+
+      - name: Upload floating major copy -> chat/<major>/bundle.min.js
+        run: |
+          aws s3 cp dist/build/static/js/bundle.min.js \
+            "s3://$BUCKET/chat/${{ steps.v.outputs.major }}/bundle.min.js" \
+            --content-type "application/javascript; charset=utf-8" \
+            --cache-control "public, max-age=300, s-maxage=300"
+
+      - name: Invalidate floating path on CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/chat/${{ steps.v.outputs.major }}/bundle.min.js"
