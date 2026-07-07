@@ -155,6 +155,7 @@ export default function ChatWindow({
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
+  const messagesContainer = useRef<HTMLDivElement>(null);
   const [windowPosition, setWindowPosition] = useState<{
     left: string;
     top: string;
@@ -421,6 +422,27 @@ export default function ChatWindow({
     if (lastMessage.current)
       lastMessage.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  /*
+   * Keep wheel/touch scrolling inside the message list instead of letting a
+   * host-page smooth-scroll library (Lenis, Locomotive, GSAP ScrollSmoother, …)
+   * hijack it. The widget renders in a closed shadow root, so the host page
+   * can't reach this container to opt out — but wheel/touchmove events are
+   * composed and bubble out to `window`, where those libraries listen. Stopping
+   * propagation here keeps native scrolling of the container working while
+   * preventing the page from scrolling instead. See fix for reps.energy (Lenis).
+   */
+  useEffect(() => {
+    const el = messagesContainer.current;
+    if (!el) return;
+    const stopScrollPropagation = (e: Event) => e.stopPropagation();
+    el.addEventListener("wheel", stopScrollPropagation, { passive: true });
+    el.addEventListener("touchmove", stopScrollPropagation, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", stopScrollPropagation);
+      el.removeEventListener("touchmove", stopScrollPropagation);
+    };
+  }, []);
 
   /* Refocus the User input whenever a new response is returned from the LLM */
 
@@ -693,6 +715,7 @@ export default function ChatWindow({
           .cl-messages_container {
             overflow-y: auto !important;
             overflow-x: hidden !important;
+            overscroll-behavior: contain !important;
             flex: 1 !important;
           }
 
@@ -813,7 +836,7 @@ export default function ChatWindow({
           </div>
         </div>
 
-        <div className="cl-messages_container" style={background_color ? { backgroundColor: background_color } : undefined}>
+        <div className="cl-messages_container" ref={messagesContainer} style={background_color ? { backgroundColor: background_color } : undefined}>
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">

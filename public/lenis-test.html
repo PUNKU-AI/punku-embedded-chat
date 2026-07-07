@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lenis + Punku Chat scroll repro</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    .banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1;
+      background: #111827; color: #F9FAFB; padding: 12px 16px; font-size: 14px;
+      border-bottom: 2px solid #3F9B47;
+    }
+    .banner b { color: #3F9B47; }
+    .banner button { margin-left: 12px; padding: 4px 10px; cursor: pointer; }
+    .filler { height: 220vh; display: flex; align-items: center; justify-content: center;
+      font-size: 48px; color: #cbd5e1; background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 40px,#eef2f7 40px,#eef2f7 80px); }
+  </style>
+</head>
+<body>
+  <!--
+    Reproduces the reps.energy environment locally: a host page running the Lenis
+    smooth-scroll library (which hijacks wheel events) with the Punku chat widget
+    embedded. Config is read from URL query params so NO secrets live in this file.
+
+    Run:
+      npm run build:bundle           # build the widget bundle from src
+      npx serve .                    # serve the repo root
+      open  http://localhost:3000/public/lenis-test.html?host_url=...&flow_id=...&api_key=...
+
+    Before the fix: scrolling over the chat scrolls THIS page, chat stays frozen.
+    After the fix:  scrolling over the chat scrolls the CHAT, page stays put.
+    Use the "Toggle Lenis" button to compare with/without the smooth-scroll lib.
+  -->
+
+  <!-- Lenis: the same smooth-scroll library reps.energy loads -->
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.2.3/dist/lenis.min.js"></script>
+
+  <div class="banner">
+    <b>Lenis scroll repro</b> — smooth-scroll is
+    <span id="lenis-state">ON</span>.
+    Open the chat, get a long message, then try scrolling <b>up</b> inside it.
+    <button id="toggle-lenis">Toggle Lenis</button>
+  </div>
+
+  <div class="filler">↑ page content above ↑</div>
+
+  <!--
+    A long welcome_message makes the message list overflow immediately, so the
+    scroll behaviour can be tested with NO backend / flow / api_key required.
+  -->
+  <punku-chat
+    input_type="chat"
+    output_type="chat"
+    theme="dark"
+    chat_position="bottom-right"
+    start_open="true"
+    placeholder="Ask me anything…"
+    welcome_message="LONG MESSAGE — scroll test.&#10;&#10;Line 1: the quick brown fox jumps over the lazy dog.&#10;Line 2: the quick brown fox jumps over the lazy dog.&#10;Line 3: the quick brown fox jumps over the lazy dog.&#10;Line 4: the quick brown fox jumps over the lazy dog.&#10;Line 5: the quick brown fox jumps over the lazy dog.&#10;Line 6: the quick brown fox jumps over the lazy dog.&#10;Line 7: the quick brown fox jumps over the lazy dog.&#10;Line 8: the quick brown fox jumps over the lazy dog.&#10;Line 9: the quick brown fox jumps over the lazy dog.&#10;Line 10: the quick brown fox jumps over the lazy dog.&#10;Line 11: the quick brown fox jumps over the lazy dog.&#10;Line 12: the quick brown fox jumps over the lazy dog.&#10;Line 13: the quick brown fox jumps over the lazy dog.&#10;Line 14: the quick brown fox jumps over the lazy dog.&#10;Line 15: the quick brown fox jumps over the lazy dog.&#10;Line 16: the quick brown fox jumps over the lazy dog.&#10;Line 17: the quick brown fox jumps over the lazy dog.&#10;Line 18: the quick brown fox jumps over the lazy dog.&#10;Line 19: the quick brown fox jumps over the lazy dog.&#10;Line 20: END OF MESSAGE — if you can reach this by scrolling inside the chat while Lenis is ON, the fix works.">
+  </punku-chat>
+
+  <div class="filler">↓ page content below ↓</div>
+
+  <script>
+    (function () {
+      // ----- init Lenis (host-page smooth scroll) -----
+      var lenis = null;
+      function startLenis() {
+        lenis = new Lenis();
+        (function raf(time) { if (lenis) { lenis.raf(time); requestAnimationFrame(raf); } })();
+        document.getElementById('lenis-state').textContent = 'ON';
+      }
+      function stopLenis() {
+        if (lenis) { lenis.destroy(); lenis = null; }
+        document.getElementById('lenis-state').textContent = 'OFF';
+      }
+      startLenis();
+      document.getElementById('toggle-lenis').addEventListener('click', function () {
+        lenis ? stopLenis() : startLenis();
+      });
+
+      // ----- wire widget config from URL params (no secrets committed) -----
+      var params = new URLSearchParams(location.search);
+      var chat = document.querySelector('punku-chat');
+      chat.setAttribute('host_url', params.get('host_url') || 'https://api.example.com');
+      chat.setAttribute('flow_id', params.get('flow_id') || 'your-flow-id');
+      if (params.get('api_key')) chat.setAttribute('api_key', params.get('api_key'));
+
+      // ----- load the locally built widget bundle -----
+      var bundleScript = document.createElement('script');
+      bundleScript.src = params.get('bundle') || '/dist/build/static/js/bundle.min.js';
+      bundleScript.async = true;
+      document.body.appendChild(bundleScript);
+    })();
+  </script>
+</body>
+</html>
