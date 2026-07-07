@@ -46,6 +46,7 @@ export default function ChatWidget({
   show_feedback = false,
   header_icon,
   header_icon_name,
+  trigger_icon,
   button_color,
   button_text_color,
   background_color,
@@ -60,8 +61,11 @@ export default function ChatWidget({
   link_color,
   bottom_offset,
   top_offset,
+  left_offset,
+  right_offset,
   closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
   show_closed_widget_hint = false,
+  show_close_button_on_desktop = false,
   closed_widget_hint_auto_hide_ms,
   closed_widget_hint_position = "left",
   closed_widget_hint_background_color,
@@ -102,6 +106,7 @@ export default function ChatWidget({
   show_feedback?: boolean;
   header_icon?: string;
   header_icon_name?: string;
+  trigger_icon?: string;
   button_color?: string;
   button_text_color?: string;
   background_color?: string;
@@ -116,8 +121,11 @@ export default function ChatWidget({
   link_color?: string;
   bottom_offset?: number;
   top_offset?: number;
+  left_offset?: number;
+  right_offset?: number;
   closed_widget_hint_text?: string;
   show_closed_widget_hint?: boolean;
+  show_close_button_on_desktop?: boolean;
   closed_widget_hint_auto_hide_ms?: number;
   closed_widget_hint_position?: "left" | "top";
   closed_widget_hint_background_color?: string;
@@ -157,7 +165,7 @@ export default function ChatWidget({
   const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
-  const ref = useRef<HTMLDivElement>(null);
+  const widgetRootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   function updateLastMessage(message: ChatMessageType) {
     setMessages((prev) => {
@@ -275,6 +283,46 @@ export default function ChatWidget({
   }, [queueProgrammaticMessage, setOpenWithSessionValidation]);
 
   const closeWidget = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const root = widgetRootRef.current;
+      if (!root) return;
+
+      const target = event.target as Node | null;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const rootNode = root.getRootNode();
+      const shadowHost =
+        typeof ShadowRoot !== "undefined" && rootNode instanceof ShadowRoot
+          ? rootNode.host
+          : null;
+
+      const clickedInside =
+        (target && root.contains(target)) ||
+        path.includes(root) ||
+        (shadowHost !== null && path.includes(shadowHost));
+
+      if (!clickedInside) {
+        closeWidget();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeWidget();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [closeWidget, open]);
 
   const handleProgrammaticMessageHandled = useCallback((id: number) => {
     setProgrammaticMessage((current) => (
@@ -870,6 +918,7 @@ video {
   border-radius: 50%;
   width: 40px;
   height: 40px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1002,6 +1051,12 @@ video {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 500ms;
+}
+
+.cl-trigger-img {
+  height: 65%;
+  width: 65%;
+  object-fit: contain;
 }
 
 .cl-chat-window {
@@ -3028,18 +3083,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   // Get position styles for the chat trigger based on chat_position prop
   const effectiveBottomOffset = bottom_offset ?? 20;
   const effectiveTopOffset = top_offset ?? 60;
+  const effectiveLeftOffset = left_offset ?? 20;
+  const effectiveRightOffset = right_offset ?? 20;
 
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "20px", left: "20px", bottom: "auto", right: "auto" };
+        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "auto", right: "auto" };
       case "top-right":
-        return { top: "20px", right: "20px", bottom: "auto", left: "auto" };
+        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset}px`, left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset}px`, right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "auto", left: "auto" };
     }
   };
 
@@ -3047,14 +3104,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const getChatWindowOffset = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "70px", left: "20px", bottom: "auto", right: "auto" };
+        return { top: "70px", left: `${effectiveLeftOffset}px`, bottom: "auto", right: "auto" };
       case "top-right":
-        return { top: "70px", right: "20px", bottom: "auto", left: "auto" };
+        return { top: "70px", right: `${effectiveRightOffset}px`, bottom: "auto", left: "auto" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset + 50}px`, left: "20px", top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, left: `${effectiveLeftOffset}px`, top: "auto", right: "auto" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset + 50}px`, right: "20px", top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset + 50}px`, right: `${effectiveRightOffset}px`, top: "auto", left: "auto" };
     }
   };
   
@@ -3102,7 +3159,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
-    <div className="cl-widget-root" style={{
+    <div ref={widgetRootRef} className="cl-widget-root" style={{
       position: "fixed",
       ...triggerStyle,
       transform: "none",
@@ -3132,6 +3189,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           buttonColor={button_color}
           buttonTextColor={button_text_color}
           theme={effectiveTheme}
+          triggerIcon={trigger_icon}
         />
       </div>
       <div style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}>
@@ -3187,8 +3245,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           isRefreshingSession={isRefreshingSession}
           language={currentLanguage}
           link_color={link_color}
+          show_close_button_on_desktop={show_close_button_on_desktop}
           bottom_offset={effectiveBottomOffset}
           top_offset={effectiveTopOffset}
+          left_offset={effectiveLeftOffset}
+          right_offset={effectiveRightOffset}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
         />

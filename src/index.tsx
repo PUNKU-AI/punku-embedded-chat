@@ -1,8 +1,8 @@
 import r2wc from '@r2wc/react-to-web-component';
 import ChatWidget from './chatWidget';
 
-if (!customElements.get('punku-chat')) {
-    customElements.define('punku-chat', r2wc(ChatWidget, {
+function createChatElement() {
+    return r2wc(ChatWidget, {
         shadow: "closed",
         props: {
             start_open: "boolean",
@@ -40,6 +40,7 @@ if (!customElements.get('punku-chat')) {
             default_language: "string",
             header_icon: "string",
             header_icon_name: "string",
+            trigger_icon: "string",
             button_color: "string",
             button_text_color: "string",
             background_color: "string",
@@ -53,12 +54,24 @@ if (!customElements.get('punku-chat')) {
             link_color: "string",
             bottom_offset: "number",
             top_offset: "number",
+            left_offset: "number",
+            right_offset: "number",
             closed_widget_hint_text: "string",
             show_closed_widget_hint: "boolean",
+            show_close_button_on_desktop: "boolean",
             closed_widget_hint_auto_hide_ms: "number",
             closed_widget_hint_position: "string",
             closed_widget_hint_background_color: "string",
             closed_widget_hint_text_color: "string",
         },
-    }));
+    });
 }
+
+function defineChatElement(tagName: string) {
+    if (!customElements.get(tagName)) {
+        customElements.define(tagName, createChatElement());
+    }
+}
+
+defineChatElement('punku-chat');
+defineChatElement('punku-chat-widget');

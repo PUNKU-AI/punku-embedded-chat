@@ -28,7 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.CDN_AWS_REGION }} # e.g. eu-central-1
-      BUCKET: ${{ vars.CDN_BUCKET }} # e.g. punku-cdn
+      BUCKET: ${{ vars.CDN_BUCKET }} # e.g. punku-cdn (primary origin, eu-central-1)
+      BUCKET_BACKUP: ${{ vars.CDN_BUCKET_BACKUP }} # e.g. punku-cdn-backup (failover origin, eu-west-1) — optional
       DIST_ID: ${{ vars.CDN_CLOUDFRONT_ID }} # CloudFront distribution id
     steps:
       - uses: actions/checkout@v4
@@ -58,19 +59,25 @@ jobs:
           role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload pinned (immutable) copy -> chat/<tag>/bundle.min.js
+      - name: Upload pinned (immutable) copy -> chat/<tag>/bundle.min.js (primary + failover origin)
         run: |
-          aws s3 cp dist/build/static/js/bundle.min.js \
-            "s3://$BUCKET/chat/${{ steps.v.outputs.tag }}/bundle.min.js" \
-            --content-type "application/javascript; charset=utf-8" \
-            --cache-control "public, max-age=31536000, immutable"
+          for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
+            echo "uploading pinned copy to s3://$B"
+            aws s3 cp dist/build/static/js/bundle.min.js \
+              "s3://$B/chat/${{ steps.v.outputs.tag }}/bundle.min.js" \
+              --content-type "application/javascript; charset=utf-8" \
+              --cache-control "public, max-age=31536000, immutable"
+          done
 
-      - name: Upload floating major copy -> chat/<major>/bundle.min.js
+      - name: Upload floating major copy -> chat/<major>/bundle.min.js (primary + failover origin)
         run: |
-          aws s3 cp dist/build/static/js/bundle.min.js \
-            "s3://$BUCKET/chat/${{ steps.v.outputs.major }}/bundle.min.js" \
-            --content-type "application/javascript; charset=utf-8" \
-            --cache-control "public, max-age=300, s-maxage=300"
+          for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
+            echo "uploading floating copy to s3://$B"
+            aws s3 cp dist/build/static/js/bundle.min.js \
+              "s3://$B/chat/${{ steps.v.outputs.major }}/bundle.min.js" \
+              --content-type "application/javascript; charset=utf-8" \
+              --cache-control "public, max-age=300, s-maxage=300"
+          done
 
       - name: Invalidate floating path on CloudFront
         run: |

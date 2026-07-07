@@ -134,6 +134,30 @@ describe('ChatWindow', () => {
       expect(chatWindow).toHaveStyle({ left: '20px', right: 'auto' });
     });
 
+    it('should apply custom left offset for left-side window placement', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ left: '64px', right: 'auto' });
+    });
+
+    it('should apply custom right offset for right-side window placement', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-right" right_offset={52} />);
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
+    });
+
+    it('should not force tablet windows to the right side', () => {
+      render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+      const styles = Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+      expect(styles).not.toContain('right: 16px !important');
+      expect(styles).not.toContain('left: auto !important');
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 
@@ -171,6 +195,13 @@ describe('ChatWindow', () => {
 
       const sendButton = document.querySelector('.cl-send-button');
       expect(sendButton).toBeInTheDocument();
+    });
+
+    it('should keep the send button circular by preventing flex shrinking', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const sendButton = document.querySelector('.cl-send-button');
+      expect(sendButton).toHaveStyle({ width: '40px', height: '40px', flexShrink: '0' });
     });
   });
 
@@ -567,6 +598,24 @@ describe('ChatWindow', () => {
 
       const closeBtn = document.querySelector('.cl-close-btn');
       expect(closeBtn).toBeInTheDocument();
+    });
+
+    it('should keep close button hidden by default for desktop screens', () => {
+      const onClose = jest.fn();
+
+      render(<ChatWindow {...defaultProps} onClose={onClose} />);
+
+      const closeBtn = document.querySelector('.cl-close-btn');
+      expect(closeBtn).toHaveStyle({ display: 'none' });
+    });
+
+    it('should show close button on desktop when configured', () => {
+      const onClose = jest.fn();
+
+      render(<ChatWindow {...defaultProps} onClose={onClose} show_close_button_on_desktop={true} />);
+
+      const closeBtn = document.querySelector('.cl-close-btn');
+      expect(closeBtn).toHaveStyle({ display: 'flex' });
     });
 
     it('should not render close button when onClose is not provided', () => {

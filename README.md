@@ -143,6 +143,8 @@ For more advanced customization, you can still use the style properties:
 </html>
 ```
 
+> **Note:** The widget is registered under two tag names: `<punku-chat>` (primary) and `<punku-chat-widget>` (alias). Both accept the same attributes.
+
 ### on React
  Import the js bundle in the index.html of your react project
 ```html
@@ -200,6 +202,7 @@ Use the widget API to customize your widget:
 | send_button_style     | json      | No       |
 | send_icon_style       | json      | No       |
 | theme                 | string    | No       |
+| trigger_icon          | string    | No       |
 | tweaks                | json      | No       |
 | user_message_color    | string    | No       |
 | user_message_style    | json      | No       |
@@ -211,6 +214,7 @@ Use the widget API to customize your widget:
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
+| show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
 
 - **background_color:**
@@ -353,6 +357,11 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", and "punku-ai-bookingkit".
 
+- **trigger_icon:**
+  - Type: String
+  - Required: No
+  - Description: URL of a custom icon to display on the floating chat trigger button instead of the default chat bubble icon. The close (X) icon is still shown while the chat window is open.
+
 - **tweaks:**
   - Type: JSON
   - Required: No
@@ -389,6 +398,12 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: false
   - Description: Controls whether the closed-widget hint is shown when the chat is closed.
+
+- **show_close_button_on_desktop:**
+  - Type: Boolean
+  - Required: No
+  - Default: false
+  - Description: Controls whether the chat window header close button is shown on desktop screens. If omitted or false, the close button keeps the default behavior and only appears on mobile/tablet.
 
 - **closed_widget_hint_auto_hide_ms:**
   - Type: Number

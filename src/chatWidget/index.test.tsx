@@ -34,6 +34,7 @@ jest.mock('./chatWindow', () => {
     onStartNewSession,
     onClose,
     language,
+    show_close_button_on_desktop,
     programmaticMessage,
     onProgrammaticMessageHandled
   }: {
@@ -43,6 +44,7 @@ jest.mock('./chatWindow', () => {
     onStartNewSession?: () => void;
     onClose?: () => void;
     language?: string;
+    show_close_button_on_desktop?: boolean;
     programmaticMessage?: { id: number; message: string } | null;
     onProgrammaticMessageHandled?: (id: number) => void;
   }) {
@@ -58,6 +60,7 @@ jest.mock('./chatWindow', () => {
       <div data-testid="chat-window">
         <span data-testid="message-count">{messages?.length || 0}</span>
         <span data-testid="language">{language || 'en'}</span>
+        <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
         <button data-testid="add-message" onClick={() => addMessage({ message: 'Test', isSend: true })}>
           Add Message
         </button>
@@ -162,6 +165,32 @@ describe('ChatWidget', () => {
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
     });
 
+    it('should pass desktop close button setting to chat window', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} show_close_button_on_desktop={true} />);
+
+      expect(screen.getByTestId('show-close-button-on-desktop')).toHaveTextContent('true');
+    });
+
+    it('should apply custom left offset for left-side launcher placement', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-left" left_offset={48} />);
+
+      const widgetRoot = document.querySelector('.cl-widget-root');
+      expect(widgetRoot).toHaveStyle({
+        left: '48px',
+        right: 'auto',
+      });
+    });
+
+    it('should apply custom right offset for right-side launcher placement', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-right" right_offset={36} />);
+
+      const widgetRoot = document.querySelector('.cl-widget-root');
+      expect(widgetRoot).toHaveStyle({
+        right: '36px',
+        left: 'auto',
+      });
+    });
+
     it('should not show closed widget hint by default when widget is closed', () => {
       render(<ChatWidget {...defaultProps} />);
 
@@ -261,6 +290,32 @@ describe('ChatWidget', () => {
 
       const closeButton = screen.getByTestId('close');
       fireEvent.click(closeButton);
+
+      expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should close chat window when clicking outside the widget', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+
+      fireEvent.pointerDown(document.body);
+
+      expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should keep chat window open when clicking inside the widget', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      fireEvent.pointerDown(screen.getByTestId('chat-window'));
+
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+    });
+
+    it('should close chat window when Escape is pressed', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      fireEvent.keyDown(document, { key: 'Escape' });
 
       expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
     });
