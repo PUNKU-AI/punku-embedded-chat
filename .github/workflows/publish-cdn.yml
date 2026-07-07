@@ -41,6 +41,10 @@ jobs:
           node-version: "18"
 
       - name: Build bundle
+        env:
+          # CRA turns warnings into fatal errors when CI=true. The publish job
+          # should fail on real build errors, not block releases on lint warnings.
+          CI: "false"
         run: npm run build # -> dist/build/static/js/bundle.min.js (single, self-contained ~3MB)
 
       - name: Resolve version paths
