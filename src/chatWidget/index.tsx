@@ -11,6 +11,37 @@ type ProgrammaticMessage = {
   message: string;
 };
 
+type TriggerPosition = {
+  x: number;
+  y: number;
+  zIndex?: number;
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && isFinite(value);
+
+const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => {
+  if (!position || typeof position !== "object") {
+    return null;
+  }
+
+  const { x, y, zIndex } = position as {
+    x?: unknown;
+    y?: unknown;
+    zIndex?: unknown;
+  };
+
+  if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
+    return null;
+  }
+
+  return {
+    x,
+    y,
+    ...(isFiniteNumber(zIndex) ? { zIndex } : {}),
+  };
+};
+
 export default function ChatWidget({
   api_key,
   output_type = "chat",
@@ -145,6 +176,7 @@ export default function ChatWidget({
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(!start_open);
   const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
+  const [triggerPositionOverride, setTriggerPositionOverride] = useState<TriggerPosition | null>(null);
 
   // Initialize language based on browser detection or default_language prop
   const getInitialLanguage = (): Language => {
@@ -167,6 +199,10 @@ export default function ChatWidget({
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const openRef = useRef(open);
+  const triggerPositionRef = useRef(triggerPositionOverride);
+  openRef.current = open;
+  triggerPositionRef.current = triggerPositionOverride;
   function updateLastMessage(message: ChatMessageType) {
     setMessages((prev) => {
       prev[prev.length - 1] = message;
@@ -284,6 +320,25 @@ export default function ChatWidget({
 
   const closeWidget = useCallback(() => setOpen(false), []);
 
+  const setTriggerPosition = useCallback((position: unknown): boolean => {
+    if (position === null || typeof position === "undefined") {
+      setTriggerPositionOverride(null);
+      return true;
+    }
+
+    const nextPosition = normalizeTriggerPosition(position);
+    if (!nextPosition) {
+      return false;
+    }
+
+    setTriggerPositionOverride(nextPosition);
+    return true;
+  }, []);
+
+  const resetTriggerPosition = useCallback(() => {
+    setTriggerPositionOverride(null);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
@@ -333,19 +388,60 @@ export default function ChatWidget({
   // Expose widget control methods globally
   useEffect(() => {
     const globalWidgetId = widget_id || "punku-chat-widget";
+    const triggerApi = {
+      setPosition: setTriggerPosition,
+      resetPosition: resetTriggerPosition,
+    };
+
+    Object.defineProperty(triggerApi, "position", {
+      configurable: true,
+      enumerable: true,
+      get: () => triggerPositionRef.current,
+      set: (position: unknown) => {
+        setTriggerPosition(position);
+      },
+    });
 
     // Create global API object
-    (window as any)[`${globalWidgetId}_api`] = {
+    const widgetApi = {
       open: openWidget,
       close: closeWidget,
-      isOpen: () => open,
+      isOpen: () => openRef.current,
+      setTriggerPosition,
+      resetTriggerPosition,
+      trigger: triggerApi,
     };
+    (window as any)[`${globalWidgetId}_api`] = widgetApi;
+
+    const existingPunkuGlobal = (window as any).punku;
+    const punkuGlobal =
+      existingPunkuGlobal && typeof existingPunkuGlobal === "object"
+        ? existingPunkuGlobal
+        : {};
+    const previousPunkuTrigger = punkuGlobal.trigger;
+
+    punkuGlobal.trigger = triggerApi;
+    (window as any).punku = punkuGlobal;
 
     // Cleanup function
     return () => {
-      delete (window as any)[`${globalWidgetId}_api`];
+      if ((window as any)[`${globalWidgetId}_api`] === widgetApi) {
+        delete (window as any)[`${globalWidgetId}_api`];
+      }
+
+      if ((window as any).punku?.trigger === triggerApi) {
+        if (previousPunkuTrigger && previousPunkuTrigger !== triggerApi) {
+          (window as any).punku.trigger = previousPunkuTrigger;
+        } else {
+          delete (window as any).punku.trigger;
+        }
+      }
+
+      if ((window as any).punku && Object.keys((window as any).punku).length === 0) {
+        delete (window as any).punku;
+      }
     };
-  }, [closeWidget, open, openWidget, widget_id]);
+  }, [closeWidget, openWidget, resetTriggerPosition, setTriggerPosition, widget_id]);
 
   const styles = `
 /* Euclid Circular B Font - Embedded for Swarovski theme */
@@ -3089,14 +3185,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "auto", right: "auto" };
+        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
       case "top-right":
-        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "auto", left: "auto" };
+        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "", left: "" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "auto", right: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "", right: "" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "auto", left: "auto" };
+        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "", left: "" };
     }
   };
 
@@ -3116,7 +3212,15 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   };
   
   const cornerPosition = chat_position || "bottom-right";
-  const triggerStyle = getCornerStyle(cornerPosition);
+  const defaultTriggerStyle = getCornerStyle(cornerPosition);
+  const triggerStyle = triggerPositionOverride
+    ? {
+        top: `${triggerPositionOverride.y}px`,
+        left: `${triggerPositionOverride.x}px`,
+        bottom: "",
+        right: "",
+      }
+    : defaultTriggerStyle;
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
   const isLeftEdgePosition = cornerPosition.endsWith("-left");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
@@ -3159,12 +3263,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
-    <div ref={widgetRootRef} className="cl-widget-root" style={{
-      position: "fixed",
-      ...triggerStyle,
-      transform: "none",
-      zIndex: 9998
-    }}>
+    <div
+      ref={widgetRootRef}
+      className="cl-widget-root"
+      style={{
+        position: "fixed",
+        ...triggerStyle,
+        transform: "none",
+        zIndex: triggerPositionOverride?.zIndex ?? 9998
+      }}
+    >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
       <div style={{ position: "relative" }}>
         {shouldRenderClosedWidgetHint && (
