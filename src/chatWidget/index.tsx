@@ -61,6 +61,7 @@ export default function ChatWidget({
   send_button_style,
   online,
   online_message,
+  branding,
   offline_message,
   window_title,
   chat_position,
@@ -115,6 +116,7 @@ export default function ChatWidget({
   chat_window_style?: React.CSSProperties;
   online?: boolean;
   online_message?: string;
+  branding?: "punku-ai" | "punku-ai-bookingkit";
   offline_message?: string;
   height?: number;
   width?: number;
@@ -3324,6 +3326,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           send_button_style={send_button_style}
           online={online}
           online_message={online_message}
+          branding={branding}
           offline_message={offline_message}
           window_title={window_title}
           placeholder={placeholder}

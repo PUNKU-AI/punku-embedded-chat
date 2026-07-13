@@ -15,6 +15,7 @@ function createChatElement() {
             flow_id: "string",
             online: "boolean",
             online_message: "string",
+            branding: "string",
             window_title: "string",
             tweaks:"json",
             bot_message_style:"json",
