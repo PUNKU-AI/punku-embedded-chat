@@ -583,6 +583,25 @@ describe('ChatWindow', () => {
       expect(screen.getByText("We are online!")).toBeInTheDocument();
     });
 
+    it('should show linked PUNKU and bookingkit branding by default', () => {
+      render(<ChatWindow {...defaultProps} online={true} />);
+
+      const punkuLink = screen.getByRole('link', { name: 'PUNKU.AI' });
+      const bookingkitLink = screen.getByRole('link', { name: 'bookingkit' });
+
+      expect(punkuLink).toHaveAttribute('href', 'https://www.punku.ai/');
+      expect(bookingkitLink).toHaveAttribute('href', 'https://bookingkit.com/');
+    });
+
+    it('should show linked PUNKU-only branding when configured', () => {
+      render(<ChatWindow {...defaultProps} online={true} branding="punku-ai" />);
+
+      const punkuLink = screen.getByRole('link', { name: 'PUNKU.AI' });
+
+      expect(punkuLink).toHaveAttribute('href', 'https://www.punku.ai/');
+      expect(screen.queryByRole('link', { name: 'bookingkit' })).not.toBeInTheDocument();
+    });
+
     it('should show custom offline message', () => {
       render(<ChatWindow {...defaultProps} online={false} offline_message="We are offline" />);
 

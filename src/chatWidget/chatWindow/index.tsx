@@ -49,6 +49,7 @@ export default function ChatWindow({
   online = true,
   open,
   online_message,
+  branding,
   offline_message,
   window_title = "Chat",
   placeholder,
@@ -104,6 +105,7 @@ export default function ChatWindow({
   open: boolean;
   onClose?: () => void;
   online_message?: string;
+  branding?: "punku-ai" | "punku-ai-bookingkit";
   placeholder_sending?: string;
   offline_message?: string;
   window_title?: string;
@@ -462,6 +464,16 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
+  const effectiveBranding =
+    branding === "punku-ai" ? "punku-ai" : "punku-ai-bookingkit";
+
+  const brandingLinkStyle: React.CSSProperties = {
+    color: "inherit",
+    fontWeight: 700,
+    textDecoration: "underline",
+    cursor: "pointer"
+  };
+
   const statusBranding = (
     <>
       Powered by{" "}
@@ -469,29 +481,23 @@ export default function ChatWindow({
         href="https://www.punku.ai/"
         target="_blank"
         rel="noopener noreferrer"
-        style={{
-          color: "inherit",
-          fontWeight: 700,
-          textDecoration: "underline",
-          cursor: "pointer"
-        }}
+        style={brandingLinkStyle}
       >
         PUNKU.AI
       </a>
-      {" & "}
-      <a
-        href="https://bookingkit.com/"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          color: "inherit",
-          fontWeight: 700,
-          textDecoration: "underline",
-          cursor: "pointer"
-        }}
-      >
-        bookingkit
-      </a>
+      {effectiveBranding === "punku-ai-bookingkit" && (
+        <>
+          {" & "}
+          <a
+            href="https://bookingkit.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={brandingLinkStyle}
+          >
+            bookingkit
+          </a>
+        </>
+      )}
     </>
   );
 

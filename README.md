@@ -28,7 +28,7 @@ The PUNKU.AI Chat Widget supports various visual themes to match your applicatio
 | dark               | Dark mode theme with dark backgrounds and light text                  |
 | ocean              | Beautiful ocean background with translucent message bubbles           |
 | aurora             | Northern lights inspired theme with colorful gradient backgrounds     |
-| punku-ai-bookingkit| Same as default theme, but with "Powered by PUNKU.AI & bookingkit" branding |
+| punku-ai-bookingkit| Legacy bookingkit-branded theme name; prefer `theme="default"` with `branding="punku-ai-bookingkit"` |
 
 ### How to Use Themes
 
@@ -90,10 +90,9 @@ These simple properties make it easy for non-technical users to customize the ap
 
 ### Link Color Customization
 
-The `link_color` property allows you to customize the color of all hyperlinks that appear in the chat interface. This includes:
+The `link_color` property allows you to customize the color of hyperlinks in chat messages and markdown content. This includes:
 - Links in bot messages (e.g., URLs, references, resources)
-- Links in the chat header (e.g., "Powered by PUNKU.AI" branding)
-- Any clickable links throughout the chat interface
+- Markdown links in generated content
 
 **Usage Example:**
 ```html
@@ -189,6 +188,7 @@ Use the widget API to customize your widget:
 | output_component      | string    | No       |
 | error_message_style   | json      | No       |
 | flow_id               | string    | Yes      |
+| branding              | string    | No       |
 | header_icon           | string    | No       |
 | height                | number    | No       |
 | host_url              | string    | Yes      |
@@ -330,7 +330,14 @@ Use the widget API to customize your widget:
 - **online_message:**
   - Type: String
   - Required: No
-  - Description: Custom message to display when the chat component is online.
+  - Description: Custom text-only message to display when the chat component is online. Use `branding` for linked built-in PUNKU.AI and bookingkit variants.
+
+- **branding:**
+  - Type: String
+  - Required: No
+  - Default: `punku-ai-bookingkit`
+  - Options: `punku-ai-bookingkit`, `punku-ai`
+  - Description: Controls the linked online status branding. `punku-ai-bookingkit` renders "Powered by PUNKU.AI & bookingkit" with both links. `punku-ai` renders "Powered by PUNKU.AI" with the PUNKU.AI link.
 
 - **placeholder:**
   - Type: String
@@ -455,4 +462,4 @@ Use the widget API to customize your widget:
 - **link_color:**
   - Type: String
   - Required: No
-  - Description: Customizes the color of all hyperlinks throughout the chat interface (hex code or CSS color). This includes links in bot messages, header branding links, and any other clickable links. The color is applied to all link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+  - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
