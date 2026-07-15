@@ -478,9 +478,9 @@ export default function ChatWindow({
     <>
       Powered by{" "}
       <a
-        href="https://www.punku.ai/"
+        href="https://www.punku.ai/?utm_source=customer_widget&utm_medium=referral&utm_campaign=powered_by"
         target="_blank"
-        rel="noopener noreferrer"
+        rel="noopener noreferrer nofollow"
         style={brandingLinkStyle}
       >
         PUNKU.AI

@@ -589,7 +589,12 @@ describe('ChatWindow', () => {
       const punkuLink = screen.getByRole('link', { name: 'PUNKU.AI' });
       const bookingkitLink = screen.getByRole('link', { name: 'bookingkit' });
 
-      expect(punkuLink).toHaveAttribute('href', 'https://www.punku.ai/');
+      expect(punkuLink).toHaveAttribute(
+        'href',
+        'https://www.punku.ai/?utm_source=customer_widget&utm_medium=referral&utm_campaign=powered_by'
+      );
+      expect(punkuLink).toHaveAttribute('target', '_blank');
+      expect(punkuLink).toHaveAttribute('rel', 'noopener noreferrer nofollow');
       expect(bookingkitLink).toHaveAttribute('href', 'https://bookingkit.com/');
     });
 
@@ -598,7 +603,12 @@ describe('ChatWindow', () => {
 
       const punkuLink = screen.getByRole('link', { name: 'PUNKU.AI' });
 
-      expect(punkuLink).toHaveAttribute('href', 'https://www.punku.ai/');
+      expect(punkuLink).toHaveAttribute(
+        'href',
+        'https://www.punku.ai/?utm_source=customer_widget&utm_medium=referral&utm_campaign=powered_by'
+      );
+      expect(punkuLink).toHaveAttribute('target', '_blank');
+      expect(punkuLink).toHaveAttribute('rel', 'noopener noreferrer nofollow');
       expect(screen.queryByRole('link', { name: 'bookingkit' })).not.toBeInTheDocument();
     });
 
