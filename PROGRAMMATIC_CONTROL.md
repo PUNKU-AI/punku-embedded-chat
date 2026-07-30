@@ -7,7 +7,7 @@ This document explains how to control the Punku Chat Widget programmatically usi
 The chat widget now supports programmatic control, allowing you to:
 - Open/close the widget from external JavaScript
 - Open the widget with a prefilled user message that is sent immediately
-- Reposition the floating trigger from external JavaScript
+- Reposition the floating trigger, closed hint, and chat window from external JavaScript
 - Check widget state
 
 ## Setup
@@ -48,7 +48,8 @@ chatWidget.close();
 const isOpen = chatWidget.isOpen();
 console.log('Widget is open:', isOpen);
 
-// Move the floating trigger to viewport coordinates.
+// Move the floating trigger to viewport coordinates. The closed hint and chat
+// window are anchored from the same trigger position.
 // x is the left offset in CSS pixels, y is the top offset in CSS pixels.
 chatWidget.setTriggerPosition({ x: 100, y: 300 });
 

@@ -35,6 +35,7 @@ jest.mock('./chatWindow', () => {
     onClose,
     language,
     show_close_button_on_desktop,
+    positionOverrideStyle,
     programmaticMessage,
     onProgrammaticMessageHandled
   }: {
@@ -45,6 +46,7 @@ jest.mock('./chatWindow', () => {
     onClose?: () => void;
     language?: string;
     show_close_button_on_desktop?: boolean;
+    positionOverrideStyle?: React.CSSProperties;
     programmaticMessage?: { id: number; message: string } | null;
     onProgrammaticMessageHandled?: (id: number) => void;
   }) {
@@ -57,7 +59,7 @@ jest.mock('./chatWindow', () => {
 
     if (!open) return null;
     return (
-      <div data-testid="chat-window">
+      <div data-testid="chat-window" style={positionOverrideStyle}>
         <span data-testid="message-count">{messages?.length || 0}</span>
         <span data-testid="language">{language || 'en'}</span>
         <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
@@ -122,8 +124,22 @@ describe('ChatWidget', () => {
     output_type: 'chat'
   };
 
+  const setViewportSize = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: width
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      writable: true,
+      value: height
+    });
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    setViewportSize(1024, 768);
     // Reset window global
     delete (window as any)['punku-chat-widget_api'];
     delete (window as any)['custom-widget_api'];
@@ -525,6 +541,40 @@ describe('ChatWidget', () => {
         zIndex: '10003',
       });
       expect(api.trigger.position).toEqual({ x: 100, y: 300, zIndex: 10003 });
+    });
+
+    it('should position the open chat window from the trigger API anchor', () => {
+      setViewportSize(1365, 900);
+      render(<ChatWidget {...defaultProps} start_open={true} width={400} height={500} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 768, zIndex: 10003 });
+      });
+
+      expect(screen.getByTestId('chat-window')).toHaveStyle({
+        left: '24px',
+        top: '236px',
+        right: 'auto',
+        bottom: 'auto',
+        zIndex: '10004',
+      });
+    });
+
+    it('should position the closed widget hint from the trigger API anchor', () => {
+      setViewportSize(1365, 900);
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_position="left" />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 84 });
+      });
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-right');
+      expect(hint).not.toHaveClass('cl-hint-left');
     });
 
     it('should reset trigger position via widget API', () => {

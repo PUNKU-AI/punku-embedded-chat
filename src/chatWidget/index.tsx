@@ -17,8 +17,25 @@ type TriggerPosition = {
   zIndex?: number;
 };
 
+const DEFAULT_TRIGGER_SIZE = 48;
+const DEFAULT_CHAT_WINDOW_WIDTH = 450;
+const DEFAULT_CHAT_WINDOW_HEIGHT = 650;
+const ANCHORED_CHAT_WINDOW_GAP = 32;
+const VIEWPORT_MARGIN = 16;
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
+
+const getViewportSize = () => ({
+  width: typeof window === "undefined" ? 1024 : window.innerWidth,
+  height: typeof window === "undefined" ? 768 : window.innerHeight,
+});
+
+const getPositiveNumber = (value: number | undefined, fallback: number) =>
+  isFiniteNumber(value) && value > 0 ? value : fallback;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), Math.max(min, max));
 
 const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => {
   if (!position || typeof position !== "object") {
@@ -40,6 +57,47 @@ const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => 
     y,
     ...(isFiniteNumber(zIndex) ? { zIndex } : {}),
   };
+};
+
+const getAnchoredChatWindowStyle = (
+  triggerPosition: TriggerPosition,
+  chatWindowWidth?: number,
+  chatWindowHeight?: number
+): React.CSSProperties => {
+  const viewport = getViewportSize();
+  const configuredWidth = getPositiveNumber(chatWindowWidth, DEFAULT_CHAT_WINDOW_WIDTH);
+  const configuredHeight = getPositiveNumber(chatWindowHeight, DEFAULT_CHAT_WINDOW_HEIGHT);
+  const availableWidth = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2);
+  const availableHeight = Math.max(0, viewport.height - VIEWPORT_MARGIN * 2);
+  const renderedWidth = Math.min(configuredWidth, availableWidth, viewport.width * 0.9);
+  const renderedHeight = Math.min(configuredHeight, availableHeight, viewport.height * 0.7);
+  const triggerCenterX = triggerPosition.x + DEFAULT_TRIGGER_SIZE / 2;
+  const triggerCenterY = triggerPosition.y + DEFAULT_TRIGGER_SIZE / 2;
+  const shouldOpenAbove = triggerCenterY >= viewport.height / 2;
+  const shouldAlignLeft = triggerCenterX < viewport.width / 2;
+  const preferredTop = shouldOpenAbove
+    ? triggerPosition.y - ANCHORED_CHAT_WINDOW_GAP - renderedHeight
+    : triggerPosition.y + DEFAULT_TRIGGER_SIZE + ANCHORED_CHAT_WINDOW_GAP;
+  const preferredLeft = shouldAlignLeft
+    ? triggerPosition.x
+    : triggerPosition.x + DEFAULT_TRIGGER_SIZE - renderedWidth;
+
+  return {
+    top: `${Math.round(
+      clamp(preferredTop, VIEWPORT_MARGIN, viewport.height - renderedHeight - VIEWPORT_MARGIN)
+    )}px`,
+    left: `${Math.round(
+      clamp(preferredLeft, VIEWPORT_MARGIN, viewport.width - renderedWidth - VIEWPORT_MARGIN)
+    )}px`,
+    bottom: "",
+    right: "",
+    zIndex: typeof triggerPosition.zIndex === "number" ? triggerPosition.zIndex + 1 : 9999,
+  };
+};
+
+const isTriggerOverrideOnLeftSide = (triggerPosition: TriggerPosition) => {
+  const { width } = getViewportSize();
+  return triggerPosition.x + DEFAULT_TRIGGER_SIZE / 2 < width / 2;
 };
 
 export default function ChatWidget({
@@ -3224,7 +3282,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       }
     : defaultTriggerStyle;
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
-  const isLeftEdgePosition = cornerPosition.endsWith("-left");
+  const anchoredChatWindowStyle = triggerPositionOverride
+    ? getAnchoredChatWindowStyle(triggerPositionOverride, width, height)
+    : undefined;
+  const isLeftEdgePosition = triggerPositionOverride
+    ? isTriggerOverrideOnLeftSide(triggerPositionOverride)
+    : cornerPosition.endsWith("-left");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
 
   const getClosedHintPositionClass = () => {
@@ -3302,7 +3365,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           triggerIcon={trigger_icon}
         />
       </div>
-      <div style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}>
+      <div
+        style={{
+          position: "fixed",
+          ...(anchoredChatWindowStyle || chatWindowStyle),
+          zIndex: anchoredChatWindowStyle?.zIndex ?? 9999,
+        }}
+      >
         <ChatWindow
           api_key={api_key}
           hostUrl={host_url}
@@ -3361,6 +3430,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           top_offset={effectiveTopOffset}
           left_offset={effectiveLeftOffset}
           right_offset={effectiveRightOffset}
+          positionOverrideStyle={anchoredChatWindowStyle}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
         />
