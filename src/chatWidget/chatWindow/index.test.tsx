@@ -148,6 +148,30 @@ describe('ChatWindow', () => {
       expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
     });
 
+    it('should use position override style when provided', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          positionOverrideStyle={{
+            top: '236px',
+            left: '24px',
+            right: 'auto',
+            bottom: 'auto',
+            zIndex: 10004,
+          }}
+        />
+      );
+
+      const chatWindow = document.querySelector('.cl-chat-window');
+      expect(chatWindow).toHaveStyle({
+        top: '236px',
+        left: '24px',
+        right: 'auto',
+        bottom: 'auto',
+        zIndex: '10004',
+      });
+    });
+
     it('should not force tablet windows to the right side', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 

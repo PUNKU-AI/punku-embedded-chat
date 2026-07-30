@@ -88,6 +88,7 @@ export default function ChatWindow({
   top_offset = 60,
   left_offset = 20,
   right_offset = 20,
+  positionOverrideStyle,
   programmaticMessage,
   onProgrammaticMessageHandled,
 }: {
@@ -148,6 +149,7 @@ export default function ChatWindow({
   top_offset?: number;
   left_offset?: number;
   right_offset?: number;
+  positionOverrideStyle?: React.CSSProperties;
   programmaticMessage?: { id: number; message: string } | null;
   onProgrammaticMessageHandled?: (id: number) => void;
 }) {
@@ -180,6 +182,11 @@ export default function ChatWindow({
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
     ? { left: `${left_offset}px`, right: "auto" }
     : { left: "auto", right: `${right_offset}px` };
+  const defaultWindowPositionStyle: React.CSSProperties = {
+    bottom: `calc(var(--cl-bottom-offset) + 80px)`,
+    ...fixedWindowHorizontalStyle,
+  };
+  const effectiveWindowPositionStyle = positionOverrideStyle || defaultWindowPositionStyle;
 
   /* Initial listener for loss of focus that refocuses User input after a small delay */
 
@@ -530,12 +537,11 @@ export default function ChatWindow({
         "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
         "--cl-top-offset": `${Number(top_offset) || 0}px`,
         position: "fixed",
-        bottom: `calc(var(--cl-bottom-offset) + 80px)`,
-        ...fixedWindowHorizontalStyle,
+        ...effectiveWindowPositionStyle,
         maxHeight: "70vh",
         maxWidth: "90vw",
         transform: "none !important", // Override any transforms with !important
-        zIndex: 9999
+        zIndex: positionOverrideStyle?.zIndex ?? 9999,
       } as React.CSSProperties}
     >
       {/* Relative positioning wrapper for modal overlay */}
