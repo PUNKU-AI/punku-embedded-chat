@@ -24,6 +24,8 @@ const DEFAULT_CHAT_WINDOW_HEIGHT = 650;
 const ANCHORED_CHAT_WINDOW_GAP = 32;
 const VIEWPORT_MARGIN = 16;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
+// Temporary kill switch while trigger relocation integrations are paused.
+const ENABLE_PROGRAMMATIC_TRIGGER_RELOCATION = false;
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
@@ -456,40 +458,49 @@ export default function ChatWidget({
   // Expose widget control methods globally
   useEffect(() => {
     const globalWidgetId = widget_id || "punku-chat-widget";
-    const triggerApi = {
-      setPosition: setTriggerPosition,
-      resetPosition: resetTriggerPosition,
-    };
-
-    Object.defineProperty(triggerApi, "position", {
-      configurable: true,
-      enumerable: true,
-      get: () => triggerPositionRef.current,
-      set: (position: unknown) => {
-        setTriggerPosition(position);
-      },
-    });
 
     // Create global API object
     const widgetApi = {
       open: openWidget,
       close: closeWidget,
       isOpen: () => openRef.current,
-      setTriggerPosition,
-      resetTriggerPosition,
-      trigger: triggerApi,
     };
     (window as any)[`${globalWidgetId}_api`] = widgetApi;
 
-    const existingPunkuGlobal = (window as any).punku;
-    const punkuGlobal =
-      existingPunkuGlobal && typeof existingPunkuGlobal === "object"
-        ? existingPunkuGlobal
-        : {};
-    const previousPunkuTrigger = punkuGlobal.trigger;
+    let triggerApi: any;
+    let previousPunkuTrigger: unknown;
 
-    punkuGlobal.trigger = triggerApi;
-    (window as any).punku = punkuGlobal;
+    if (ENABLE_PROGRAMMATIC_TRIGGER_RELOCATION) {
+      triggerApi = {
+        setPosition: setTriggerPosition,
+        resetPosition: resetTriggerPosition,
+      };
+
+      Object.defineProperty(triggerApi, "position", {
+        configurable: true,
+        enumerable: true,
+        get: () => triggerPositionRef.current,
+        set: (position: unknown) => {
+          setTriggerPosition(position);
+        },
+      });
+
+      Object.assign(widgetApi, {
+        setTriggerPosition,
+        resetTriggerPosition,
+        trigger: triggerApi,
+      });
+
+      const existingPunkuGlobal = (window as any).punku;
+      const punkuGlobal =
+        existingPunkuGlobal && typeof existingPunkuGlobal === "object"
+          ? existingPunkuGlobal
+          : {};
+      previousPunkuTrigger = punkuGlobal.trigger;
+
+      punkuGlobal.trigger = triggerApi;
+      (window as any).punku = punkuGlobal;
+    }
 
     // Cleanup function
     return () => {
@@ -497,7 +508,7 @@ export default function ChatWidget({
         delete (window as any)[`${globalWidgetId}_api`];
       }
 
-      if ((window as any).punku?.trigger === triggerApi) {
+      if (triggerApi && (window as any).punku?.trigger === triggerApi) {
         if (previousPunkuTrigger && previousPunkuTrigger !== triggerApi) {
           (window as any).punku.trigger = previousPunkuTrigger;
         } else {

@@ -482,9 +482,9 @@ describe('ChatWidget', () => {
       expect(typeof api.open).toBe('function');
       expect(typeof api.close).toBe('function');
       expect(typeof api.isOpen).toBe('function');
-      expect(typeof api.setTriggerPosition).toBe('function');
-      expect(typeof api.resetTriggerPosition).toBe('function');
-      expect(api.trigger).toBeDefined();
+      expect(api.setTriggerPosition).toBeUndefined();
+      expect(api.resetTriggerPosition).toBeUndefined();
+      expect(api.trigger).toBeUndefined();
     });
 
     it('should expose API with custom widget_id', () => {
@@ -540,72 +540,14 @@ describe('ChatWidget', () => {
       expect(api.isOpen()).toBe(true);
     });
 
-    it('should reposition trigger via widget API in viewport pixels', () => {
+    it('should not expose trigger relocation APIs while temporarily disabled', () => {
       render(<ChatWidget {...defaultProps} />);
 
       const api = (window as any)['punku-chat-widget_api'];
-
-      act(() => {
-        api.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 });
-      });
-
-      const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
-        left: '100px',
-        top: '300px',
-        right: 'auto',
-        bottom: 'auto',
-        zIndex: '10003',
-      });
-      expect(api.trigger.position).toEqual({ x: 100, y: 300, zIndex: 10003 });
-    });
-
-    it('should position the open chat window from the trigger API anchor', () => {
-      setViewportSize(1365, 900);
-      render(<ChatWidget {...defaultProps} start_open={true} width={400} height={500} />);
-
-      const api = (window as any)['punku-chat-widget_api'];
-
-      act(() => {
-        api.setTriggerPosition({ x: 24, y: 768, zIndex: 10003 });
-      });
-
-      expect(screen.getByTestId('chat-window')).toHaveStyle({
-        left: '24px',
-        top: '236px',
-        right: 'auto',
-        bottom: 'auto',
-        zIndex: '10004',
-      });
-    });
-
-    it('should position the closed widget hint from the trigger API anchor', () => {
-      setViewportSize(1365, 900);
-      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_position="left" />);
-
-      const api = (window as any)['punku-chat-widget_api'];
-
-      act(() => {
-        api.setTriggerPosition({ x: 24, y: 84 });
-      });
-
-      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
-      expect(hint).toHaveClass('cl-hint-right');
-      expect(hint).not.toHaveClass('cl-hint-left');
-    });
-
-    it('should reset trigger position via widget API', () => {
-      render(<ChatWidget {...defaultProps} />);
-
-      const api = (window as any)['punku-chat-widget_api'];
-
-      act(() => {
-        api.setTriggerPosition({ x: 100, y: 300 });
-      });
-
-      act(() => {
-        api.resetTriggerPosition();
-      });
+      expect(api.setTriggerPosition).toBeUndefined();
+      expect(api.resetTriggerPosition).toBeUndefined();
+      expect(api.trigger).toBeUndefined();
+      expect((window as any).punku?.trigger).toBeUndefined();
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect(widgetRoot).toHaveStyle({
@@ -615,73 +557,13 @@ describe('ChatWidget', () => {
         top: 'auto',
         zIndex: '9998',
       });
-      expect(api.trigger.position).toBeNull();
-    });
-
-    it('should support the window.punku.trigger.position setter', () => {
-      render(<ChatWidget {...defaultProps} />);
-
-      expect((window as any).punku.trigger).toBeDefined();
-
-      act(() => {
-        (window as any).punku.trigger.position = { x: 24, y: 48 };
-      });
-
-      const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
-        left: '24px',
-        top: '48px',
-        right: 'auto',
-        bottom: 'auto',
-      });
-      expect((window as any).punku.trigger.position).toEqual({ x: 24, y: 48 });
-    });
-
-    it('should reset trigger position when window.punku.trigger.position is null', () => {
-      render(<ChatWidget {...defaultProps} />);
-
-      act(() => {
-        (window as any).punku.trigger.position = { x: 24, y: 48 };
-      });
-
-      act(() => {
-        (window as any).punku.trigger.position = null;
-      });
-
-      const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
-        right: '20px',
-        bottom: '20px',
-        left: 'auto',
-        top: 'auto',
-      });
-      expect((window as any).punku.trigger.position).toBeNull();
-    });
-
-    it('should ignore invalid trigger position values', () => {
-      render(<ChatWidget {...defaultProps} />);
-
-      const api = (window as any)['punku-chat-widget_api'];
-
-      act(() => {
-        api.trigger.position = { x: '100', y: 300 };
-      });
-
-      const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
-        right: '20px',
-        bottom: '20px',
-        left: 'auto',
-        top: 'auto',
-      });
-      expect(api.trigger.position).toBeNull();
     });
 
     it('should clean up API on unmount', () => {
       const { unmount } = render(<ChatWidget {...defaultProps} />);
 
       expect((window as any)['punku-chat-widget_api']).toBeDefined();
-      expect((window as any).punku).toBeDefined();
+      expect((window as any).punku).toBeUndefined();
 
       unmount();
 
