@@ -1,5 +1,73 @@
 import axios from "axios";
 
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+export class InvalidRequestHeaderError extends Error {
+  code = "ERR_INVALID_REQUEST_HEADER";
+  headerName: string;
+  reason: string;
+
+  constructor(headerName: string, reason: string) {
+    super(`Invalid request header "${headerName}": ${reason}`);
+    this.name = "InvalidRequestHeaderError";
+    this.headerName = headerName;
+    this.reason = reason;
+    Object.setPrototypeOf(this, InvalidRequestHeaderError.prototype);
+  }
+}
+
+function validateRequestHeader(headerName: string, headerValue: unknown) {
+  if (!HEADER_NAME_PATTERN.test(headerName)) {
+    throw new InvalidRequestHeaderError(
+      headerName,
+      "header names must be valid HTTP token characters"
+    );
+  }
+
+  if (typeof headerValue !== "string") {
+    throw new InvalidRequestHeaderError(headerName, "header values must be strings");
+  }
+
+  for (let index = 0; index < headerValue.length; index += 1) {
+    const codePoint = headerValue.charCodeAt(index);
+
+    if (codePoint > 255) {
+      throw new InvalidRequestHeaderError(
+        headerName,
+        "header values must contain only ISO-8859-1 code points"
+      );
+    }
+
+    if (codePoint === 0 || codePoint === 10 || codePoint === 13) {
+      throw new InvalidRequestHeaderError(
+        headerName,
+        "header values cannot contain null, carriage return, or newline characters"
+      );
+    }
+  }
+}
+
+function buildRequestHeaders(
+  api_key?: string,
+  additional_headers?: { [key: string]: string }
+) {
+  let headers: { [key: string]: string } = { "Content-Type": "application/json" };
+
+  if (api_key) {
+    headers["x-api-key"] = api_key;
+  }
+
+  if (additional_headers) {
+    headers = { ...headers, ...additional_headers };
+  }
+
+  Object.keys(headers).forEach((headerName) => {
+    validateRequestHeader(headerName, headers[headerName]);
+  });
+
+  return headers;
+}
+
 export async function sendMessage(
   baseUrl: string, 
   flowId: string, 
@@ -26,15 +94,7 @@ export async function sendMessage(
     data.session_id=sessionId.current;
   }
 
-  let headers:{[key:string]:string} = {"Content-Type": "application/json"}
-
-  if (api_key) {
-    headers["x-api-key"] = api_key;
-  }
-
-  if (additional_headers) {
-    headers = {...headers, ...additional_headers};
-  }
+  const headers = buildRequestHeaders(api_key, additional_headers);
 
   const url = `${baseUrl}/api/v1/run/${flowId}`;
 
@@ -88,23 +148,14 @@ export async function sendMessage(
       data.session_id=sessionId.current;
     }
   
-    let headers:{[key:string]:string} = {"Content-Type": "application/json"}
-  
-    if (api_key) {
-        headers["x-api-key"] = api_key;
-    }
-  
-    if (additional_headers) {
-      headers = {...headers, ...additional_headers};
-    }
-  
-    const url = `${baseUrl}/api/v1/run/${flowId}?stream=true`
-  
-    // console.log('🚀 Starting streaming request to:', url);
-    // console.log('📦 Request data:', data);
-    // console.log('📋 Headers:', headers);
-  
     try {
+      const headers = buildRequestHeaders(api_key, additional_headers);
+      const url = `${baseUrl}/api/v1/run/${flowId}?stream=true`
+    
+      // console.log('🚀 Starting streaming request to:', url);
+      // console.log('📦 Request data:', data);
+      // console.log('📋 Headers:', headers);
+    
       const response = await fetch(url, {
         method: 'POST',
         headers,
@@ -196,13 +247,7 @@ export async function sendFeedback(
   api_key?: string,
   additional_headers?: {[key: string]: string}
 ) {
-  let headers: {[key: string]: string} = {"Content-Type": "application/json"}
-  if (api_key) {
-    headers["x-api-key"] = api_key;
-  }
-  if (additional_headers) {
-    headers = Object.assign(headers, additional_headers);
-  }
+  const headers = buildRequestHeaders(api_key, additional_headers);
 
   // Prepare the request body according to MessageUpdate model
   const requestBody = {

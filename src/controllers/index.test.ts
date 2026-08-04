@@ -130,6 +130,31 @@ describe('sendMessage', () => {
     );
   });
 
+  it('should reject additional header values outside ISO-8859-1 before fetch', async () => {
+    const invalidValue = `invalid-${String.fromCharCode(256)}`;
+
+    await expect(
+      sendMessage(
+        baseUrl,
+        flowId,
+        message,
+        input_type,
+        output_type,
+        sessionId,
+        undefined,
+        undefined,
+        undefined,
+        { 'X-Custom-Header': invalidValue }
+      )
+    ).rejects.toMatchObject({
+      name: 'InvalidRequestHeaderError',
+      code: 'ERR_INVALID_REQUEST_HEADER',
+      headerName: 'X-Custom-Header'
+    });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('should include tweaks in request when provided', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -292,6 +317,40 @@ describe('streamMessage', () => {
     expect(onStreamError).toHaveBeenCalled();
   });
 
+  it('should call onStreamError for invalid headers before fetch', async () => {
+    const onStreamError = jest.fn();
+    const invalidValue = `invalid-${String.fromCharCode(256)}`;
+
+    await expect(
+      streamMessage(
+        baseUrl,
+        flowId,
+        message,
+        input_type,
+        output_type,
+        sessionId,
+        undefined,
+        undefined,
+        undefined,
+        { 'X-Custom-Header': invalidValue },
+        undefined,
+        undefined,
+        onStreamError
+      )
+    ).rejects.toMatchObject({
+      name: 'InvalidRequestHeaderError',
+      code: 'ERR_INVALID_REQUEST_HEADER',
+      headerName: 'X-Custom-Header'
+    });
+
+    expect(onStreamError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headerName: 'X-Custom-Header'
+      })
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('should throw error when stream is not supported', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -432,5 +491,25 @@ describe('sendFeedback', () => {
         })
       })
     );
+  });
+
+  it('should reject invalid additional headers before sending feedback', async () => {
+    const invalidValue = `invalid-${String.fromCharCode(256)}`;
+
+    await expect(
+      sendFeedback(
+        baseUrl,
+        messageId,
+        'positive',
+        undefined,
+        { 'X-Custom-Header': invalidValue }
+      )
+    ).rejects.toMatchObject({
+      name: 'InvalidRequestHeaderError',
+      code: 'ERR_INVALID_REQUEST_HEADER',
+      headerName: 'X-Custom-Header'
+    });
+
+    expect(axios.put).not.toHaveBeenCalled();
   });
 });

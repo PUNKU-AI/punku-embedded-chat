@@ -5,6 +5,7 @@ import rehypeMathjax from "rehype-mathjax";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
+import { PunkuChatErrorPhase } from "../../clientErrors";
 
 // Pins a readable base text size on every message. The widget renders inside a
 // closed shadow root, so without this the font-size inherits from the host page
@@ -96,11 +97,17 @@ export default function ChatMessage({
   additional_headers,
   host_url,
   onFeedbackUpdate,
+  onClientError,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
+  onClientError?: (
+    error: unknown,
+    phase: PunkuChatErrorPhase,
+    context?: Record<string, unknown>
+  ) => void;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -134,6 +141,10 @@ export default function ChatMessage({
         // console.log(`Feedback sent: ${feedbackValue} (positive_feedback: ${type === 'thumbsUp' ? 'true' : 'false'})`);
       } catch (error) {
         console.error("Error sending feedback:", error);
+        onClientError?.(error, "send-feedback", {
+          messageId: message_id,
+          feedback: feedbackValue,
+        });
         // Optionally revert the selection if feedback fails
         setSelectedFeedback(null);
         // Also revert the message data

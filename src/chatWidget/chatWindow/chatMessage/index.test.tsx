@@ -358,6 +358,37 @@ describe('ChatMessage', () => {
         expect(onFeedbackUpdate).toHaveBeenLastCalledWith('test-message-id', '');
       });
     });
+
+    it('should report feedback errors to the client error handler', async () => {
+      const feedbackError = Object.assign(new Error('Failed to read headers'), {
+        code: 'ERR_INVALID_REQUEST_HEADER',
+        headerName: 'X-Custom-Header'
+      });
+      mockedSendFeedback.mockRejectedValueOnce(feedbackError);
+      const onClientError = jest.fn();
+
+      render(
+        <ChatMessage
+          {...defaultProps}
+          message_id="test-message-id"
+          onClientError={onClientError}
+        />
+      );
+
+      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      fireEvent.click(thumbsUpButton);
+
+      await waitFor(() => {
+        expect(onClientError).toHaveBeenCalledWith(
+          feedbackError,
+          'send-feedback',
+          {
+            messageId: 'test-message-id',
+            feedback: 'positive',
+          }
+        );
+      });
+    });
   });
 
   describe('CSS Classes', () => {

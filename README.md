@@ -37,7 +37,6 @@ Simply add the `theme` attribute to your chat widget:
 ```html
 <punku-chat
   theme="ocean"
-  host_url="your-punku-api-url"
   flow_id="your-flow-id"
 ></punku-chat>
 ```
@@ -49,7 +48,6 @@ You can still apply custom styling to themed widgets using the style properties:
 ```html
 <punku-chat
   theme="dark"
-  host_url="your-punku-api-url"
   flow_id="your-flow-id"
   chat_window_style='{"borderRadius":"16px"}'
 ></punku-chat>
@@ -97,7 +95,6 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 **Usage Example:**
 ```html
 <punku-chat
-  host_url="https://your-punku-instance.com"
   flow_id="your-flow-id"
   link_color="#FF5733"
 ></punku-chat>
@@ -135,7 +132,6 @@ For more advanced customization, you can still use the style properties:
 </head>
 <body>
 <punku-chat
-    host_url="punku.ai url"
     flow_id="your_flow_id"
   ></punku-chat>
 </body>
@@ -154,9 +150,7 @@ Encapsulate your custom element in a react component
 export default function ChatWidget() {
   return (
     <div>
-<punku-chat
-    host_url="punku.ai url"
-    flow_id="your_flow_id"></punku-chat>
+      <punku-chat flow_id="your_flow_id"></punku-chat>
     </div>
   );
 }
@@ -182,7 +176,9 @@ Use the widget API to customize your widget:
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
+| client_error_report_url | string  | No       |
 | default_language      | string    | No       |
+| enable_client_error_reporting | boolean | No |
 | output_type           | string    | No       |
 | input_type            | string    | No       |
 | output_component      | string    | No       |
@@ -191,7 +187,7 @@ Use the widget API to customize your widget:
 | branding              | string    | No       |
 | header_icon           | string    | No       |
 | height                | number    | No       |
-| host_url              | string    | Yes      |
+| host_url              | string    | No       |
 | input_container_style | json      | No       |
 | input_style           | json      | No       |
 | online                | boolean   | No       |
@@ -304,8 +300,9 @@ Use the widget API to customize your widget:
 
 - **host_url:**
   - Type: String
-  - Required: Yes
-  - Description: The URL of the host for communication with the chat component.
+  - Required: No
+  - Default: `https://app.punku.ai`
+  - Description: The URL of the host for communication with the chat component. Override this only when using a custom PUNKU instance.
 
 - **input_container_style:**
   - Type: JSON
@@ -453,6 +450,17 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: Additional headers to send with the API requests.
 
+- **client_error_report_url:**
+  - Type: String
+  - Required: No
+  - Description: Optional endpoint that receives browser-side widget errors. Defaults to `${host_url}/api/v1/widget/client-errors`.
+
+- **enable_client_error_reporting:**
+  - Type: Boolean
+  - Required: No
+  - Default: true
+  - Description: Controls whether the widget automatically POSTs browser-side widget errors to the reporting endpoint. The `punku-chat-error` browser event is still dispatched either way.
+
 - **show_feedback:**
   - Type: Boolean
   - Required: No
@@ -463,3 +471,66 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Client Error Notifications
+
+Some browser-side failures happen before a request reaches your normal PUNKU run endpoint, such as invalid header values, CORS/preflight failures, DNS/TLS failures, blocked requests, or network loss. The widget reports these failures itself by POSTing to `${host_url}/api/v1/widget/client-errors` by default. If `host_url` is omitted, it defaults to `https://app.punku.ai`.
+
+```html
+<punku-chat
+  flow_id="your-flow-id"
+></punku-chat>
+```
+
+You can override the endpoint:
+
+```html
+<punku-chat
+  host_url="https://your-punku-instance.com"
+  flow_id="your-flow-id"
+  client_error_report_url="https://your-api.example.com/widget-client-errors"
+></punku-chat>
+```
+
+The endpoint should return `202` with `{ "status": "queued" }`. Reporting is best-effort; failures from this endpoint are swallowed and never block the chat UI.
+
+The report payload matches the platform endpoint schema:
+
+```json
+{
+  "message": "Failed to read headers",
+  "flow_id": "your-flow-id",
+  "widget_id": "punku-chat-widget",
+  "session_id": "optional-session-id",
+  "error_type": "ERR_INVALID_REQUEST_HEADER",
+  "status_code": null,
+  "page_url": "https://customer.example.com/chat",
+  "run_url": "https://app.punku.ai/api/v1/run/your-flow-id",
+  "host_url": "https://app.punku.ai",
+  "stack": "Error stack when available",
+  "details": {
+    "phase": "send-message",
+    "classification": "invalid_request_header",
+    "header_name": "X-Custom-Header",
+    "message_length": 5,
+    "streaming": false
+  }
+}
+```
+
+The widget does not include `api_key`, authorization headers, cookies, user messages, response bodies, or full request headers. Page and run URLs are sent without query strings or hashes. If a header is invalid, `error_type` is `ERR_INVALID_REQUEST_HEADER` and `details.header_name` contains the invalid header name.
+
+The widget also dispatches a global `punku-chat-error` event for host pages that want custom handling:
+
+```html
+<script>
+  window.addEventListener("punku-chat-error", (event) => {
+    const detail = event.detail;
+
+    navigator.sendBeacon(
+      "/client-errors",
+      JSON.stringify(detail)
+    );
+  });
+</script>
+```

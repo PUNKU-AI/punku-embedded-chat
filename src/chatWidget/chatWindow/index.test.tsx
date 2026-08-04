@@ -97,6 +97,7 @@ describe('ChatWindow', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSessionId.current = 'test-session-id';
   });
 
   describe('Rendering', () => {
@@ -470,6 +471,139 @@ describe('ChatWindow', () => {
       });
       expect(onProgrammaticMessageHandled).toHaveBeenCalledWith(1);
     });
+
+    it('should dispatch a client error event when sending fails before reaching the server', async () => {
+      const clientError = Object.assign(new Error('Failed to read headers'), {
+        code: 'ERR_INVALID_REQUEST_HEADER',
+        headerName: 'X-Custom-Header'
+      });
+      const listener = jest.fn();
+      mockedSendMessage.mockRejectedValueOnce(clientError);
+      window.addEventListener('punku-chat-error', listener);
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+          widget_id="custom-widget"
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = document.querySelector('.cl-input-element') as HTMLInputElement;
+      const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
+
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.click(sendButton);
+
+      await waitFor(() => {
+        expect(listener).toHaveBeenCalledTimes(1);
+      });
+
+      const event = listener.mock.calls[0][0] as CustomEvent;
+      expect(event.detail).toEqual(
+        expect.objectContaining({
+          event: 'punku-chat-error',
+          phase: 'send-message',
+          widgetId: 'custom-widget',
+          flowId: 'test-flow-id',
+          hostUrl: 'http://localhost:3000',
+          sessionId: 'test-session-id',
+        })
+      );
+      expect(event.detail.error).toEqual(
+        expect.objectContaining({
+          name: 'Error',
+          message: 'Failed to read headers',
+          code: 'ERR_INVALID_REQUEST_HEADER',
+          headerName: 'X-Custom-Header',
+        })
+      );
+
+      window.removeEventListener('punku-chat-error', listener);
+    });
+
+    it('should report client errors to the default host endpoint without host-page listeners', async () => {
+      const clientError = Object.assign(new Error('Failed to read headers'), {
+        code: 'ERR_INVALID_REQUEST_HEADER',
+        headerName: 'X-Custom-Header'
+      });
+      const fetchMock = jest.fn<
+        Promise<Response>,
+        [RequestInfo | URL, RequestInit?]
+      >(() => Promise.resolve({ ok: true } as Response));
+      const originalFetch = global.fetch;
+      const originalSendBeacon = navigator.sendBeacon;
+      mockedSendMessage.mockRejectedValueOnce(clientError);
+      global.fetch = fetchMock as unknown as typeof fetch;
+      Object.defineProperty(navigator, 'sendBeacon', {
+        configurable: true,
+        value: undefined,
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+        />
+      );
+
+      const input = document.querySelector('.cl-input-element') as HTMLInputElement;
+      const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
+
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.click(sendButton);
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          'http://localhost:3000/api/v1/widget/client-errors',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: expect.any(String),
+            keepalive: true,
+          })
+        );
+      });
+
+      const reportRequest = fetchMock.mock.calls[0]![1] as RequestInit;
+      const reportBody = JSON.parse(reportRequest.body as string);
+      expect(reportBody).toEqual(
+        expect.objectContaining({
+          message: 'Failed to read headers',
+          flow_id: 'test-flow-id',
+          widget_id: 'punku-chat-widget',
+          session_id: 'test-session-id',
+          error_type: 'ERR_INVALID_REQUEST_HEADER',
+          status_code: null,
+          run_url: 'http://localhost:3000/api/v1/run/test-flow-id',
+          host_url: 'http://localhost:3000',
+        })
+      );
+      expect(reportBody.details).toEqual(
+        expect.objectContaining({
+          phase: 'send-message',
+          classification: 'invalid_request_header',
+          error_code: 'ERR_INVALID_REQUEST_HEADER',
+          header_name: 'X-Custom-Header',
+          input_type: 'chat',
+          output_type: 'chat',
+          message_length: 5,
+          streaming: false,
+        })
+      );
+      expect(reportBody.details).not.toHaveProperty('authorization');
+
+      if (originalFetch) {
+        global.fetch = originalFetch;
+      } else {
+        delete (global as { fetch?: typeof fetch }).fetch;
+      }
+      Object.defineProperty(navigator, 'sendBeacon', {
+        configurable: true,
+        value: originalSendBeacon,
+      });
+    });
   });
 
   describe('Streaming Messages', () => {
@@ -487,6 +621,92 @@ describe('ChatWindow', () => {
       await waitFor(() => {
         expect(mockedStreamMessage).toHaveBeenCalled();
       });
+    });
+
+    it('should dispatch one client error event when streaming fails and rejects', async () => {
+      const clientError = Object.assign(new Error('Failed to read headers'), {
+        code: 'ERR_INVALID_REQUEST_HEADER',
+        headerName: 'X-Custom-Header'
+      });
+      const listener = jest.fn();
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamError = args[12] as (error: unknown) => void;
+        onStreamError(clientError);
+        return Promise.reject(clientError);
+      });
+      window.addEventListener('punku-chat-error', listener);
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          widget_id="custom-widget"
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = document.querySelector('.cl-input-element') as HTMLInputElement;
+      const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
+
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.click(sendButton);
+
+      await waitFor(() => {
+        expect(listener).toHaveBeenCalledTimes(1);
+      });
+
+      const event = listener.mock.calls[0][0] as CustomEvent;
+      expect(event.detail).toEqual(
+        expect.objectContaining({
+          event: 'punku-chat-error',
+          phase: 'stream-message',
+          widgetId: 'custom-widget',
+          flowId: 'test-flow-id',
+        })
+      );
+      expect(event.detail.error).toEqual(
+        expect.objectContaining({
+          code: 'ERR_INVALID_REQUEST_HEADER',
+          headerName: 'X-Custom-Header',
+        })
+      );
+
+      window.removeEventListener('punku-chat-error', listener);
+    });
+
+    it('should dispatch a client error event when streaming rejects before its error callback', async () => {
+      const clientError = Object.assign(new Error('Failed to read headers'), {
+        code: 'ERR_INVALID_REQUEST_HEADER',
+        headerName: 'X-Custom-Header'
+      });
+      const listener = jest.fn();
+      mockedStreamMessage.mockRejectedValueOnce(clientError);
+      window.addEventListener('punku-chat-error', listener);
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          widget_id="custom-widget"
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = document.querySelector('.cl-input-element') as HTMLInputElement;
+      const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
+
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.click(sendButton);
+
+      await waitFor(() => {
+        expect(listener).toHaveBeenCalledTimes(1);
+      });
+
+      const event = listener.mock.calls[0][0] as CustomEvent;
+      expect(event.detail.phase).toBe('stream-message');
+      expect(event.detail.error.headerName).toBe('X-Custom-Header');
+
+      window.removeEventListener('punku-chat-error', listener);
     });
   });
 

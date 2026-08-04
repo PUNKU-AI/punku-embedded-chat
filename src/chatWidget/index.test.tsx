@@ -37,7 +37,8 @@ jest.mock('./chatWindow', () => {
     show_close_button_on_desktop,
     positionOverrideStyle,
     programmaticMessage,
-    onProgrammaticMessageHandled
+    onProgrammaticMessageHandled,
+    hostUrl
   }: {
     open: boolean;
     messages: any[];
@@ -49,6 +50,7 @@ jest.mock('./chatWindow', () => {
     positionOverrideStyle?: React.CSSProperties;
     programmaticMessage?: { id: number; message: string } | null;
     onProgrammaticMessageHandled?: (id: number) => void;
+    hostUrl?: string;
   }) {
     mockReact.useEffect(() => {
       if (!open || !programmaticMessage) return;
@@ -62,6 +64,7 @@ jest.mock('./chatWindow', () => {
       <div data-testid="chat-window" style={positionOverrideStyle}>
         <span data-testid="message-count">{messages?.length || 0}</span>
         <span data-testid="language">{language || 'en'}</span>
+        <span data-testid="host-url">{hostUrl}</span>
         <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
         <button data-testid="add-message" onClick={() => addMessage({ message: 'Test', isSend: true })}>
           Add Message
@@ -181,6 +184,20 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} start_open={true} />);
 
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+    });
+
+    it('should default host_url to app.punku.ai when omitted', () => {
+      render(
+        <ChatWidget
+          flow_id="test-flow-id"
+          input_value="test"
+          input_type="chat"
+          output_type="chat"
+          start_open={true}
+        />
+      );
+
+      expect(screen.getByTestId('host-url')).toHaveTextContent('https://app.punku.ai');
     });
 
     it('should pass desktop close button setting to chat window', () => {
