@@ -9,6 +9,14 @@ import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { translations, Language } from "../../translations";
+import {
+  createPunkuChatErrorDetail,
+  dispatchPunkuChatError,
+  getDefaultClientErrorReportUrl,
+  PunkuChatErrorDetail,
+  PunkuChatErrorPhase,
+  reportPunkuChatError,
+} from "../clientErrors";
 
 // Same rationale as DEFAULT_MESSAGE_TEXT_STYLE: pin a readable input text size so
 // it doesn't inherit a small host-page font through the closed shadow root. 16px
@@ -28,6 +36,33 @@ const getLucideIconByName = (name?: string): LucideIcon | undefined => {
   if (typeof icon === "object" && "$$typeof" in (icon as object))
     return icon as LucideIcon;
   return undefined;
+};
+
+const getRequestErrorMessage = (error: unknown) => {
+  if (error && typeof error === "object") {
+    const errorRecord = error as {
+      code?: string;
+      message?: string;
+      response?: { status?: number; data?: { detail?: string } };
+    };
+
+    if (errorRecord.code === "ERR_NETWORK") {
+      return "Network error";
+    }
+
+    if (
+      errorRecord.response?.status === 500 &&
+      errorRecord.response.data?.detail
+    ) {
+      return errorRecord.response.data.detail;
+    }
+
+    if (errorRecord.message) {
+      return errorRecord.message;
+    }
+  }
+
+  return "Network error";
 };
 
 export default function ChatWindow({
@@ -91,6 +126,10 @@ export default function ChatWindow({
   positionOverrideStyle,
   programmaticMessage,
   onProgrammaticMessageHandled,
+  widget_id = "punku-chat-widget",
+  on_client_error,
+  client_error_report_url,
+  enable_client_error_reporting = true,
 }: {
   api_key?: string;
   output_type: string,
@@ -152,6 +191,10 @@ export default function ChatWindow({
   positionOverrideStyle?: React.CSSProperties;
   programmaticMessage?: { id: number; message: string } | null;
   onProgrammaticMessageHandled?: (id: number) => void;
+  widget_id?: string;
+  on_client_error?: (detail: PunkuChatErrorDetail) => void;
+  client_error_report_url?: string;
+  enable_client_error_reporting?: boolean;
 }) {
   const HeaderLucideIcon =
     getLucideIconByName(header_icon_name) ?? MessagesSquare;
@@ -194,6 +237,42 @@ export default function ChatWindow({
   const [isStreaming, setIsStreaming] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
+
+  const notifyClientError = useCallback(
+    (
+      error: unknown,
+      phase: PunkuChatErrorPhase,
+      context?: Record<string, unknown>
+    ) => {
+      const detail = createPunkuChatErrorDetail({
+        error,
+        phase,
+        widgetId: widget_id,
+        flowId,
+        hostUrl,
+        sessionId: sessionId.current,
+        context,
+      });
+
+      dispatchPunkuChatError(detail);
+      on_client_error?.(detail);
+      if (enable_client_error_reporting) {
+        reportPunkuChatError(
+          detail,
+          client_error_report_url || getDefaultClientErrorReportUrl(hostUrl)
+        );
+      }
+    },
+    [
+      client_error_report_url,
+      enable_client_error_reporting,
+      flowId,
+      hostUrl,
+      on_client_error,
+      sessionId,
+      widget_id,
+    ]
+  );
 
   const sendUserMessage = useCallback((message: string): boolean => {
     if (!message || message.trim() === "" || sendingMessage) {
@@ -265,25 +344,18 @@ export default function ChatWindow({
           setSendingMessage(false);
         })
         .catch((err) => {
-          const response = err.response;
-          if (err.code === "ERR_NETWORK") {
-            updateLastMessage({
-              message: "Network error",
-              isSend: false,
-              error: true,
-            });
-          } else if (
-            response &&
-            response.status === 500 &&
-            response.data &&
-            response.data.detail
-          ) {
-            updateLastMessage({
-              message: response.data.detail,
-              isSend: false,
-              error: true,
-            });
-          }
+          updateLastMessage({
+            message: getRequestErrorMessage(err),
+            isSend: false,
+            error: true,
+          });
+          notifyClientError(err, "send-message", {
+            inputType: input_type,
+            outputType: output_type,
+            outputComponent: output_component,
+            messageLength: message.length,
+            streaming: false,
+          });
           console.error(err);
           setSendingMessage(false);
         });
@@ -291,6 +363,32 @@ export default function ChatWindow({
       // Streaming version
       let currentMessageId: string | null = null;
       let message_to_add = "";
+      let streamErrorHandled = false;
+
+      const handleStreamError = (error: unknown) => {
+        if (streamErrorHandled) {
+          return;
+        }
+
+        streamErrorHandled = true;
+        console.error('Streaming error:', error);
+        setSendingMessage(false);
+        setIsStreaming(false);
+
+        updateLastMessage({
+          message: getRequestErrorMessage(error),
+          isSend: false,
+          error: true,
+        });
+
+        notifyClientError(error, "stream-message", {
+          inputType: input_type,
+          outputType: output_type,
+          outputComponent: output_component,
+          messageLength: message.length,
+          streaming: true,
+        });
+      };
 
       streamMessage(
         hostUrl,
@@ -363,17 +461,11 @@ export default function ChatWindow({
           }
         },
         (error) => {
-          // Stream error
-          console.error('Streaming error:', error);
-          setSendingMessage(false);
-
-          updateLastMessage({
-            message: error.message || "Streaming error occurred",
-            isSend: false,
-            error: true,
-          });
+          handleStreamError(error);
         }
-      );
+      ).catch((error) => {
+        handleStreamError(error);
+      });
     }
     return true;
   }, [
@@ -384,6 +476,7 @@ export default function ChatWindow({
     flowId,
     hostUrl,
     input_type,
+    notifyClientError,
     onSessionValidate,
     onStartNewSession,
     output_component,
@@ -880,6 +973,7 @@ export default function ChatWindow({
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}
+              onClientError={notifyClientError}
               onFeedbackUpdate={undefined}
             />
           )}
@@ -911,6 +1005,7 @@ export default function ChatWindow({
               api_key={api_key}
               additional_headers={additional_headers}
               host_url={hostUrl}
+              onClientError={notifyClientError}
             />
           ))}
           {sendingMessage && !isStreaming && (

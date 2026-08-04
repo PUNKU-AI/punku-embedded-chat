@@ -5,6 +5,7 @@ import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
+import type { PunkuChatErrorDetail } from "./clientErrors";
 
 type ProgrammaticMessage = {
   id: number;
@@ -22,6 +23,7 @@ const DEFAULT_CHAT_WINDOW_WIDTH = 450;
 const DEFAULT_CHAT_WINDOW_HEIGHT = 650;
 const ANCHORED_CHAT_WINDOW_GAP = 32;
 const VIEWPORT_MARGIN = 16;
+export const DEFAULT_HOST_URL = "https://app.punku.ai";
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
@@ -106,7 +108,7 @@ export default function ChatWidget({
   input_type = "chat",
   output_component,
   chat_trigger_style,
-  host_url,
+  host_url = DEFAULT_HOST_URL,
   flow_id,
   tweaks,
   send_icon_style,
@@ -160,6 +162,9 @@ export default function ChatWidget({
   closed_widget_hint_position = "left",
   closed_widget_hint_background_color,
   closed_widget_hint_text_color,
+  on_client_error,
+  client_error_report_url,
+  enable_client_error_reporting = true,
 }: {
   api_key?: string;
   input_value: string,
@@ -186,7 +191,7 @@ export default function ChatWidget({
   placeholder?: string;
   input_style?: React.CSSProperties;
   input_container_style?: React.CSSProperties;
-  host_url: string;
+  host_url?: string;
   flow_id: string;
   tweaks?: { [key: string]: any };
   additional_headers?: { [key: string]: string };
@@ -221,6 +226,9 @@ export default function ChatWidget({
   closed_widget_hint_position?: "left" | "top";
   closed_widget_hint_background_color?: string;
   closed_widget_hint_text_color?: string;
+  on_client_error?: (detail: PunkuChatErrorDetail) => void;
+  client_error_report_url?: string;
+  enable_client_error_reporting?: boolean;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = useMemo(() => ({
@@ -3433,6 +3441,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           positionOverrideStyle={anchoredChatWindowStyle}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
+          widget_id={widget_id}
+          on_client_error={on_client_error}
+          client_error_report_url={client_error_report_url}
+          enable_client_error_reporting={enable_client_error_reporting}
         />
       </div>
     </div>
