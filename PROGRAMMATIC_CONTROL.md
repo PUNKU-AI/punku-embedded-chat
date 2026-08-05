@@ -8,6 +8,7 @@ The chat widget now supports programmatic control, allowing you to:
 - Open/close the widget from external JavaScript
 - Open the widget with a prefilled user message that is sent immediately
 - Check widget state
+- Relocate the trigger unless `enable_trigger_relocation` is false
 
 ## Setup
 
@@ -48,10 +49,49 @@ const isOpen = chatWidget.isOpen();
 console.log('Widget is open:', isOpen);
 ```
 
-Note: trigger relocation APIs are temporarily disabled. This includes `setTriggerPosition`,
-`resetTriggerPosition`, `trigger.position`, and `window.punku.trigger.position`.
+### 3. Trigger Relocation API
 
-### 3. Example Testing Script
+Trigger relocation APIs are enabled by default. To hide them for an embed, set
+`enable_trigger_relocation="false"` in the widget configuration:
+
+```html
+<punku-chat
+  host_url="https://your-api-url.com"
+  flow_id="your-flow-id"
+  api_key="your-api-key"
+  widget_id="my-chat-widget"
+  enable_trigger_relocation="false">
+</punku-chat>
+```
+
+By default, the widget exposes both the widget-scoped API and the shared
+`window.punku.trigger` alias:
+
+```javascript
+const chatWidget = window['my-chat-widget_api'];
+
+// Move the closed trigger to a fixed viewport coordinate.
+chatWidget.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 });
+
+// The trigger API exposes the same behavior.
+chatWidget.trigger.setPosition({ x: 100, y: 300 });
+chatWidget.trigger.position = { x: 100, y: 300 };
+window.punku.trigger.position = { x: 100, y: 300 };
+
+// Read the current override, or reset back to chat_position and offsets.
+console.log(chatWidget.trigger.position);
+chatWidget.resetTriggerPosition();
+chatWidget.trigger.resetPosition();
+```
+
+The closed-widget hint follows the relocated trigger. For side hints, the widget
+checks whether the trigger center is on the left or right half of the viewport
+and places the hint on the opposite side of the trigger. Top and bottom hints
+use the same calculation to choose left alignment when the trigger is on the
+left. If a top hint would render from a trigger near the top edge, the widget
+automatically uses the bottom hint placement instead.
+
+### 4. Example Testing Script
 <script>
     // Wait for the widget to load
     function waitForWidget() {

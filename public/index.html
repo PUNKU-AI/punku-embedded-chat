@@ -3,39 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punku Chat Widget Demo</title>
+    <title>Punku Chat Widget Test Harness</title>
+    <style>
+        :root {
+            color: #172033;
+            background: #f4f6f8;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 180vh;
+            margin: 0;
+            background:
+                linear-gradient(90deg, rgba(18, 112, 153, 0.08) 1px, transparent 1px),
+                linear-gradient(rgba(18, 112, 153, 0.08) 1px, transparent 1px),
+                #f4f6f8;
+            background-size: 40px 40px;
+        }
+
+        main {
+            max-width: 860px;
+            padding: 32px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+            line-height: 1.2;
+        }
+
+        p {
+            max-width: 720px;
+            margin: 0 0 20px;
+            color: #536174;
+            line-height: 1.55;
+        }
+
+        .test-panel {
+            display: grid;
+            gap: 16px;
+            max-width: 760px;
+            padding: 18px;
+            border: 1px solid #d8e0ea;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(23, 32, 51, 0.08);
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        button {
+            min-height: 40px;
+            border: 1px solid #b7c4d2;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #172033;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 650;
+            padding: 8px 12px;
+        }
+
+        button.primary {
+            border-color: #0f172a;
+            background: #0f172a;
+            color: #ffffff;
+        }
+
+        button:hover {
+            border-color: #0f172a;
+        }
+
+        .status {
+            min-height: 76px;
+            overflow: auto;
+            margin: 0;
+            border-radius: 6px;
+            background: #172033;
+            color: #e9eef5;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.45;
+            padding: 12px;
+            white-space: pre-wrap;
+        }
+
+        .spacer {
+            height: 80vh;
+            display: flex;
+            align-items: center;
+            color: #697789;
+        }
+    </style>
 </head>
-<body style="width: 100vh; height: 100vh; background-color: #f5f5f5;">
-    <h1 style="font-family: system-ui, -apple-system, sans-serif; padding: 20px;">Punku Chat Widget</h1>
-    <p style="font-family: system-ui, -apple-system, sans-serif; padding: 0 20px;">This demonstrates the chat widget integration.</p>
+<body>
+    <main>
+        <h1>Punku Chat Widget Test Harness</h1>
+        <p>
+            Trigger relocation APIs are enabled for this page. Use the controls to move the closed launcher,
+            verify the hint follows it, and reset back to the configured placement.
+        </p>
+
+        <section class="test-panel" aria-label="Widget API tests">
+            <div class="button-row">
+                <button class="primary" type="button" onclick="openChat()">Open chat</button>
+                <button type="button" onclick="closeChat()">Close chat / show hint</button>
+                <button type="button" onclick="checkStatus()">Check status</button>
+                <button type="button" onclick="moveTrigger('left')">Move left</button>
+                <button type="button" onclick="moveTrigger('right')">Move right</button>
+                <button type="button" onclick="moveTrigger('top')">Move top</button>
+                <button type="button" onclick="resetTrigger()">Reset trigger</button>
+                <button type="button" onclick="setHintPosition('left')">Hint side</button>
+                <button type="button" onclick="setHintPosition('top')">Hint top</button>
+                <button type="button" onclick="setHintPosition('bottom')">Hint bottom</button>
+                <button type="button" onclick="testTopAutoHint()">Top auto hint</button>
+            </div>
+
+            <pre id="status" class="status">Waiting for widget API...</pre>
+        </section>
+
+        <div class="spacer">
+            Scroll area for verifying the configured fixed launcher placement.
+        </div>
+    </main>
 
     <punku-chat
         window_title="Support Assistant"
         welcome_message="Hello! How can I help you today?"
         flow_id=""
-        host_url="https://app.punku.ai"
         theme="swarovski"
         branding="punku-ai"
         api_key=""
         start_open="false"
+        enable_trigger_relocation="true"
+        chat_position="bottom-right"
+        width="400"
+        height="500"
+        show_closed_widget_hint="true"
+        closed_widget_hint_text="Anchor test hint"
+        closed_widget_hint_position="left"
         background_color="#0F172A"
         button_color="#0F172A"
         button_text_color="#FFFFFF"
         link_color="#2563EB"
-        user_message_color="#0F172A" 
+        user_message_color="#0F172A"
         send_button_style='{"backgroundColor": "#0F172A"}'
         bot_message_color="#F1F5F9"
- 
+        host_url="http://localhost:7860"
     ></punku-chat>
-    
-    
+
     <script>
-        // Wait for the widget to load
+        function getWidgetElement() {
+            return document.querySelector("punku-chat");
+        }
+
+        function getWidgetApi() {
+            return window["punku-chat-widget_api"] || getWidgetElement()?.api;
+        }
+
+        function getTriggerApi(widget) {
+            return widget.trigger || window.punku?.trigger;
+        }
+
         function waitForWidget() {
             return new Promise((resolve) => {
                 const checkWidget = () => {
-                    if (window['punku-chat-widget_api']) {
-                        resolve(window['punku-chat-widget_api']);
+                    const widget = getWidgetApi();
+                    if (widget) {
+                        resolve(widget);
                     } else {
                         setTimeout(checkWidget, 100);
                     }
@@ -43,49 +186,166 @@
                 checkWidget();
             });
         }
-        
-        // Update status display
+
+        function waitForWidgetUpdate() {
+            return new Promise((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
+            });
+        }
+
         function updateStatus(message) {
-            const statusDiv = document.getElementById('status');
+            const statusDiv = document.getElementById("status");
             const timestamp = new Date().toLocaleTimeString();
             if (statusDiv) {
-                statusDiv.innerHTML = `[${timestamp}] ${message}`;
-            } else {
-                console.log(`[${timestamp}] ${message}`);
+                statusDiv.textContent = `[${timestamp}] ${message}`;
+            }
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function formatState(widget) {
+            const triggerApi = getTriggerApi(widget);
+            return JSON.stringify({
+                open: widget.isOpen(),
+                hintPosition: getWidgetElement()?.getAttribute("closed_widget_hint_position"),
+                relocationApiAvailable: Boolean(widget.setTriggerPosition || widget.resetTriggerPosition || triggerApi),
+                triggerPosition: triggerApi?.position || null,
+                viewport: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    scrollY: Math.round(window.scrollY),
+                },
+            }, null, 2);
+        }
+
+        function getTestPosition(placement) {
+            const safeRightX = Math.max(24, window.innerWidth - 96);
+            const safeLowerY = Math.max(96, window.innerHeight - 140);
+
+            switch (placement) {
+                case "left":
+                    return { x: 24, y: safeLowerY, zIndex: 10003 };
+                case "right":
+                    return { x: safeRightX, y: 120, zIndex: 10003 };
+                case "top":
+                    return {
+                        x: Math.max(24, Math.round(window.innerWidth / 2) - 32),
+                        y: 32,
+                        zIndex: 10003,
+                    };
+                default:
+                    return { x: safeRightX, y: safeLowerY, zIndex: 10003 };
             }
         }
-        
-        // Programmatic control functions
+
         async function openChat() {
             try {
                 const widget = await waitForWidget();
                 widget.open();
-                updateStatus('✅ Chat opened programmatically');
+                await waitForWidgetUpdate();
+                updateStatus(`Opened chat.\n${formatState(widget)}`);
             } catch (error) {
-                updateStatus('❌ Error opening chat: ' + error.message);
+                updateStatus(`Error opening chat: ${error.message}`);
             }
         }
-        
+
         async function closeChat() {
             try {
                 const widget = await waitForWidget();
                 widget.close();
-                updateStatus('✅ Chat closed programmatically');
+                await waitForWidgetUpdate();
+                updateStatus(`Closed chat.\n${formatState(widget)}`);
             } catch (error) {
-                updateStatus('❌ Error closing chat: ' + error.message);
+                updateStatus(`Error closing chat: ${error.message}`);
             }
         }
-        
+
         async function checkStatus() {
             try {
                 const widget = await waitForWidget();
-                const isOpen = widget.isOpen();
-                updateStatus(`📊 Status - Open: ${isOpen}`);
+                await waitForWidgetUpdate();
+                updateStatus(formatState(widget));
             } catch (error) {
-                updateStatus('❌ Error checking status: ' + error.message);
+                updateStatus(`Error checking status: ${error.message}`);
             }
         }
-        
+
+        async function moveTrigger(placement) {
+            try {
+                const widget = await waitForWidget();
+                const triggerApi = getTriggerApi(widget);
+                if (!triggerApi?.setPosition) {
+                    throw new Error("Trigger relocation API is not available");
+                }
+
+                triggerApi.setPosition(getTestPosition(placement));
+                await waitForWidgetUpdate();
+                updateStatus(`Moved trigger ${placement}.\n${formatState(widget)}`);
+            } catch (error) {
+                updateStatus(`Error moving trigger: ${error.message}`);
+            }
+        }
+
+        async function resetTrigger() {
+            try {
+                const widget = await waitForWidget();
+                if (widget.resetTriggerPosition) {
+                    widget.resetTriggerPosition();
+                } else {
+                    getTriggerApi(widget)?.resetPosition?.();
+                }
+
+                await waitForWidgetUpdate();
+                updateStatus(`Reset trigger.\n${formatState(widget)}`);
+            } catch (error) {
+                updateStatus(`Error resetting trigger: ${error.message}`);
+            }
+        }
+
+        async function setHintPosition(position) {
+            try {
+                const widgetElement = getWidgetElement();
+                if (!widgetElement) {
+                    throw new Error("Widget element is not available");
+                }
+
+                widgetElement.setAttribute("closed_widget_hint_position", position);
+                const widget = await waitForWidget();
+                widget.close();
+                await waitForWidgetUpdate();
+                updateStatus(`Set hint ${position}.\n${formatState(widget)}`);
+            } catch (error) {
+                updateStatus(`Error setting hint position: ${error.message}`);
+            }
+        }
+
+        async function testTopAutoHint() {
+            try {
+                const widgetElement = getWidgetElement();
+                if (!widgetElement) {
+                    throw new Error("Widget element is not available");
+                }
+
+                widgetElement.setAttribute("closed_widget_hint_position", "top");
+                const widget = await waitForWidget();
+                const triggerApi = getTriggerApi(widget);
+                if (!triggerApi?.setPosition) {
+                    throw new Error("Trigger relocation API is not available");
+                }
+
+                widget.close();
+                triggerApi.setPosition(getTestPosition("top"));
+                await waitForWidgetUpdate();
+                updateStatus(`Moved trigger near top with hint configured as top.\n${formatState(widget)}`);
+            } catch (error) {
+                updateStatus(`Error testing top auto hint: ${error.message}`);
+            }
+        }
+
+        window.addEventListener("load", async () => {
+            const widget = await waitForWidget();
+            await waitForWidgetUpdate();
+            updateStatus(`Widget API loaded.\n${formatState(widget)}`);
+        });
     </script>
 </body>
 </html>

@@ -179,6 +179,7 @@ Use the widget API to customize your widget:
 | client_error_report_url | string  | No       |
 | default_language      | string    | No       |
 | enable_client_error_reporting | boolean | No |
+| enable_trigger_relocation | boolean | No |
 | output_type           | string    | No       |
 | input_type            | string    | No       |
 | output_component      | string    | No       |
@@ -418,7 +419,7 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Default: "left"
-  - Description: Position of the closed-widget hint relative to the trigger. Supported values: "left", "top".
+  - Description: Position of the closed-widget hint relative to the trigger. Supported values: "left", "top", "bottom". Top hints automatically render below the trigger when the trigger is near the top edge.
 
 - **closed_widget_hint_background_color:**
   - Type: String
@@ -460,6 +461,12 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: true
   - Description: Controls whether the widget automatically POSTs browser-side widget errors to the reporting endpoint. The `punku-chat-error` browser event is still dispatched either way.
+
+- **enable_trigger_relocation:**
+  - Type: Boolean
+  - Required: No
+  - Default: true
+  - Description: Controls whether the programmatic trigger relocation APIs are exposed. Set to false to hide `setTriggerPosition`, `resetTriggerPosition`, `trigger.position`, and `window.punku.trigger.position`.
 
 - **show_feedback:**
   - Type: Boolean

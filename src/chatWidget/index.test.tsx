@@ -285,6 +285,37 @@ describe('ChatWidget', () => {
       expect(hint).not.toHaveClass('cl-hint-top');
     });
 
+    it('should move top closed widget hint to bottom for top-right widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="top-right" show_closed_widget_hint={true} closed_widget_hint_position="top" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-bottom');
+      expect(hint).not.toHaveClass('cl-hint-top');
+    });
+
+    it('should move top closed widget hint to bottom-left for top-left widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="top-left" show_closed_widget_hint={true} closed_widget_hint_position="top" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-bottom-left');
+      expect(hint).not.toHaveClass('cl-hint-top-left');
+    });
+
+    it('should position closed widget hint at bottom when configured', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_position="bottom" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-bottom');
+    });
+
+    it('should align bottom closed widget hint from the left for left-side widgets', () => {
+      render(<ChatWidget {...defaultProps} chat_position="bottom-left" show_closed_widget_hint={true} closed_widget_hint_position="bottom" />);
+
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-bottom-left');
+      expect(hint).not.toHaveClass('cl-hint-bottom');
+    });
+
     it('should apply custom closed widget hint background color', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_background_color="#123456" />);
 
@@ -482,9 +513,9 @@ describe('ChatWidget', () => {
       expect(typeof api.open).toBe('function');
       expect(typeof api.close).toBe('function');
       expect(typeof api.isOpen).toBe('function');
-      expect(api.setTriggerPosition).toBeUndefined();
-      expect(api.resetTriggerPosition).toBeUndefined();
-      expect(api.trigger).toBeUndefined();
+      expect(typeof api.setTriggerPosition).toBe('function');
+      expect(typeof api.resetTriggerPosition).toBe('function');
+      expect(api.trigger).toBe((window as any).punku.trigger);
     });
 
     it('should expose API with custom widget_id', () => {
@@ -540,8 +571,8 @@ describe('ChatWidget', () => {
       expect(api.isOpen()).toBe(true);
     });
 
-    it('should not expose trigger relocation APIs while temporarily disabled', () => {
-      render(<ChatWidget {...defaultProps} />);
+    it('should not expose trigger relocation APIs when disabled by config', () => {
+      render(<ChatWidget {...defaultProps} enable_trigger_relocation={false} />);
 
       const api = (window as any)['punku-chat-widget_api'];
       expect(api.setTriggerPosition).toBeUndefined();
@@ -559,11 +590,128 @@ describe('ChatWidget', () => {
       });
     });
 
+    it('should expose trigger relocation APIs by default', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      expect(typeof api.setTriggerPosition).toBe('function');
+      expect(typeof api.resetTriggerPosition).toBe('function');
+      expect(api.trigger).toBeDefined();
+      expect(api.trigger).toBe((window as any).punku.trigger);
+      expect(typeof api.trigger.setPosition).toBe('function');
+      expect(typeof api.trigger.resetPosition).toBe('function');
+      expect(api.trigger.position).toBeNull();
+    });
+
+    it('should relocate and reset the trigger through the default API', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const widgetRoot = document.querySelector('.cl-widget-root');
+
+      act(() => {
+        expect(api.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 })).toBe(true);
+      });
+
+      expect(api.trigger.position).toEqual({ x: 100, y: 300, zIndex: 10003 });
+      expect(widgetRoot).toHaveStyle({
+        left: '100px',
+        top: '300px',
+        zIndex: '10003',
+      });
+
+      act(() => {
+        (window as any).punku.trigger.position = { x: 20, y: 40 };
+      });
+
+      expect(api.trigger.position).toEqual({ x: 20, y: 40 });
+      expect(widgetRoot).toHaveStyle({
+        left: '20px',
+        top: '40px',
+        zIndex: '9998',
+      });
+
+      act(() => {
+        api.resetTriggerPosition();
+      });
+
+      expect(api.trigger.position).toBeNull();
+      expect(widgetRoot).toHaveStyle({
+        right: '20px',
+        bottom: '20px',
+        left: 'auto',
+        top: 'auto',
+        zIndex: '9998',
+      });
+    });
+
+    it('should position the closed hint from the relocated trigger side by default', () => {
+      render(
+        <ChatWidget
+          {...defaultProps}
+          show_closed_widget_hint={true}
+          closed_widget_hint_position="left"
+        />
+      );
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-left');
+
+      act(() => {
+        api.trigger.setPosition({ x: 20, y: 300 });
+      });
+
+      expect(hint).toHaveClass('cl-hint-right');
+      expect(hint).not.toHaveClass('cl-hint-left');
+    });
+
+    it('should align bottom closed hint from the relocated trigger side', () => {
+      render(
+        <ChatWidget
+          {...defaultProps}
+          show_closed_widget_hint={true}
+          closed_widget_hint_position="bottom"
+        />
+      );
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+      expect(hint).toHaveClass('cl-hint-bottom');
+
+      act(() => {
+        api.trigger.setPosition({ x: 20, y: 300 });
+      });
+
+      expect(hint).toHaveClass('cl-hint-bottom-left');
+      expect(hint).not.toHaveClass('cl-hint-bottom');
+    });
+
+    it('should move top closed hint below a relocated top trigger', () => {
+      render(
+        <ChatWidget
+          {...defaultProps}
+          show_closed_widget_hint={true}
+          closed_widget_hint_position="top"
+        />
+      );
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const hint = screen.getByText(defaultClosedHintText).closest('.cl-closed-widget-hint');
+
+      act(() => {
+        api.trigger.setPosition({ x: 600, y: 20 });
+      });
+
+      expect(hint).toHaveClass('cl-hint-bottom');
+      expect(hint).not.toHaveClass('cl-hint-top');
+    });
+
     it('should clean up API on unmount', () => {
       const { unmount } = render(<ChatWidget {...defaultProps} />);
 
       expect((window as any)['punku-chat-widget_api']).toBeDefined();
-      expect((window as any).punku).toBeUndefined();
+      expect((window as any).punku?.trigger).toBeDefined();
 
       unmount();
 
