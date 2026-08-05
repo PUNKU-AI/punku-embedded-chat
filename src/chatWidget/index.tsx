@@ -23,9 +23,8 @@ const DEFAULT_CHAT_WINDOW_WIDTH = 450;
 const DEFAULT_CHAT_WINDOW_HEIGHT = 650;
 const ANCHORED_CHAT_WINDOW_GAP = 32;
 const VIEWPORT_MARGIN = 16;
+const CLOSED_HINT_TOP_EDGE_THRESHOLD = DEFAULT_TRIGGER_SIZE + VIEWPORT_MARGIN;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
-// Temporary kill switch while trigger relocation integrations are paused.
-const ENABLE_PROGRAMMATIC_TRIGGER_RELOCATION = false;
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
@@ -167,6 +166,7 @@ export default function ChatWidget({
   on_client_error,
   client_error_report_url,
   enable_client_error_reporting = true,
+  enable_trigger_relocation = true,
 }: {
   api_key?: string;
   input_value: string,
@@ -225,12 +225,13 @@ export default function ChatWidget({
   show_closed_widget_hint?: boolean;
   show_close_button_on_desktop?: boolean;
   closed_widget_hint_auto_hide_ms?: number;
-  closed_widget_hint_position?: "left" | "top";
+  closed_widget_hint_position?: "left" | "top" | "bottom";
   closed_widget_hint_background_color?: string;
   closed_widget_hint_text_color?: string;
   on_client_error?: (detail: PunkuChatErrorDetail) => void;
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
+  enable_trigger_relocation?: boolean;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = useMemo(() => ({
@@ -470,7 +471,7 @@ export default function ChatWidget({
     let triggerApi: any;
     let previousPunkuTrigger: unknown;
 
-    if (ENABLE_PROGRAMMATIC_TRIGGER_RELOCATION) {
+    if (enable_trigger_relocation) {
       triggerApi = {
         setPosition: setTriggerPosition,
         resetPosition: resetTriggerPosition,
@@ -520,7 +521,7 @@ export default function ChatWidget({
         delete (window as any).punku;
       }
     };
-  }, [closeWidget, openWidget, resetTriggerPosition, setTriggerPosition, widget_id]);
+  }, [closeWidget, enable_trigger_relocation, openWidget, resetTriggerPosition, setTriggerPosition, widget_id]);
 
   const styles = `
 /* Euclid Circular B Font - Embedded for Swarovski theme */
@@ -1144,6 +1145,11 @@ video {
   right: 0;
 }
 
+.cl-closed-widget-hint.cl-hint-bottom {
+  top: calc(100% + 12px);
+  right: 0;
+}
+
 .cl-closed-widget-hint.cl-hint-right {
   left: calc(100% + 12px);
   top: 50%;
@@ -1152,6 +1158,11 @@ video {
 
 .cl-closed-widget-hint.cl-hint-top-left {
   bottom: calc(100% + 12px);
+  left: 0;
+}
+
+.cl-closed-widget-hint.cl-hint-bottom-left {
+  top: calc(100% + 12px);
   left: 0;
 }
 
@@ -1187,12 +1198,28 @@ video {
   border-right: 7px solid var(--cl-closed-hint-bg);
 }
 
+.cl-closed-widget-hint.cl-hint-bottom .cl-closed-widget-hint-arrow {
+  top: -7px;
+  right: 18px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--cl-closed-hint-bg);
+}
+
 .cl-closed-widget-hint.cl-hint-top-left .cl-closed-widget-hint-arrow {
   bottom: -7px;
   left: 18px;
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
   border-top: 7px solid var(--cl-closed-hint-bg);
+}
+
+.cl-closed-widget-hint.cl-hint-bottom-left .cl-closed-widget-hint-arrow {
+  top: -7px;
+  left: 18px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--cl-closed-hint-bg);
 }
 
 .cl-window {
@@ -3291,28 +3318,37 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   };
   
   const cornerPosition = chat_position || "bottom-right";
+  const activeTriggerPosition = enable_trigger_relocation ? triggerPositionOverride : null;
   const defaultTriggerStyle = getCornerStyle(cornerPosition);
-  const triggerStyle = triggerPositionOverride
+  const triggerStyle = activeTriggerPosition
     ? {
-        top: `${triggerPositionOverride.y}px`,
-        left: `${triggerPositionOverride.x}px`,
+        top: `${activeTriggerPosition.y}px`,
+        left: `${activeTriggerPosition.x}px`,
         bottom: "",
         right: "",
       }
     : defaultTriggerStyle;
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
-  const anchoredChatWindowStyle = triggerPositionOverride
-    ? getAnchoredChatWindowStyle(triggerPositionOverride, width, height)
+  const anchoredChatWindowStyle = activeTriggerPosition
+    ? getAnchoredChatWindowStyle(activeTriggerPosition, width, height)
     : undefined;
-  const isLeftEdgePosition = triggerPositionOverride
-    ? isTriggerOverrideOnLeftSide(triggerPositionOverride)
+  const isLeftEdgePosition = activeTriggerPosition
+    ? isTriggerOverrideOnLeftSide(activeTriggerPosition)
     : cornerPosition.endsWith("-left");
+  const isTopEdgePosition = activeTriggerPosition
+    ? activeTriggerPosition.y <= CLOSED_HINT_TOP_EDGE_THRESHOLD
+    : cornerPosition.startsWith("top-");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
       case "top":
+        if (isTopEdgePosition) {
+          return isLeftEdgePosition ? "cl-hint-bottom-left" : "cl-hint-bottom";
+        }
         return isLeftEdgePosition ? "cl-hint-top-left" : "cl-hint-top";
+      case "bottom":
+        return isLeftEdgePosition ? "cl-hint-bottom-left" : "cl-hint-bottom";
       case "left":
       default:
         return isLeftEdgePosition ? "cl-hint-right" : "cl-hint-left";
@@ -3354,7 +3390,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         position: "fixed",
         ...triggerStyle,
         transform: "none",
-        zIndex: triggerPositionOverride?.zIndex ?? 9998
+        zIndex: activeTriggerPosition?.zIndex ?? 9998
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
