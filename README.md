@@ -171,6 +171,7 @@ Use the widget API to customize your widget:
 | closed_widget_hint_auto_hide_ms | number | No   |
 | closed_widget_hint_background_color | string | No |
 | closed_widget_hint_position | string | No      |
+| closed_widget_hint_show_once | boolean | No     |
 | closed_widget_hint_text_color | string | No |
 | closed_widget_hint_text | string  | No       |
 | chat_position         | string    | No       |
@@ -414,6 +415,12 @@ Use the widget API to customize your widget:
   - Type: Number
   - Required: No
   - Description: Optional auto-hide timeout for the closed-widget hint in milliseconds. If omitted or set to 0/negative, the hint stays visible until the widget opens.
+
+- **closed_widget_hint_show_once:**
+  - Type: Boolean
+  - Required: No
+  - Default: true
+  - Description: Shows the closed-widget hint only once per browsing session (tracked in sessionStorage per domain and flow). The hint does not reappear on subpage navigation or after the visitor closes the chat window. It appears again when the visitor opens the site in a new tab or browser session. Set to false to show the hint on every page load (previous behavior).
 
 - **closed_widget_hint_position:**
   - Type: String

@@ -142,6 +142,7 @@ describe('ChatWidget', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    window.sessionStorage.clear();
     setViewportSize(1024, 768);
     // Reset window global
     delete (window as any)['punku-chat-widget_api'];
@@ -410,6 +411,66 @@ describe('ChatWidget', () => {
 
       expect(hint).not.toHaveClass('cl-visible');
       jest.useRealTimers();
+    });
+  });
+
+  describe('Closed Widget Hint Show Once', () => {
+    it('should show the hint only once per browsing session by default', () => {
+      const firstMount = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      firstMount.unmount();
+
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).not.toHaveClass('cl-visible');
+    });
+
+    it('should show the hint on every mount when closed_widget_hint_show_once is false', () => {
+      const firstMount = render(
+        <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_show_once={false} />
+      );
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      firstMount.unmount();
+
+      render(
+        <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_show_once={false} />
+      );
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+    });
+
+    it('should not re-show the hint after the user closes the chat window', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+
+      fireEvent.click(screen.getByTestId('chat-trigger'));
+      expect(screen.queryByText(defaultClosedHintText)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('chat-trigger'));
+      expect(screen.getByText(defaultClosedHintText)).not.toHaveClass('cl-visible');
+    });
+
+    it('should scope the shown flag to the flow id', () => {
+      const firstMount = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      firstMount.unmount();
+
+      render(<ChatWidget {...defaultProps} flow_id="another-flow-id" show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+    });
+
+    it('should show the hint again in a new browsing session', () => {
+      const firstMount = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      firstMount.unmount();
+      window.sessionStorage.clear();
+
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+    });
+
+    it('should not mark the hint as shown when it is disabled', () => {
+      const firstMount = render(<ChatWidget {...defaultProps} />);
+      firstMount.unmount();
+
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
     });
   });
 

@@ -3,6 +3,7 @@ import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
+import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
@@ -160,6 +161,7 @@ export default function ChatWidget({
   show_closed_widget_hint = false,
   show_close_button_on_desktop = false,
   closed_widget_hint_auto_hide_ms,
+  closed_widget_hint_show_once = true,
   closed_widget_hint_position = "left",
   closed_widget_hint_background_color,
   closed_widget_hint_text_color,
@@ -225,6 +227,7 @@ export default function ChatWidget({
   show_closed_widget_hint?: boolean;
   show_close_button_on_desktop?: boolean;
   closed_widget_hint_auto_hide_ms?: number;
+  closed_widget_hint_show_once?: boolean;
   closed_widget_hint_position?: "left" | "top" | "bottom";
   closed_widget_hint_background_color?: string;
   closed_widget_hint_text_color?: string;
@@ -245,7 +248,9 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
-  const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(!start_open);
+  const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(
+    () => !start_open && !(closed_widget_hint_show_once && ClosedWidgetHintStorage.hasBeenShown(flow_id))
+  );
   const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
   const [triggerPositionOverride, setTriggerPositionOverride] = useState<TriggerPosition | null>(null);
 
@@ -314,7 +319,16 @@ export default function ChatWidget({
       return;
     }
 
+    if (closed_widget_hint_show_once && ClosedWidgetHintStorage.hasBeenShown(flow_id)) {
+      setShowClosedWidgetHint(false);
+      return;
+    }
+
     setShowClosedWidgetHint(true);
+
+    if (closed_widget_hint_show_once) {
+      ClosedWidgetHintStorage.markShown(flow_id);
+    }
 
     if (typeof closed_widget_hint_auto_hide_ms !== "number" || closed_widget_hint_auto_hide_ms <= 0) {
       return;
@@ -325,7 +339,7 @@ export default function ChatWidget({
     }, closed_widget_hint_auto_hide_ms);
 
     return () => clearTimeout(timeout);
-  }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms]);
+  }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms, closed_widget_hint_show_once, flow_id]);
 
   // Function to start a new session
   const startNewSession = useCallback(() => {
