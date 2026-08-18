@@ -61,6 +61,7 @@ function createChatElement() {
             show_closed_widget_hint: "boolean",
             show_close_button_on_desktop: "boolean",
             closed_widget_hint_auto_hide_ms: "number",
+            closed_widget_hint_show_once: "boolean",
             closed_widget_hint_position: "string",
             closed_widget_hint_background_color: "string",
             closed_widget_hint_text_color: "string",
