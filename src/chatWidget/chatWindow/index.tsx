@@ -461,7 +461,13 @@ export default function ChatWindow({
             }
           } else if (data.event === "error") {
             terminalReceived = true;
-            const detail = data.data?.text || data.data?.message || data.data?.detail || data.message;
+            const detail = [
+              data.data,
+              data.data?.text,
+              data.data?.message,
+              data.data?.detail,
+              data.message
+            ].find((value) => typeof value === "string" && value.trim());
             handleStreamError(createStreamError(
               typeof detail === "string" && detail.trim()
                 ? detail

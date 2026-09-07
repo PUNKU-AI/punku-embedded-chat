@@ -862,6 +862,65 @@ describe('ChatWindow', () => {
       });
     });
 
+    it.each([
+      ['Provider quota exceeded', 'Provider quota exceeded'],
+      [' \n ', 'The assistant could not complete the response. Please try again.']
+    ])('should show string stream error %j once and retain the user message without replay', async (data, message) => {
+      const addMessage = jest.fn();
+      const updateLastMessage = jest.fn();
+      const listener = jest.fn();
+      const streamError = Object.assign(new Error(message), { code: 'ERR_BACKEND_STREAM' });
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        const onStreamError = args[12] as (error: unknown) => void;
+        onStreamData({ event: 'error', data });
+        onStreamError(streamError);
+        return Promise.reject(streamError);
+      });
+
+      function StreamingChatHarness() {
+        const [messages, setMessages] = React.useState<ChatMessageType[]>([]);
+        return (
+          <ChatWindow
+            {...defaultProps}
+            enable_streaming={true}
+            messages={messages}
+            addMessage={(newMessage: ChatMessageType) => {
+              addMessage(newMessage);
+              setMessages((previous) => [...previous, newMessage]);
+            }}
+            updateLastMessage={updateLastMessage}
+            enable_client_error_reporting={false}
+          />
+        );
+      }
+
+      window.addEventListener('punku-chat-error', listener);
+      try {
+        render(<StreamingChatHarness />);
+
+        const input = screen.getByRole('textbox');
+        fireEvent.change(input, { target: { value: 'Hello' } });
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+        await waitFor(() => {
+          expect(screen.getAllByText(message, { exact: true })).toHaveLength(1);
+        });
+
+        expect(screen.getByText('Hello', { exact: true })).toBeInTheDocument();
+        expect(addMessage.mock.calls).toEqual([
+          [{ message: 'Hello', isSend: true }],
+          [{ message, isSend: false, error: true }]
+        ]);
+        expect(updateLastMessage).not.toHaveBeenCalled();
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+        expect(mockedSendMessage).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('punku-chat-error', listener);
+      }
+    });
+
     it('should show an error when the stream ends without a terminal event', async () => {
       const addMessage = jest.fn();
       mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
