@@ -1,9 +1,9 @@
-import { Send, MessagesSquare, RefreshCw, X, type LucideIcon } from "lucide-react";
-import * as LucideIcons from "lucide-react";
+import { Send, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
+import LucideCdnIcon from "./lucideCdnIcon";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
@@ -26,17 +26,6 @@ import {
 const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,
-};
-
-const getLucideIconByName = (name?: string): LucideIcon | undefined => {
-  if (!name) return undefined;
-  const icon = (LucideIcons as unknown as Record<string, unknown>)[name];
-  if (!icon) return undefined;
-  if (typeof icon === "function") return icon as LucideIcon;
-  // lucide-react icons are typically React.forwardRef components (typeof === 'object')
-  if (typeof icon === "object" && "$$typeof" in (icon as object))
-    return icon as LucideIcon;
-  return undefined;
 };
 
 const getRequestErrorMessage = (error: unknown) => {
@@ -200,9 +189,6 @@ export default function ChatWindow({
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
 }) {
-  const HeaderLucideIcon =
-    getLucideIconByName(header_icon_name) ?? MessagesSquare;
-
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
   const lastMessage = useRef<HTMLDivElement>(null);
@@ -918,7 +904,8 @@ export default function ChatWindow({
               />
             ) : (
               <div className="cl-default-header-icon">
-                <HeaderLucideIcon
+                <LucideCdnIcon
+                  name={header_icon_name}
                   className="cl-header-logo"
                   color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                   size={24}

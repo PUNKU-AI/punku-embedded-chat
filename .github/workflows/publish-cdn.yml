@@ -63,6 +63,14 @@ jobs:
           role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Header icons go first. A new bundle must never reach customers before
+      # the icon files that it loads by name. See scripts/build-lucide-icons.js.
+      - name: Build header icon set
+        run: node scripts/build-lucide-icons.js
+
+      - name: Upload header icons -> chat/icons/lucide/ (primary + failover origin)
+        run: scripts/upload-lucide-icons.sh
+
       - name: Upload pinned (immutable) copy -> chat/<tag>/bundle.min.js (primary + failover origin)
         run: |
           for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
