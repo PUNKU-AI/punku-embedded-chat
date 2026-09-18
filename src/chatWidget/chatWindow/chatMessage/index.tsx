@@ -1,7 +1,6 @@
 import Markdown from "react-markdown";
 import { ChatMessageType } from "../../../types/chatWidget";
 import remarkGfm from "remark-gfm";
-import rehypeMathjax from "rehype-mathjax";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
@@ -192,7 +191,6 @@ export default function ChatMessage({
           <Markdown
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeMathjax]}
             components={{
               a: ({ href, children, ...props }) => (
                 <a href={href} target="_blank" rel="noopener noreferrer" {...props}>

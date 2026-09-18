@@ -20,9 +20,8 @@ jest.mock('react-markdown', () => {
   };
 });
 
-// Mock remark-gfm and rehype-mathjax
+// Mock remark-gfm
 jest.mock('remark-gfm', () => () => {});
-jest.mock('rehype-mathjax', () => () => {});
 
 // Mock the components
 jest.mock('./chatMessage', () => {
