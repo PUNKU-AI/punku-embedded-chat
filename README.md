@@ -8,7 +8,7 @@ The PUNKU.AI Embedded Chat is a powerful web component that enables seamless com
 
 ## Features
 
-🌟 Seamless Integration: Easily integrate the Langflow Widget into your website or web application with just a few lines of JavaScript.
+🌟 Seamless Integration: Easily integrate the PUNKU.AI chat widget into your website or web application with just a few lines of JavaScript.
 
 🚀 Interactive Chat Interface: Engage your users with a user-friendly chat interface, powered by PUNKU's advanced language understanding capabilities.
 
@@ -28,6 +28,7 @@ The PUNKU.AI Chat Widget supports various visual themes to match your applicatio
 | dark               | Dark mode theme with dark backgrounds and light text                  |
 | ocean              | Beautiful ocean background with translucent message bubbles           |
 | aurora             | Northern lights inspired theme with colorful gradient backgrounds     |
+| swarovski          | Crystalline theme with its own fonts, loader, and German default language |
 | punku-ai-bookingkit| Legacy bookingkit-branded theme name; prefer `theme="default"` with `branding="punku-ai-bookingkit"` |
 
 ### How to Use Themes
@@ -162,6 +163,7 @@ Use the widget API to customize your widget:
 
 | Prop                  | Type      | Required |
 |-----------------------|-----------|----------|
+| api_key               | string    | No       |
 | background_color      | string    | No       |
 | bot_message_color     | string    | No       |
 | bot_message_style     | json      | No       |
@@ -188,10 +190,13 @@ Use the widget API to customize your widget:
 | flow_id               | string    | Yes      |
 | branding              | string    | No       |
 | header_icon           | string    | No       |
+| header_icon_name      | string    | No       |
 | height                | number    | No       |
 | host_url              | string    | No       |
+| idle_expiration_hours | number    | No       |
 | input_container_style | json      | No       |
 | input_style           | json      | No       |
+| loading_messages      | json      | No       |
 | online                | boolean   | No       |
 | start_open            | boolean   | No       |
 | online_message        | string    | No       |
@@ -209,11 +214,22 @@ Use the widget API to customize your widget:
 | width                 | number    | No       |
 | window_title          | string    | No       |
 | session_id            | string    | No       |
+| ttl_hours             | number    | No       |
+| widget_id             | string    | No       |
+| bottom_offset         | number    | No       |
+| top_offset            | number    | No       |
+| left_offset           | number    | No       |
+| right_offset          | number    | No       |
 | additional_headers    | json      | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
+
+- **api_key:**
+  - Type: String
+  - Required: No
+  - Description: API key for the flow. The widget sends it in the `x-api-key` request header. Every visitor can read this value in the page source. Use only a key that is safe to publish.
 
 - **background_color:**
   - Type: String
@@ -300,11 +316,23 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: URL of a custom icon to display in the chat window header.
 
+- **header_icon_name:**
+  - Type: String
+  - Required: No
+  - Default: `MessagesSquare`
+  - Description: Name of a [Lucide](https://lucide.dev/icons/) icon for the chat window header, in PascalCase (for example `MessageCircle`). An unknown name falls back to the default icon. If `header_icon` is also set, `header_icon` wins.
+
 - **host_url:**
   - Type: String
   - Required: No
   - Default: `https://app.punku.ai`
   - Description: The URL of the host for communication with the chat component. Override this only when using a custom PUNKU instance.
+
+- **idle_expiration_hours:**
+  - Type: Number
+  - Required: No
+  - Default: 0.5 (30 minutes)
+  - Description: The stored session expires after this many hours without activity. The next message then starts a new session.
 
 - **input_container_style:**
   - Type: JSON
@@ -315,6 +343,11 @@ Use the widget API to customize your widget:
   - Type: JSON
   - Required: No
   - Description: Styling options for the chat input field.
+
+- **loading_messages:**
+  - Type: JSON
+  - Required: No
+  - Description: Array of strings that the widget shows in turn while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in messages.
 
 - **Online:**
   - Type: Boolean
@@ -361,7 +394,7 @@ Use the widget API to customize your widget:
 - **theme:**
   - Type: String
   - Required: No
-  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", and "punku-ai-bookingkit".
+  - Description: Specifies the visual theme for the chat widget. Options include "default", "dark", "ocean", "aurora", "swarovski", and "punku-ai-bookingkit".
 
 - **trigger_icon:**
   - Type: String
@@ -452,6 +485,42 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Custom session id to override the random session id used as default.
+
+- **ttl_hours:**
+  - Type: Number
+  - Required: No
+  - Default: 24
+  - Description: Maximum age of a stored session in hours. After this time the widget starts a new session, even if the visitor is active.
+
+- **widget_id:**
+  - Type: String
+  - Required: No
+  - Default: `punku-chat-widget`
+  - Description: Identifier of this widget instance. The widget exposes its control API as `window["<widget_id>_api"]` (`open()`, `close()`, `isOpen()`) and sends the identifier in client error reports. Set a different value for each widget when a page has more than one.
+
+- **bottom_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 20
+  - Description: Distance in pixels between the widget and the bottom edge of the viewport.
+
+- **top_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 60
+  - Description: Distance in pixels between the widget and the top edge of the viewport. Applies to top positions.
+
+- **left_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 20
+  - Description: Distance in pixels between the widget and the left edge of the viewport. Applies to left positions.
+
+- **right_offset:**
+  - Type: Number
+  - Required: No
+  - Default: 20
+  - Description: Distance in pixels between the widget and the right edge of the viewport. Applies to right positions.
 
 - **additional_headers:**
   - Type: JSON
