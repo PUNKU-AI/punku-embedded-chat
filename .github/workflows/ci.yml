@@ -1,0 +1,37 @@
+name: CI
+
+# Typecheck and test every PR and every push to main. The committed bundle in
+# dist/ ships to customer embeds on the next version tag, so broken source must
+# not reach main unnoticed. See publish-cdn.yml for the release build.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test -- --watchAll=false --maxWorkers=2
