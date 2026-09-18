@@ -365,7 +365,11 @@ describe('streamMessage', () => {
 
   it('should include stream=true in URL', async () => {
     const mockReader = {
-      read: jest.fn().mockResolvedValue({ done: true, value: undefined })
+      read: jest.fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: new TextEncoder().encode('[DONE]\n')
+        })
     };
 
     mockFetch.mockResolvedValueOnce({
@@ -390,7 +394,46 @@ describe('streamMessage', () => {
       read: jest.fn()
         .mockResolvedValueOnce({
           done: false,
-          value: new TextEncoder().encode('\n\n{"message": "Hello"}\n\n')
+          value: new TextEncoder().encode(
+            '\n\n{"message": "Hello"}\n\n{"event":"end","data":{}}\n'
+          )
+        })
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => mockReader }
+    });
+
+    await streamMessage(
+      baseUrl,
+      flowId,
+      message,
+      input_type,
+      output_type,
+      sessionId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onStreamData,
+      onStreamEnd
+    );
+
+    expect(onStreamData).toHaveBeenCalledWith({ message: 'Hello' });
+    expect(onStreamEnd).toHaveBeenCalledWith('end');
+  });
+
+  it('should process a final buffered event without a newline', async () => {
+    const onStreamData = jest.fn();
+    const onStreamEnd = jest.fn();
+    const endEvent = { event: 'end', data: { result: { session_id: 'new-session' } } };
+    const mockReader = {
+      read: jest.fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: new TextEncoder().encode(JSON.stringify(endEvent))
         })
         .mockResolvedValueOnce({ done: true, value: undefined })
     };
@@ -416,7 +459,134 @@ describe('streamMessage', () => {
       onStreamEnd
     );
 
-    expect(onStreamData).toHaveBeenCalledWith({ message: 'Hello' });
+    expect(onStreamData).toHaveBeenCalledWith(endEvent);
+    expect(onStreamEnd).toHaveBeenCalledWith('end');
+  });
+
+  it('should reject a premature EOF', async () => {
+    const onStreamError = jest.fn();
+    const mockReader = {
+      read: jest.fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: new TextEncoder().encode('{"event":"add_message","data":{"text":"Partial"}}\n')
+        })
+        .mockResolvedValueOnce({ done: true, value: undefined })
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => mockReader }
+    });
+
+    await expect(
+      streamMessage(
+        baseUrl,
+        flowId,
+        message,
+        input_type,
+        output_type,
+        sessionId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        onStreamError
+      )
+    ).rejects.toMatchObject({ code: 'ERR_PREMATURE_STREAM_END' });
+
+    expect(onStreamError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ERR_PREMATURE_STREAM_END' })
+    );
+  });
+
+  it('should reject an explicit backend error event', async () => {
+    const onStreamData = jest.fn();
+    const onStreamEnd = jest.fn();
+    const onStreamError = jest.fn();
+    const errorEvent = {
+      event: 'error',
+      data: { text: 'The assistant could not complete the response. Please try again.' }
+    };
+    const mockReader = {
+      read: jest.fn().mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(`${JSON.stringify(errorEvent)}\n`)
+      })
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => mockReader }
+    });
+
+    await expect(
+      streamMessage(
+        baseUrl,
+        flowId,
+        message,
+        input_type,
+        output_type,
+        sessionId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        onStreamData,
+        onStreamEnd,
+        onStreamError
+      )
+    ).rejects.toMatchObject({ code: 'ERR_BACKEND_STREAM' });
+
+    expect(onStreamData).toHaveBeenCalledWith(errorEvent);
+    expect(onStreamEnd).not.toHaveBeenCalled();
+    expect(onStreamError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'ERR_BACKEND_STREAM' })
+    );
+  });
+
+  it('should complete a normal stream after an explicit end event', async () => {
+    const onStreamData = jest.fn();
+    const onStreamEnd = jest.fn();
+    const events = [
+      { event: 'add_message', data: { sender: 'Machine', text: 'Hello' } },
+      { event: 'end', data: { result: {} } }
+    ];
+    const mockReader = {
+      read: jest.fn().mockResolvedValueOnce({
+        done: false,
+        value: new TextEncoder().encode(`${events.map((event) => JSON.stringify(event)).join('\n')}\n`)
+      })
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => mockReader }
+    });
+
+    await streamMessage(
+      baseUrl,
+      flowId,
+      message,
+      input_type,
+      output_type,
+      sessionId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onStreamData,
+      onStreamEnd
+    );
+
+    expect(onStreamData).toHaveBeenNthCalledWith(1, events[0]);
+    expect(onStreamData).toHaveBeenNthCalledWith(2, events[1]);
+    expect(onStreamEnd).toHaveBeenCalledWith('end');
   });
 });
 

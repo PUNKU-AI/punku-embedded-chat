@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import { sendMessage, streamMessage } from "../../controllers";
+import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
@@ -64,6 +65,9 @@ const getRequestErrorMessage = (error: unknown) => {
 
   return "Network error";
 };
+
+const createStreamError = (message: string, code: string) =>
+  Object.assign(new Error(message), { code });
 
 export default function ChatWindow({
   api_key,
@@ -295,6 +299,22 @@ export default function ChatWindow({
     if (!enable_streaming) {
       sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
         .then((res) => {
+          let visibleAssistantMessageAdded = false;
+
+          const addAssistantOutput = (output: any, messageId?: string) => {
+            const assistantMessage = extractMessageFromOutput(output);
+            if (typeof assistantMessage !== "string" || !assistantMessage.trim()) {
+              return;
+            }
+
+            addMessage({
+              message: assistantMessage,
+              message_id: messageId,
+              isSend: false,
+            });
+            visibleAssistantMessageAdded = true;
+          };
+
           if (
             res.data &&
             res.data.outputs &&
@@ -305,21 +325,13 @@ export default function ChatWindow({
             if (output_component &&
               flowOutputs.map(e => e.component_id).includes(output_component)) {
               Object.values(flowOutputs.find(e => e.component_id === output_component).outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: output.id || output.component_id,
-                  isSend: false,
-                });
+                addAssistantOutput(output, output.id || output.component_id);
               })
             } else if (
               flowOutputs.length === 1
             ) {
               Object.values(flowOutputs[0].outputs).forEach((output: any) => {
-                addMessage({
-                  message: extractMessageFromOutput(output),
-                  message_id: flowOutputs[0].results.message.data.id,
-                  isSend: false,
-                });
+                addAssistantOutput(output, flowOutputs[0].results.message.data.id);
               })
             } else {
               flowOutputs
@@ -330,21 +342,26 @@ export default function ChatWindow({
               })
               .forEach((flowOutput) => {
                 Object.values(flowOutput.outputs).forEach((output: any) => {
-                  addMessage({
-                    message: extractMessageFromOutput(output),
-                    isSend: false,
-                  });
+                  addAssistantOutput(output);
                 });
               });
             }
           }
+
+          if (!visibleAssistantMessageAdded) {
+            throw createStreamError(
+              "The assistant did not return a response. Please try again.",
+              "ERR_EMPTY_ASSISTANT_RESPONSE"
+            );
+          }
+
           if (res.data && res.data.session_id) {
             sessionId.current = res.data.session_id;
           }
           setSendingMessage(false);
         })
         .catch((err) => {
-          updateLastMessage({
+          addMessage({
             message: getRequestErrorMessage(err),
             isSend: false,
             error: true,
@@ -364,6 +381,12 @@ export default function ChatWindow({
       let currentMessageId: string | null = null;
       let message_to_add = "";
       let streamErrorHandled = false;
+      let terminalReceived = false;
+
+      const emptyResponseError = () => createStreamError(
+        "The assistant did not return a response. Please try again.",
+        "ERR_EMPTY_ASSISTANT_RESPONSE"
+      );
 
       const handleStreamError = (error: unknown) => {
         if (streamErrorHandled) {
@@ -375,11 +398,20 @@ export default function ChatWindow({
         setSendingMessage(false);
         setIsStreaming(false);
 
-        updateLastMessage({
+        const errorMessage = {
           message: getRequestErrorMessage(error),
           isSend: false,
           error: true,
-        });
+        };
+
+        if (currentMessageId) {
+          updateLastMessage({
+            ...errorMessage,
+            message_id: currentMessageId,
+          });
+        } else {
+          addMessage(errorMessage);
+        }
 
         notifyClientError(error, "stream-message", {
           inputType: input_type,
@@ -403,7 +435,7 @@ export default function ChatWindow({
         additional_headers,
         (data) => {
           // Handle streaming data as it arrives
-          if (data.event === 'add_message' && data.data.sender==="Machine") {
+          if (data.event === 'add_message' && data.data?.sender === "Machine") {
             // console.log('Data from :', data.data.sender);
             // console.log('Streaming text:', data.data.text);
             const new_message = data.data.text;
@@ -427,24 +459,54 @@ export default function ChatWindow({
                 });
               }
             }
+          } else if (data.event === "error") {
+            terminalReceived = true;
+            const detail = [
+              data.data,
+              data.data?.text,
+              data.data?.message,
+              data.data?.detail,
+              data.message
+            ].find((value) => typeof value === "string" && value.trim());
+            handleStreamError(createStreamError(
+              typeof detail === "string" && detail.trim()
+                ? detail
+                : "The assistant could not complete the response. Please try again.",
+              "ERR_BACKEND_STREAM"
+            ));
           } else if (data.event === "end") {
+            terminalReceived = true;
+
             // Final result - might contain session_id or final data
-            if (data.data.result.session_id) {
+            if (data.data?.result?.session_id) {
               sessionId.current = data.data.result.session_id;
             }
 
-            // Mark message as complete (remove streaming flag)
-            if (currentMessageId) {
-              updateLastMessage({
-                message: message_to_add,
-                message_id: currentMessageId,
-                isSend: false,
-                streaming: false // Mark as complete
-              });
+            if (!message_to_add.trim()) {
+              handleStreamError(emptyResponseError());
             }
           }
         },
-        () => {
+        (terminal?: StreamTerminal) => {
+          terminalReceived = terminalReceived || terminal === "end" || terminal === "done";
+
+          if (streamErrorHandled) {
+            return;
+          }
+
+          if (!terminalReceived) {
+            handleStreamError(createStreamError(
+              "The assistant response ended before it completed. Please try again.",
+              "ERR_PREMATURE_STREAM_END"
+            ));
+            return;
+          }
+
+          if (!message_to_add.trim()) {
+            handleStreamError(emptyResponseError());
+            return;
+          }
+
           // Stream ended
           // console.log('Stream completed');
           setSendingMessage(false);

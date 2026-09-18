@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './index';
 import { sendMessage, streamMessage } from '../../controllers';
+import type { ChatMessageType } from '../../types/chatWidget';
 
 // Mock scrollIntoView
 Element.prototype.scrollIntoView = jest.fn();
@@ -94,6 +95,28 @@ describe('ChatWindow', () => {
     triggerRef: mockTriggerRef,
     sessionId: mockSessionId as React.MutableRefObject<string>
   };
+
+  const successfulNonStreamingResponse = () => ({
+    data: {
+      outputs: [
+        {
+          outputs: [
+            {
+              component_id: 'chat-output',
+              outputs: {
+                message: { type: 'message', message: { text: 'Assistant reply' } }
+              },
+              results: { message: { data: { id: 'assistant-message' } } }
+            }
+          ]
+        }
+      ],
+      session_id: 'new-session'
+    },
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers()
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -312,13 +335,50 @@ describe('ChatWindow', () => {
   });
 
   describe('Sending Messages (Non-Streaming)', () => {
-    it('should call sendMessage when send button is clicked', async () => {
+    it('should retain the user message and append one error for empty assistant output', async () => {
+      const history: ChatMessageType[] = [];
+      const addMessage = jest.fn((message: ChatMessageType) => history.push(message));
+      const updateLastMessage = jest.fn((message: ChatMessageType) => {
+        history[history.length - 1] = message;
+      });
       mockedSendMessage.mockResolvedValueOnce({
         data: { outputs: [], session_id: 'new-session' },
         status: 200,
         statusText: 'OK',
         headers: new Headers()
       });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+          addMessage={addMessage}
+          updateLastMessage={updateLastMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(history).toEqual([
+          { message: 'Hello', isSend: true },
+          {
+            message: 'The assistant did not return a response. Please try again.',
+            isSend: false,
+            error: true
+          }
+        ]);
+      });
+
+      expect(addMessage).toHaveBeenCalledTimes(2);
+      expect(updateLastMessage).not.toHaveBeenCalled();
+    });
+
+    it('should call sendMessage when send button is clicked', async () => {
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
       render(<ChatWindow {...defaultProps} enable_streaming={false} />);
 
@@ -346,12 +406,7 @@ describe('ChatWindow', () => {
 
     it('should call addMessage with user message', async () => {
       const addMessage = jest.fn();
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
       render(<ChatWindow {...defaultProps} enable_streaming={false} addMessage={addMessage} />);
 
@@ -370,12 +425,7 @@ describe('ChatWindow', () => {
     });
 
     it('should clear input after sending', async () => {
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
       render(<ChatWindow {...defaultProps} enable_streaming={false} />);
 
@@ -412,12 +462,7 @@ describe('ChatWindow', () => {
     });
 
     it('should send message on Enter key press', async () => {
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
       render(<ChatWindow {...defaultProps} enable_streaming={false} />);
 
@@ -434,12 +479,7 @@ describe('ChatWindow', () => {
     it('should send a programmatic message', async () => {
       const addMessage = jest.fn();
       const onProgrammaticMessageHandled = jest.fn();
-      mockedSendMessage.mockResolvedValueOnce({
-        data: { outputs: [], session_id: 'new-session' },
-        status: 200,
-        statusText: 'OK',
-        headers: new Headers()
-      });
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
       render(
         <ChatWindow
@@ -707,6 +747,208 @@ describe('ChatWindow', () => {
       expect(event.detail.error.headerName).toBe('X-Custom-Header');
 
       window.removeEventListener('punku-chat-error', listener);
+    });
+
+    it('should complete a normal stream with visible assistant text', async () => {
+      const addMessage = jest.fn();
+      const updateLastMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        const onStreamEnd = args[11] as (terminal: 'end') => void;
+
+        onStreamData({
+          event: 'add_message',
+          data: { sender: 'Machine', id: 'assistant-message', text: 'Hello back' }
+        });
+        onStreamData({ event: 'end', data: { result: { session_id: 'next-session' } } });
+        onStreamEnd('end');
+        return Promise.resolve();
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          addMessage={addMessage}
+          updateLastMessage={updateLastMessage}
+        />
+      );
+
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(updateLastMessage).toHaveBeenCalledWith({
+          message: 'Hello back',
+          message_id: 'assistant-message',
+          isSend: false,
+          streaming: false
+        });
+      });
+
+      expect(addMessage).toHaveBeenCalledWith({
+        message: 'Hello back',
+        message_id: 'assistant-message',
+        isSend: false,
+        streaming: true
+      });
+      expect(mockSessionId.current).toBe('next-session');
+    });
+
+    it('should reject an end event without visible assistant text', async () => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        const onStreamEnd = args[11] as (terminal: 'end') => void;
+
+        onStreamData({ event: 'end', data: { result: {} } });
+        onStreamEnd('end');
+        return Promise.resolve();
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          addMessage={addMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(addMessage).toHaveBeenCalledWith({
+          message: 'The assistant did not return a response. Please try again.',
+          isSend: false,
+          error: true
+        });
+      });
+    });
+
+    it('should show an explicit backend stream error', async () => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        onStreamData({
+          event: 'error',
+          data: { text: 'The assistant is temporarily unavailable. Please try again.' }
+        });
+        return Promise.resolve();
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          addMessage={addMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(addMessage).toHaveBeenCalledWith({
+          message: 'The assistant is temporarily unavailable. Please try again.',
+          isSend: false,
+          error: true
+        });
+      });
+    });
+
+    it.each([
+      ['Provider quota exceeded', 'Provider quota exceeded'],
+      [' \n ', 'The assistant could not complete the response. Please try again.']
+    ])('should show string stream error %j once and retain the user message without replay', async (data, message) => {
+      const addMessage = jest.fn();
+      const updateLastMessage = jest.fn();
+      const listener = jest.fn();
+      const streamError = Object.assign(new Error(message), { code: 'ERR_BACKEND_STREAM' });
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        const onStreamError = args[12] as (error: unknown) => void;
+        onStreamData({ event: 'error', data });
+        onStreamError(streamError);
+        return Promise.reject(streamError);
+      });
+
+      function StreamingChatHarness() {
+        const [messages, setMessages] = React.useState<ChatMessageType[]>([]);
+        return (
+          <ChatWindow
+            {...defaultProps}
+            enable_streaming={true}
+            messages={messages}
+            addMessage={(newMessage: ChatMessageType) => {
+              addMessage(newMessage);
+              setMessages((previous) => [...previous, newMessage]);
+            }}
+            updateLastMessage={updateLastMessage}
+            enable_client_error_reporting={false}
+          />
+        );
+      }
+
+      window.addEventListener('punku-chat-error', listener);
+      try {
+        render(<StreamingChatHarness />);
+
+        const input = screen.getByRole('textbox');
+        fireEvent.change(input, { target: { value: 'Hello' } });
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+        await waitFor(() => {
+          expect(screen.getAllByText(message, { exact: true })).toHaveLength(1);
+        });
+
+        expect(screen.getByText('Hello', { exact: true })).toBeInTheDocument();
+        expect(addMessage.mock.calls).toEqual([
+          [{ message: 'Hello', isSend: true }],
+          [{ message, isSend: false, error: true }]
+        ]);
+        expect(updateLastMessage).not.toHaveBeenCalled();
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+        expect(mockedSendMessage).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('punku-chat-error', listener);
+      }
+    });
+
+    it('should show an error when the stream ends without a terminal event', async () => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamEnd = args[11] as (terminal?: 'end' | 'done') => void;
+        onStreamEnd();
+        return Promise.resolve();
+      });
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          addMessage={addMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(addMessage).toHaveBeenCalledWith({
+          message: 'The assistant response ended before it completed. Please try again.',
+          isSend: false,
+          error: true
+        });
+      });
     });
   });
 

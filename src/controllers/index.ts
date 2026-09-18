@@ -16,6 +16,35 @@ export class InvalidRequestHeaderError extends Error {
   }
 }
 
+export type StreamTerminal = "end" | "done";
+
+export class StreamProtocolError extends Error {
+  code: string;
+
+  constructor(message: string, code = "ERR_STREAM_PROTOCOL") {
+    super(message);
+    this.name = "StreamProtocolError";
+    this.code = code;
+    Object.setPrototypeOf(this, StreamProtocolError.prototype);
+  }
+}
+
+function getBackendStreamErrorMessage(data: any): string {
+  const errorData = data?.data;
+
+  if (typeof errorData === "string" && errorData.trim()) {
+    return errorData;
+  }
+
+  for (const value of [errorData?.text, errorData?.message, errorData?.detail, data?.message]) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return "The assistant could not complete the response. Please try again.";
+}
+
 function validateRequestHeader(headerName: string, headerValue: unknown) {
   if (!HEADER_NAME_PATTERN.test(headerName)) {
     throw new InvalidRequestHeaderError(
@@ -131,7 +160,7 @@ export async function sendMessage(
     api_key?: string, 
     additional_headers?: {[key:string]:string}, 
     onStreamData?: (data: any) => void,
-    onStreamEnd?: () => void,
+    onStreamEnd?: (terminal?: StreamTerminal) => void,
     onStreamError?: (error: any) => void
   ){
     let data: any = {input_type, input_value: message, output_type}
@@ -178,7 +207,49 @@ export async function sendMessage(
   
       const decoder = new TextDecoder();
       let buffer = '';
-      let chunkCount = 0;
+      let terminalReceived = false;
+
+      const processEventLine = (line: string): boolean => {
+        const eventData = line.trim();
+
+        if (eventData === '') {
+          return false;
+        }
+
+        if (eventData === '[DONE]') {
+          terminalReceived = true;
+          onStreamEnd?.("done");
+          return true;
+        }
+
+        let parsedData: any;
+        try {
+          parsedData = JSON.parse(eventData);
+        } catch {
+          throw new StreamProtocolError(
+            "The assistant returned an invalid stream response. Please try again.",
+            "ERR_INVALID_STREAM_EVENT"
+          );
+        }
+
+        onStreamData?.(parsedData);
+
+        if (parsedData?.event === "error") {
+          terminalReceived = true;
+          throw new StreamProtocolError(
+            getBackendStreamErrorMessage(parsedData),
+            "ERR_BACKEND_STREAM"
+          );
+        }
+
+        if (parsedData?.event === "end") {
+          terminalReceived = true;
+          onStreamEnd?.("end");
+          return true;
+        }
+
+        return false;
+      };
   
       // console.log('🔄 Starting to read stream...');
   
@@ -186,12 +257,22 @@ export async function sendMessage(
         const { done, value } = await reader.read();
           
         if (done) {
-          // console.log('✅ Stream completed naturally');
-          onStreamEnd?.();
-          break;
+          buffer += decoder.decode();
+
+          if (buffer && processEventLine(buffer)) {
+            return;
+          }
+
+          if (!terminalReceived) {
+            throw new StreamProtocolError(
+              "The assistant response ended before it completed. Please try again.",
+              "ERR_PREMATURE_STREAM_END"
+            );
+          }
+
+          return;
         }
   
-        chunkCount++;
         const chunkText = decoder.decode(value, { stream: true });
         // console.log(`📦 Chunk ${chunkCount}:`, JSON.stringify(chunkText));
         
@@ -208,28 +289,8 @@ export async function sendMessage(
         buffer = incompleteLine;
   
         for (const line of lines) {
-          // console.log(`🔍 Processing line:`, JSON.stringify(line));
-          try {
-            const eventData = line.trim();
-            // console.log(`📝 Event data:`, JSON.stringify(eventData));
-            
-            if (eventData === '[DONE]') {
-              // console.log('🏁 Received [DONE] signal');
-              onStreamEnd?.();
-              return;
-            }
-            
-            if (eventData === '') {
-              // console.log('📭 Empty event data, skipping');
-              continue;
-            }
-            
-            const parsedData = JSON.parse(eventData);
-            // console.log('✨ Parsed data:', parsedData);
-            onStreamData?.(parsedData);
-          } catch (parseError) {
-            // console.warn('⚠️ Failed to parse streaming data:', parseError);
-            // console.warn('🔍 Raw line that failed:', JSON.stringify(line));
+          if (processEventLine(line)) {
+            return;
           }
         }
       }
