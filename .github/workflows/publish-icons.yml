@@ -1,0 +1,49 @@
+name: Publish header icons to CDN
+
+# Uploads the Lucide header icon set to chat/icons/lucide/ on the CDN, without
+# a widget release. The widget loads `header_icon_name` icons from there.
+#
+# Run it by hand:
+#   - once, before the first widget release that loads icons from the CDN
+#   - after a `lucide-static` update, when the platform offers new icons
+#
+# publish-cdn.yml runs the same two scripts on every version tag.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC: assume the deploy role without storing static AWS keys
+  contents: read
+
+jobs:
+  publish-icons:
+    if: ${{ vars.CDN_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.CDN_AWS_REGION }}
+      BUCKET: ${{ vars.CDN_BUCKET }}
+      BUCKET_BACKUP: ${{ vars.CDN_BUCKET_BACKUP }}
+      DIST_ID: ${{ vars.CDN_CLOUDFRONT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build header icon set
+        run: node scripts/build-lucide-icons.js
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload header icons -> chat/icons/lucide/ (primary + failover origin)
+        run: scripts/upload-lucide-icons.sh

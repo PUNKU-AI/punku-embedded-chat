@@ -99,6 +99,26 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 
 GitHub keeps publishing to GitHub tags exactly as before; this just **adds** the S3 push. To backfill the current release once configured, run the workflow manually (`workflow_dispatch`) with `tag: v1.0.6`.
 
+### Header icons (`header_icon_name`)
+
+The platform lets customers pick any Lucide icon for the chat header. The widget does not bundle the icon set. It loads one file by name from the same CDN:
+
+```
+https://cdn.punku.ai/chat/icons/lucide/<name>.svg      (1-day cache)
+https://cdn.punku.ai/chat/icons/lucide/manifest.json   (Lucide version and all names)
+```
+
+- `<name>` is the icon name in lower case, letters and digits only. `MessageSquare`, `message-square`, and `messageSquare` all resolve to `messagesquare.svg`. The platform picker normalizes names the same way.
+- [`scripts/build-lucide-icons.js`](./scripts/build-lucide-icons.js) builds the files from the `lucide-static` dev dependency, plus [`assets/lucide-legacy/`](./assets/lucide-legacy) for icons that Lucide 1.x removed.
+- [`scripts/upload-lucide-icons.sh`](./scripts/upload-lucide-icons.sh) uploads them. It only adds and overwrites. It never deletes, so old names keep working.
+- `publish-cdn.yml` runs both scripts on every version tag, before it uploads the bundle.
+- [`publish-icons.yml`](./.github/workflows/publish-icons.yml) runs them by hand, without a widget release.
+- Six common icons (`MessageSquare`, `MessagesSquare`, `MessageCircle`, `Bot`, `Sparkles`, `MountainSnow`) are built into the bundle and need no request.
+- If a request fails or a name does not exist, the widget shows the default icon.
+- The CDN must send `Access-Control-Allow-Origin: *` (§2, step 3). The deploy role already may write to `chat/*`.
+
+**When the platform updates `lucide-react`:** set `lucide-react` and `lucide-static` in this repo to the same version or a newer one, merge, and run `publish-icons.yml`. No widget release is necessary for new icons.
+
 ---
 
 ## 4. Switch the embed snippet (main app: `PUNKU-AI/PUNKU.AI`)
