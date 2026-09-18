@@ -13,9 +13,6 @@ jest.mock('react-markdown', () => {
 // Mock remark-gfm
 jest.mock('remark-gfm', () => () => {});
 
-// Mock rehype-mathjax
-jest.mock('rehype-mathjax', () => () => {});
-
 // Mock the controllers module
 jest.mock('../../../controllers', () => ({
   sendFeedback: jest.fn()
