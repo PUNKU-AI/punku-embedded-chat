@@ -116,6 +116,7 @@ https://cdn.punku.ai/chat/icons/lucide/manifest.json   (Lucide version and all n
 - Six common icons (`MessageSquare`, `MessagesSquare`, `MessageCircle`, `Bot`, `Sparkles`, `MountainSnow`) are built into the bundle and need no request.
 - If a request fails or a name does not exist, the widget shows the default icon.
 - The CDN must send `Access-Control-Allow-Origin: *` (§2, step 3). The deploy role already may write to `chat/*`.
+- **The CORS policy must allow all request headers.** Chrome and Firefox add a `Priority` header to every `fetch()`. CloudFront adds the CORS headers only when every request header is on the policy's allow-list. The AWS managed policies (`Managed-SimpleCORS` and the others) have an empty allow-list, so a browser gets no CORS header and blocks the icon. Use a custom response headers policy with `Access-Control-Allow-Headers: *`. `curl -H "Origin: ..."` alone does not show the problem. Add `-H "Priority: u=1, i"` to test like a browser. `upload-lucide-icons.sh` runs this check after each upload.
 
 **When the platform updates `lucide-react`:** set `lucide-react` and `lucide-static` in this repo to the same version or a newer one, merge, and run `publish-icons.yml`. No widget release is necessary for new icons.
 
