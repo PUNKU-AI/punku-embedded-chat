@@ -24,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "18" # same as publish-cdn.yml
+          node-version: "20"
           cache: npm
 
       - name: Install dependencies
