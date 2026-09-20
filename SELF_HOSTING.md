@@ -62,7 +62,7 @@ Defaults below — confirm/adjust the values in **§6 Decisions** before running
    - Origin = the S3 bucket via **Origin Access Control (OAC)**.
    - Alternate domain (CNAME): `cdn.punku.ai`; attach the ACM cert.
    - **Compression: ON** (gzip + Brotli — a 3 MB JS file compresses to well under 1 MB).
-   - Response-headers policy: `Access-Control-Allow-Origin: *` and `Cross-Origin-Resource-Policy: cross-origin` (widget loads cross-origin from customer sites).
+   - Response-headers policy: the **custom** policy `punku-cdn-widget-cors` (created 2026-09-18). It sets `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Headers: *`, methods `GET, HEAD, OPTIONS`, origin override on, and the custom header `Cross-Origin-Resource-Policy: cross-origin`. **Do not use an AWS managed CORS policy such as `Managed-SimpleCORS`.** Their request-header allow-list is empty, so a browser `fetch()` gets no CORS header (see "Header icons" in §3). This distribution is not managed by CloudFormation, so this document is the record of its setup.
    - Default cache behavior: respect origin `Cache-Control` (set per-object by the workflow).
 4. **Bucket policy** granting the CloudFront OAC `s3:GetObject`.
 5. **DNS:** `cdn.punku.ai` → the distribution domain (`dxxxx.cloudfront.net`).
