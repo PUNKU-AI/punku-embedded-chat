@@ -127,6 +127,51 @@ describe('SessionStorage', () => {
 
       expect(SessionStorage.isSessionExpired(mockSession)).toBe(true);
     });
+
+    it('should turn off idle expiry when idleExpiryHours is 0', () => {
+      const mockSession: StoredSession = {
+        sessionId: 'test-session-id',
+        messages: [],
+        createdAt: Date.now(),
+        lastActiveAt: Date.now() - 2 * 60 * 60 * 1000,
+        expiresAt: Date.now() + 86400000,
+        domain: domain,
+        flowId: flowId
+      };
+
+      expect(SessionStorage.isSessionExpired(mockSession, { idleExpiryHours: 0 })).toBe(false);
+    });
+
+    it('should turn off absolute expiry when expiryHours is 0', () => {
+      const mockSession: StoredSession = {
+        sessionId: 'test-session-id',
+        messages: [],
+        createdAt: Date.now() - 86400000 * 2,
+        lastActiveAt: Date.now(),
+        expiresAt: 0,
+        domain: domain,
+        flowId: flowId
+      };
+
+      expect(SessionStorage.isSessionExpired(mockSession, { expiryHours: 0 })).toBe(false);
+      // The default of 24 hours applies when the config does not say 0
+      expect(SessionStorage.isSessionExpired(mockSession)).toBe(true);
+    });
+
+    it('should use the default for a negative or non-numeric value', () => {
+      const mockSession: StoredSession = {
+        sessionId: 'test-session-id',
+        messages: [],
+        createdAt: Date.now(),
+        lastActiveAt: Date.now() - 2 * 60 * 60 * 1000,
+        expiresAt: Date.now() + 86400000,
+        domain: domain,
+        flowId: flowId
+      };
+
+      expect(SessionStorage.isSessionExpired(mockSession, { idleExpiryHours: -1 })).toBe(true);
+      expect(SessionStorage.isSessionExpired(mockSession, { idleExpiryHours: NaN })).toBe(true);
+    });
   });
 
   describe('getStoredSession', () => {
@@ -208,6 +253,18 @@ describe('SessionStorage', () => {
       expect(result).toBe(true);
     });
 
+    it('should set lastActiveAt when messages are saved', () => {
+      const session = SessionStorage.createSession(flowId);
+      const storageKey = `punku-chat-session-${domain}-${flowId}`;
+      const stale = Date.now() - 20 * 60 * 1000;
+      mockStorage[storageKey] = JSON.stringify({ ...session, lastActiveAt: stale });
+
+      SessionStorage.updateMessages(flowId, [{ message: 'Hi', isSend: true }]);
+
+      const stored = JSON.parse(mockStorage[storageKey]) as StoredSession;
+      expect(stored.lastActiveAt).toBeGreaterThan(stale);
+    });
+
     it('should return false when no session exists', () => {
       const result = SessionStorage.updateMessages(flowId, []);
       expect(result).toBe(false);
@@ -264,6 +321,13 @@ describe('SessionStorage', () => {
 
       expect(session.expiresAt).toBeGreaterThan(now + 47 * 60 * 60 * 1000);
       expect(session.expiresAt).toBeLessThan(now + 49 * 60 * 60 * 1000);
+    });
+
+    it('should store no absolute expiry when expiryHours is 0', () => {
+      const session = SessionStorage.createSession(flowId, undefined, { expiryHours: 0 });
+
+      expect(session.expiresAt).toBe(0);
+      expect(SessionStorage.isSessionExpired(session, { expiryHours: 0 })).toBe(false);
     });
   });
 
@@ -332,6 +396,27 @@ describe('SessionStorage', () => {
       const result = SessionStorage.getOrCreateSession(flowId);
 
       expect(result.isNewSession).toBe(true);
+    });
+
+    it('should keep an idle session when idleExpiryHours is 0', () => {
+      const mockSession: StoredSession = {
+        sessionId: 'idle-session-id',
+        messages: [{ message: 'Hello', isSend: true }],
+        createdAt: Date.now(),
+        lastActiveAt: Date.now() - 2 * 60 * 60 * 1000,
+        expiresAt: Date.now() + 86400000,
+        domain: domain,
+        flowId: flowId
+      };
+
+      const storageKey = `punku-chat-session-${domain}-${flowId}`;
+      mockStorage[storageKey] = JSON.stringify(mockSession);
+
+      const result = SessionStorage.getOrCreateSession(flowId, undefined, { idleExpiryHours: 0 });
+
+      expect(result.isNewSession).toBe(false);
+      expect(result.sessionId).toBe('idle-session-id');
+      expect(result.messages).toHaveLength(1);
     });
   });
 
