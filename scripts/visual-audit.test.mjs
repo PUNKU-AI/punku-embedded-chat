@@ -7,7 +7,7 @@ import { auditScreenshots, DEFAULT_MODEL, main } from "./visual-audit.mjs";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Z1sAAAAASUVORK5CYII=", "base64");
 const ENV = { GEMINI_API_KEY: "test-only-fake-key" };
-const screen = (index = 1) => ({ index, hint: "visible", legibility: "readable", issues: [] });
+const screen = (index = 1) => ({ index, hint: "visible", legibility: "readable", clipping: "none", issues: [] });
 const success = (screens = [screen()]) => ({ ok: true, text: async () => JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify({ screens }) }] } }] }) });
 
 async function fixture(t) {

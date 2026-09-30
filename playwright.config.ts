@@ -12,7 +12,11 @@ export default defineConfig({
   timeout: 20000,
   expect: { timeout: 5000 },
   outputDir: 'output/playwright/results',
-  reporter: [['line'], ['html', { outputFolder: 'output/playwright/report', open: 'never' }]],
+  reporter: [
+    ['line'],
+    ['html', { outputFolder: 'output/playwright/report', open: 'never' }],
+    ['json', { outputFile: 'output/playwright/test-results.json' }],
+  ],
   use: {
     baseURL: 'http://127.0.0.1:4179',
     trace: 'retain-on-failure',

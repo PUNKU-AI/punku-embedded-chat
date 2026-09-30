@@ -35,7 +35,9 @@
     "test:browser": "playwright test --workers=1",
     "typecheck:browser": "tsc --noEmit -p tsconfig.e2e.json",
     "test:visual-audit": "node --test --test-concurrency=1 scripts/visual-audit.test.mjs",
-    "audit:visual": "node scripts/visual-audit.mjs"
+    "audit:visual": "node scripts/visual-audit.mjs",
+    "test:visual-live": "node scripts/visual-audit-ci.mjs",
+    "test:visual-contract": "node --test --test-concurrency=1 scripts/visual-audit-ci.test.mjs"
   },
   "eslintConfig": {
     "extends": [

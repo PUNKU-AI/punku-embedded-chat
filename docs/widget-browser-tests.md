@@ -66,15 +66,35 @@ The matrix uses one worker.
 CI saves screenshots, failure traces, and the HTML report for 14 days.
 Local evidence stays under `output/playwright` and is ignored by Git.
 
-## Optional Gemini screenshot review
+## Real Gemini checks in CI
 
 Gemini can review visibility, clipping, overlap, and readability.
 Browser assertions prove that links open.
-Gemini observations require human review and do not change browser test results.
+CI sends 40 synthetic screenshots to the real Gemini API after the browser matrix passes.
+Each of eight profiles provides four visible-hint screenshots and one disabled-hint control.
+The runner requires all screenshots from the completed browser report before sending any request.
+It makes ten serial requests, with four images in each request and no retries.
+Missing, unreadable, clipped, or uncertain visible hints fail the check.
+Disabled-hint controls must return no visible hint.
+Free-text observations remain advisory because a floating hint can cover background page text.
 
-The checker uses [Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite) by default.
-`GEMINI_MODEL=gemini-3.1-flash-lite` selects the cheaper supported model.
+The checker uses [Gemini 3.1 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite) by default.
+CI pins that model explicitly.
 Use an image-understanding model for screenshots.
+
+The widget repository provides the encrypted `GEMINI_API_KEY` secret only to the live review step.
+Trusted repository PRs and pushes to `main` run the real review.
+A missing key fails trusted runs.
+Fork and Dependabot PRs run browser tests, but skip the live review because GitHub withholds their secrets.
+CI saves the sanitized Gemini results with the browser evidence.
+
+Run the same checks locally after generating the browser report:
+
+```sh
+npm run test:visual-live
+```
+
+## Manual screenshot review
 
 Set `GEMINI_API_KEY` through your secure shell environment.
 Pass one to four synthetic fixture PNGs explicitly.
@@ -86,5 +106,5 @@ It limits the response and validates the returned JSON.
 npm run audit:visual -- output/playwright/results/widget-hint-left-visible-text-colors-and-viewport-bounds-narrow-phone/hint-left.png
 ```
 
-CI does not use an API key or make paid model calls.
-`npm run test:visual-audit` checks the optional checker with fake API responses.
+`npm run test:visual-audit` remains available for local API-client unit tests.
+These unit tests do not replace the real Gemini checks in CI.

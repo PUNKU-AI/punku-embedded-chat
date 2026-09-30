@@ -1,8 +1,13 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, TestInfo } from '@playwright/test';
 import { activate, assertDestination, assertHintVisible, elementState, loadWidget } from './widget-helpers';
 
 const link = '.markdown-body a strong';
 const pageErrors = new WeakMap<Page, string[]>();
+async function saveVisualScreenshot(page: Page, testInfo: TestInfo, name: string) {
+  const screenshot = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path: screenshot });
+  await testInfo.attach(`gemini-${name}`, { path: screenshot, contentType: 'image/png' });
+}
 test.beforeEach(({ page }) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
@@ -25,7 +30,7 @@ for (const position of ['left', 'top', 'bottom']) {
     expect(hint.background).toBe('rgb(18, 52, 86)');
     expect(hint.color).toBe('rgb(255, 255, 255)');
     await page.bringToFront();
-    await page.screenshot({ path: testInfo.outputPath(`hint-${position}.png`) });
+    await saveVisualScreenshot(page, testInfo, `hint-${position}`);
   });
 }
 
@@ -38,7 +43,7 @@ test('hint stays visible at the opposite corner and after resize', async ({ page
   // metric overrides. Check the rendered viewport without changing bounds.
   await page.screenshot();
   await assertHintVisible(page);
-  await page.screenshot({ path: testInfo.outputPath('hint-resized.png') });
+  await saveVisualScreenshot(page, testInfo, 'hint-resized');
   await assertHintVisible(page);
 });
 
@@ -98,9 +103,11 @@ test('hint timeout and session persistence', async ({ page, hasTouch }) => {
   await expect.poll(async () => (await elementState(page, '.cl-closed-widget-hint'))?.opacity).toBe(0);
 });
 
-test('disabled hints stay absent', async ({ page }) => {
+test('disabled hints stay absent', async ({ page }, testInfo) => {
   await loadWidget(page, { show_closed_widget_hint: 'false' });
   expect(await elementState(page, '.cl-closed-widget-hint')).toBeNull();
+  await page.bringToFront();
+  await saveVisualScreenshot(page, testInfo, 'hint-disabled');
 });
 
 test('branding link opens its exact referral URL', async ({ page, context, hasTouch }) => {
