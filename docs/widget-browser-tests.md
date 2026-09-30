@@ -20,6 +20,7 @@ Playwright then sends real mouse, keyboard, and touch input.
 
 Hint checks cover text, colors, opacity, screen bounds, three placements, long text, resizing, opening, closing, timeout, and session persistence.
 Oversized hints must scroll so users can reach their text.
+Unit tests verify that closed chats preserve focus and cancel pending input focus when closing or unmounting.
 Link checks cover nested Markdown text, branding links, exact URLs, query strings, fragments, opener protection, and referrer protection.
 Desktop checks also cover Enter, modified Enter, and middle-click.
 Phone and tablet checks use touch.

@@ -597,10 +597,11 @@ export default function ChatWindow({
   /* Refocus the User input whenever a new response is returned from the LLM */
 
   useEffect(() => {
-    // after a slight delay
-    setTimeout(() => {
+    if (!open) return;
+    const focusTimer = setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
+    return () => clearTimeout(focusTimer);
   }, [messages, open]);
 
   // Use translations based on language prop
