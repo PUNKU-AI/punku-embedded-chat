@@ -7,12 +7,13 @@ export interface StoredSession {
   messages: ChatMessageType[];
   createdAt: number;
   lastActiveAt: number;
-  expiresAt: number;
+  expiresAt: number; // 0 = no absolute expiry (created with expiryHours 0)
   domain: string;
   flowId: string;
 }
 
 export interface SessionConfig {
+  // 0 turns the limit off. A negative or non-numeric value uses the default.
   expiryHours?: number;
   idleExpiryHours?: number;
 }
@@ -21,6 +22,17 @@ export class SessionStorage {
   private static readonly STORAGE_PREFIX = 'punku-chat-session';
   private static readonly DEFAULT_EXPIRY_HOURS = 24; // 1 day
   private static readonly DEFAULT_IDLE_EXPIRY_HOURS = 0.5 // 30 minutes
+  private static readonly HOUR_MS = 60 * 60 * 1000;
+
+  /**
+   * Resolve a TTL value. An explicit 0 is kept. A missing, negative, or
+   * non-numeric value (the web component turns a bad attribute into NaN)
+   * uses the default.
+   */
+  private static resolveHours(value: number | undefined, fallback: number): number {
+    const hours = value ?? fallback;
+    return Number.isFinite(hours) && hours >= 0 ? hours : fallback;
+  }
 
   /**
    * Get storage key for the current domain and flow
@@ -131,19 +143,20 @@ export class SessionStorage {
    */
   static isSessionExpired(session: StoredSession, config: SessionConfig = {}): boolean {
     const now = Date.now();
-    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
-    const idleExpiryHours = config.idleExpiryHours || this.DEFAULT_IDLE_EXPIRY_HOURS;
+    const expiryHours = this.resolveHours(config.expiryHours, this.DEFAULT_EXPIRY_HOURS);
+    const idleExpiryHours = this.resolveHours(config.idleExpiryHours, this.DEFAULT_IDLE_EXPIRY_HOURS);
 
-    // Check absolute expiration
-    const absoluteExpiry = session.expiresAt || (session.createdAt + (expiryHours * 60 * 60 * 1000));
-    if (now > absoluteExpiry) {
+    // Check absolute expiration. 0 = no limit.
+    const absoluteExpiry = session.expiresAt
+      || (expiryHours > 0 ? session.createdAt + (expiryHours * this.HOUR_MS) : 0);
+    if (absoluteExpiry > 0 && now > absoluteExpiry) {
       // console.log('Session expired by absolute expiry');
       return true;
     }
 
-    // Check idle expiration
-    const idleExpiry = session.lastActiveAt + (idleExpiryHours * 60 * 60 * 1000);
-    if (now > idleExpiry) {
+    // Check idle expiration. 0 = no limit.
+    const idleExpiry = session.lastActiveAt + (idleExpiryHours * this.HOUR_MS);
+    if (idleExpiryHours > 0 && now > idleExpiry) {
       // console.log('Session expired by idle expiry');
       return true;
     }
@@ -160,14 +173,14 @@ export class SessionStorage {
     config: SessionConfig = {}
   ): StoredSession {
     const now = Date.now();
-    const expiryHours = config.expiryHours || this.DEFAULT_EXPIRY_HOURS;
+    const expiryHours = this.resolveHours(config.expiryHours, this.DEFAULT_EXPIRY_HOURS);
 
     const session: StoredSession = {
       sessionId: providedSessionId || uuidv4(),
       messages: [],
       createdAt: now,
       lastActiveAt: now,
-      expiresAt: now + (expiryHours * 60 * 60 * 1000),
+      expiresAt: expiryHours > 0 ? now + (expiryHours * this.HOUR_MS) : 0,
       domain: window.location.hostname,
       flowId: flowId
     };
