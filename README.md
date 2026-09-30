@@ -304,7 +304,7 @@ Use the widget API to customize your widget:
 - **flow_id:**
   - Type: String
   - Required: Yes
-  - Description: Identifier for the flow associated with the component.
+  - Description: Identifier for the flow associated with the component. The widget reads it when it mounts. To change it, replace the element.
 
 - **height:**
   - Type: Number
@@ -332,7 +332,7 @@ Use the widget API to customize your widget:
   - Type: Number
   - Required: No
   - Default: 0.5 (30 minutes)
-  - Description: The stored session expires after this many hours without activity. The next message then starts a new session.
+  - Description: The stored session expires after this many hours without activity. The next message then starts a new session. `0` turns off the idle limit.
 
 - **input_container_style:**
   - Type: JSON
@@ -484,13 +484,13 @@ Use the widget API to customize your widget:
 - **session_id:**
   - Type: String
   - Required: No
-  - Description: Custom session id to override the random session id used as default.
+  - Description: Custom session id to override the random session id used as default. With this prop, each page load starts the session with an empty history. The widget reads it when it mounts. To change it, replace the element.
 
 - **ttl_hours:**
   - Type: Number
   - Required: No
   - Default: 24
-  - Description: Maximum age of a stored session in hours. After this time the widget starts a new session, even if the visitor is active.
+  - Description: Maximum age of a stored session in hours. After this time the widget starts a new session, even if the visitor is active. `0` turns off the age limit.
 
 - **widget_id:**
   - Type: String
