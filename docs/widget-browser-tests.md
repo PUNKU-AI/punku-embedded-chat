@@ -56,7 +56,8 @@ Run one profile with `npm run test:browser -- --project=iphone`.
 Do not increase the worker count on a shared machine.
 
 CI builds current source before running the matrix.
-Linux runs headed engines under Xvfb with one worker.
+Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
+The matrix uses one worker.
 CI saves screenshots, failure traces, and the HTML report for 14 days.
 Local evidence stays under `output/playwright` and is ignored by Git.
 

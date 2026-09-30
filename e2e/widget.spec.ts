@@ -24,6 +24,7 @@ for (const position of ['left', 'top', 'bottom']) {
     expect(hint.text).toBe(text);
     expect(hint.background).toBe('rgb(18, 52, 86)');
     expect(hint.color).toBe('rgb(255, 255, 255)');
+    await page.bringToFront();
     await page.screenshot({ path: testInfo.outputPath(`hint-${position}.png`) });
   });
 }
@@ -48,7 +49,10 @@ test('oversized hints keep all text reachable by scrolling', async ({ page }) =>
     return window.__widgetRoots.get(host)!.querySelector<HTMLElement>('.cl-closed-widget-hint-text')!;
   });
   expect(await text.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
   await text.asElement()!.focus();
+  expect(await text.evaluate((element) => (element.getRootNode() as ShadowRoot).activeElement === element)).toBe(true);
   await page.keyboard.press('PageDown');
   await expect.poll(() => text.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await assertHintVisible(page);
@@ -109,6 +113,7 @@ for (const nitro of ['false', 'true']) {
     expect(context.pages()).toHaveLength(2);
     expect(await page.evaluate(() => window.__hostDiagnostics.opens)).toBe(nitro === 'true' ? 1 : 0);
     expect(await page.evaluate(() => window.__hostDiagnostics.replays)).toBe(0);
+    await page.bringToFront();
     await page.screenshot({ path: testInfo.outputPath(`chat-nitro-${nitro}.png`) });
   });
 }
@@ -125,6 +130,8 @@ for (const key of ['Enter', 'ControlOrMeta+Enter']) {
 test(`${key} opens the Nitro-intercepted link`, async ({ page, context, hasTouch }) => {
   test.skip(hasTouch, 'Desktop keyboard input is covered on all three desktop engines.');
   await loadWidget(page, { start_open: 'true', nitro: 'true' });
+  await page.bringToFront();
+  await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
   // Focus is setup only. The keyboard generates a trusted activation event.
   await page.evaluate(() => {
     const host = document.querySelector('punku-chat')!;

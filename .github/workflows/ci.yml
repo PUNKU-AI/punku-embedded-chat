@@ -61,7 +61,7 @@ jobs:
       - name: Test optional visual audit without API calls
         run: npm run test:visual-audit
       - name: Test desktop and mobile layouts
-        run: xvfb-run --auto-servernum npm run test:browser -- --headed --max-failures=2
+        run: xvfb-run --auto-servernum npm run test:browser -- --max-failures=2
       - name: Save browser evidence
         if: always()
         uses: actions/upload-artifact@v4

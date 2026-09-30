@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Linux WebKit uses Xvfb. Chromium and Firefox keep their headless compositor.
+const webkitHeadless = !process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -25,11 +28,11 @@ export default defineConfig({
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'desktop-webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'desktop-webkit', use: { ...devices['Desktop Safari'], headless: webkitHeadless } },
     { name: 'android', use: { ...devices['Pixel 7'] } },
-    { name: 'iphone', use: { ...devices['iPhone 13'] } },
+    { name: 'iphone', use: { ...devices['iPhone 13'], headless: webkitHeadless } },
     { name: 'narrow-phone', use: { ...devices['Pixel 7'], viewport: { width: 320, height: 568 } } },
-    { name: 'phone-landscape', use: { ...devices['iPhone 13 landscape'] } },
-    { name: 'tablet', use: { ...devices['iPad (gen 7)'] } },
+    { name: 'phone-landscape', use: { ...devices['iPhone 13 landscape'], headless: webkitHeadless } },
+    { name: 'tablet', use: { ...devices['iPad (gen 7)'], headless: webkitHeadless } },
   ],
 });
