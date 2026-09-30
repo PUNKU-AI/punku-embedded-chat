@@ -123,6 +123,7 @@ export default function ChatWindow({
   on_client_error,
   client_error_report_url,
   enable_client_error_reporting = true,
+  onCheckout,
 }: {
   api_key?: string;
   output_type: string,
@@ -188,6 +189,7 @@ export default function ChatWindow({
   on_client_error?: (detail: PunkuChatErrorDetail) => void;
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
+  onCheckout?: (url: string) => boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
@@ -1023,6 +1025,7 @@ export default function ChatWindow({
               additional_headers={additional_headers}
               host_url={hostUrl}
               onClientError={notifyClientError}
+              onCheckout={onCheckout}
               onFeedbackUpdate={undefined}
             />
           )}
@@ -1055,6 +1058,7 @@ export default function ChatWindow({
               additional_headers={additional_headers}
               host_url={hostUrl}
               onClientError={notifyClientError}
+              onCheckout={onCheckout}
             />
           ))}
           {sendingMessage && !isStreaming && (

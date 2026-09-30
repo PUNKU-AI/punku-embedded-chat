@@ -125,6 +125,19 @@ For more advanced customization, you can still use the style properties:
 
 ## Usage
 
+### Bookingkit checkout
+
+Bookingkit cart links with `utm_source=web_chat` open checkout on the same page.
+The widget uses the installed Bookingkit modal when its checkout API has a visible host.
+Otherwise, it opens checkout in a native dialog with a Bookingkit iframe.
+This also handles checkout clicks when NitroPack cancels normal link navigation.
+
+The handler accepts only `https://eu5.bookingkit.de/cart/set/<32-character vendor ID>` links.
+It preserves the complete cart URL and all attribution parameters.
+Other links, middle clicks, and modifier clicks keep their normal browser behavior.
+The dialog includes a close button and an explicit link to open checkout in a new tab.
+Browsers without native dialog support keep the normal checkout link.
+
 ### on simple HTML
 ```html
 <html lang="en">
