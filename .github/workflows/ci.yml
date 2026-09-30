@@ -35,3 +35,39 @@ jobs:
 
       - name: Tests
         run: npm test -- --watchAll=false --maxWorkers=2
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Check browser test types and lint
+        run: |
+          npm run typecheck:browser
+          npx eslint e2e scripts/build-browser-test-bundle.cjs scripts/visual-audit.mjs scripts/visual-audit.test.mjs playwright.config.ts
+      - name: Build current source with bounded workers
+        env:
+          # Existing CRA warnings are reported by lint, not promoted during build.
+          CI: "false"
+        run: npm run build:browser-tests
+      - name: Test optional visual audit without API calls
+        run: npm run test:visual-audit
+      - name: Test desktop and mobile layouts
+        run: xvfb-run --auto-servernum npm run test:browser -- --headed --max-failures=2
+      - name: Save browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-browser-evidence
+          path: |
+            output/playwright/report
+            output/playwright/results
+          retention-days: 14

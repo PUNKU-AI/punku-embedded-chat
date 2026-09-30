@@ -30,12 +30,39 @@
     "build:react": "react-scripts build",
     "build:bundle": "webpack --config webpack.config.js",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:browser-tests": "node scripts/build-browser-test-bundle.cjs",
+    "test:browser": "playwright test --workers=1",
+    "typecheck:browser": "tsc --noEmit -p tsconfig.e2e.json",
+    "test:visual-audit": "node --test --test-concurrency=1 scripts/visual-audit.test.mjs",
+    "audit:visual": "node scripts/visual-audit.mjs"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "e2e/**/*",
+          "playwright.config.ts"
+        ],
+        "rules": {
+          "jest/valid-title": "off",
+          "jest/expect-expect": "off",
+          "testing-library/prefer-screen-queries": "off"
+        }
+      },
+      {
+        "files": [
+          "scripts/*.mjs"
+        ],
+        "env": {
+          "node": true,
+          "es2021": true
+        }
+      }
     ]
   },
   "browserslist": {
@@ -51,6 +78,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "lucide-static": "1.47.0",
     "webpack-cli": "^5.1.4"
   },

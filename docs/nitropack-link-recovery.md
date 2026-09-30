@@ -41,3 +41,7 @@ The fixed bundle on a page without NitroPack opens the link without invoking rec
 
 Jest tests cover cancellation detection, link scoping, protocol rejection, replay suppression, and cleanup.
 Browser verification remains necessary because JSDOM cannot produce trusted user input.
+
+The automated [browser matrix](widget-browser-tests.md) now covers eight desktop and device profiles.
+It checks native input, popup counts, exact destinations, security properties, and hint geometry.
+Its behavioral Nitro fixture includes an unprotected control that reproduces the failure.

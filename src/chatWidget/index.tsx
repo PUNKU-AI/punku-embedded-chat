@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
@@ -8,6 +8,7 @@ import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
+import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 
 type ProgrammaticMessage = {
   id: number;
@@ -275,6 +276,8 @@ export default function ChatWidget({
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
+  const closedWidgetHintRef = useRef<HTMLDivElement>(null);
+  const [closedHintLayout, setClosedHintLayout] = useState<ClosedWidgetHintLayout | null>(null);
 
   useEffect(() => installNitroLinkRecovery(widgetRootRef.current), []);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -1151,6 +1154,17 @@ video {
   opacity: 1;
 }
 
+.cl-closed-widget-hint-text {
+  max-height: var(--cl-closed-hint-text-max-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: none;
+}
+
+.cl-closed-widget-hint.cl-visible .cl-closed-widget-hint-text {
+  pointer-events: auto;
+}
+
 .cl-closed-widget-hint.cl-hint-left {
   right: calc(100% + 12px);
   top: 50%;
@@ -1190,7 +1204,7 @@ video {
 }
 
 .cl-closed-widget-hint.cl-hint-left .cl-closed-widget-hint-arrow {
-  top: 50%;
+  top: var(--cl-closed-hint-arrow-y, 50%);
   right: -7px;
   transform: translateY(-50%);
   border-top: 7px solid transparent;
@@ -1207,7 +1221,7 @@ video {
 }
 
 .cl-closed-widget-hint.cl-hint-right .cl-closed-widget-hint-arrow {
-  top: 50%;
+  top: var(--cl-closed-hint-arrow-y, 50%);
   left: -7px;
   transform: translateY(-50%);
   border-top: 7px solid transparent;
@@ -3371,6 +3385,55 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         return isLeftEdgePosition ? "cl-hint-right" : "cl-hint-left";
     }
   };
+  const preferredClosedHintPositionClass = getClosedHintPositionClass();
+
+  useLayoutEffect(() => {
+    const hint = closedWidgetHintRef.current;
+    const trigger = triggerRef.current;
+    if (!shouldRenderClosedWidgetHint || !hint || !trigger) return;
+
+    let frame: number | undefined;
+    const updateLayout = () => {
+      frame = undefined;
+      const next = layoutClosedWidgetHint(hint, trigger, preferredClosedHintPositionClass);
+      if (next) {
+        setClosedHintLayout((previous) =>
+          previous?.positionClass === next.positionClass && previous.scrollText === next.scrollText
+            ? previous
+            : next
+        );
+      }
+    };
+    const scheduleLayout = () => {
+      if (frame === undefined) frame = window.requestAnimationFrame(updateLayout);
+    };
+    updateLayout();
+
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(scheduleLayout);
+    observer?.observe(hint);
+    observer?.observe(trigger);
+    if (hint.parentElement) observer?.observe(hint.parentElement);
+    window.addEventListener("resize", scheduleLayout);
+    window.visualViewport?.addEventListener("resize", scheduleLayout);
+    window.visualViewport?.addEventListener("scroll", scheduleLayout);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", scheduleLayout);
+      window.visualViewport?.removeEventListener("resize", scheduleLayout);
+      window.visualViewport?.removeEventListener("scroll", scheduleLayout);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, [
+    shouldRenderClosedWidgetHint,
+    showClosedWidgetHint,
+    closed_widget_hint_text,
+    preferredClosedHintPositionClass,
+    closedHintLayout?.scrollText,
+    triggerStyle.top,
+    triggerStyle.left,
+    triggerStyle.bottom,
+    triggerStyle.right,
+  ]);
 
   // Create style objects from simple color props if provided
   const chatTriggerStyleFromProps = button_color || button_text_color ? {
@@ -3414,7 +3477,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       <div style={{ position: "relative" }}>
         {shouldRenderClosedWidgetHint && (
           <div
-            className={`cl-closed-widget-hint ${getClosedHintPositionClass()} ${showClosedWidgetHint ? "cl-visible" : ""}`}
+            ref={closedWidgetHintRef}
+            className={`cl-closed-widget-hint ${closedHintLayout?.positionClass ?? preferredClosedHintPositionClass} ${showClosedWidgetHint ? "cl-visible" : ""}`}
             aria-hidden={!showClosedWidgetHint}
             style={{
               ...(closed_widget_hint_background_color ? { ["--cl-closed-hint-bg" as any]: closed_widget_hint_background_color } : {}),
@@ -3422,7 +3486,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
               ...(closed_widget_hint_text_color ? { color: closed_widget_hint_text_color } : {}),
             }}
           >
-            {closed_widget_hint_text}
+            {closedHintLayout?.scrollText ? (
+              <div className="cl-closed-widget-hint-text" tabIndex={showClosedWidgetHint ? 0 : -1}>{closed_widget_hint_text}</div>
+            ) : closed_widget_hint_text}
             <span className="cl-closed-widget-hint-arrow" />
           </div>
         )}
