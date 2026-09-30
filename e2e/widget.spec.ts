@@ -36,6 +36,8 @@ test('hint stays visible at the opposite corner and after resize', async ({ page
   await page.bringToFront();
   // Playwright's screenshot path synchronizes WebKit's virtual display after
   // metric overrides. Check the rendered viewport without changing bounds.
+  await page.screenshot();
+  await assertHintVisible(page);
   await page.screenshot({ path: testInfo.outputPath('hint-resized.png') });
   await assertHintVisible(page);
 });
