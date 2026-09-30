@@ -57,6 +57,8 @@ Do not increase the worker count on a shared machine.
 
 CI builds current source before running the matrix.
 Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
+Chromium uses the full browser's new headless mode.
+CI uses the matching Playwright image with a fixed digest.
 The matrix uses one worker.
 CI saves screenshots, failure traces, and the HTML report for 14 days.
 Local evidence stays under `output/playwright` and is ignored by Git.

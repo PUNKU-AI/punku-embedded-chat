@@ -51,8 +51,21 @@ test('oversized hints keep all text reachable by scrolling', async ({ page }) =>
   expect(await text.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await page.bringToFront();
   await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
-  await text.asElement()!.focus();
-  expect(await text.evaluate((element) => (element.getRootNode() as ShadowRoot).activeElement === element)).toBe(true);
+  const focusState = await text.evaluate((element) => {
+    const root = element.getRootNode() as ShadowRoot;
+    element.focus();
+    return {
+      connected: element.isConnected,
+      current: root.querySelector('.cl-closed-widget-hint-text') === element,
+      tabIndex: element.tabIndex,
+      focused: root.activeElement === element,
+      activeElement: root.activeElement?.tagName,
+      visibility: getComputedStyle(element).visibility,
+      display: getComputedStyle(element).display,
+    };
+  });
+  await test.info().attach('scroll-focus', { body: JSON.stringify(focusState), contentType: 'application/json' });
+  expect(focusState).toMatchObject({ connected: true, current: true, tabIndex: 0, focused: true });
   await page.keyboard.press('PageDown');
   await expect.poll(() => text.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await assertHintVisible(page);
@@ -140,6 +153,9 @@ test(`${key} opens the Nitro-intercepted link`, async ({ page, context, hasTouch
   const popupPromise = context.waitForEvent('page');
   await page.keyboard.press(key);
   await assertDestination(await popupPromise);
+  await expect.poll(() => page.evaluate(() => window.__hostDiagnostics.settled)).toBe(1);
+  expect(await page.evaluate(() => window.__hostDiagnostics.cancellations)).toBe(1);
+  expect(await page.evaluate(() => window.__hostDiagnostics.replays)).toBe(0);
   expect(context.pages()).toHaveLength(2);
 });
 }
@@ -151,4 +167,6 @@ test('middle-click retains native navigation under Nitro interception', async ({
   await activate(page, link, false, 'middle');
   await assertDestination(await popupPromise);
   expect(await page.evaluate(() => window.__hostDiagnostics.opens)).toBe(0);
+  expect(await page.evaluate(() => window.__hostDiagnostics.cancellations)).toBe(0);
+  expect(context.pages()).toHaveLength(2);
 });
