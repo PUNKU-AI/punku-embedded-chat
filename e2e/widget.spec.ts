@@ -1,5 +1,8 @@
 import { test, expect, Page, TestInfo } from '@playwright/test';
 import { activate, assertDestination, assertHintVisible, elementState, loadWidget } from './widget-helpers';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const link = '.markdown-body a strong';
 const pageErrors = new WeakMap<Page, string[]>();
@@ -15,6 +18,14 @@ test.beforeEach(({ page }) => {
 });
 test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
+});
+
+test('fixture serves the exact release bundle', async ({ request }) => {
+  const filename = path.resolve(__dirname, '../dist/build/static/js/bundle.min.js');
+  const response = await request.get('/bundle.js');
+  expect(response.ok()).toBe(true);
+  const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+  expect(digest(await response.body())).toBe(digest(readFileSync(filename)));
 });
 
 for (const position of ['left', 'top', 'bottom']) {

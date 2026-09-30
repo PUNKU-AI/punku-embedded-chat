@@ -8,7 +8,7 @@ const routes = {
   '/': ['fixture.html', 'text/html'],
   '/fixture.html': ['fixture.html', 'text/html'],
   '/nitro-fixture.js': ['nitro-fixture.js', 'text/javascript'],
-  '/bundle.js': ['../output/playwright/bundle.min.js', 'text/javascript'],
+  '/bundle.js': ['../dist/build/static/js/bundle.min.js', 'text/javascript'],
 };
 http.createServer((request, response) => {
   const pathname = new URL(request.url, 'http://127.0.0.1:4179').pathname;
@@ -28,7 +28,7 @@ http.createServer((request, response) => {
   }
   fs.readFile(path.resolve(__dirname, route[0]), (error, data) => {
     if (error) {
-      response.writeHead(500).end('Fixture bundle missing. Run npm run build:browser-tests.');
+      response.writeHead(500).end('Release bundle missing. Run npm run build:release.');
       return;
     }
     response.setHeader('Content-Type', route[1]);

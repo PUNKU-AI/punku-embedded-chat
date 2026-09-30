@@ -19,13 +19,52 @@ on:
         required: true
 
 permissions:
-  id-token: write # OIDC: assume the deploy role without storing static AWS keys
   contents: read
 
 jobs:
-  publish:
+  validate:
     if: ${{ vars.CDN_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user pwuser --init --ipc=host
+    outputs:
+      commit_sha: ${{ steps.check.outputs.commit_sha }}
+      tag: ${{ steps.ref.outputs.tag }}
+    steps:
+      - name: Validate version tag
+        id: ref
+        shell: bash
+        env:
+          RELEASE_REF: ${{ github.event.inputs.tag || github.ref }}
+        run: |
+          TAG="${RELEASE_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*([+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release requires an existing version tag such as v1.0.7."
+            exit 1
+          fi
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+      - name: Build and check exact release bundle
+        id: check
+        uses: ./.github/actions/check-widget-bundle
+        with:
+          real_gemini: "true"
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          check_committed_bundle: "true"
+          bundle_artifact_name: widget-tested-release-bundle
+
+  publish:
+    needs: validate
+    if: needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     env:
       AWS_REGION: ${{ vars.CDN_AWS_REGION }} # e.g. eu-central-1
       BUCKET: ${{ vars.CDN_BUCKET }} # e.g. punku-cdn (primary origin, eu-central-1)
@@ -34,39 +73,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ needs.validate.outputs.commit_sha }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20" # same as ci.yml; Node 18 is past its end of life
 
-      - name: Build bundle
-        env:
-          # CRA turns warnings into fatal errors when CI=true. The publish job
-          # should fail on real build errors, not block releases on lint warnings.
-          CI: "false"
-        run: npm run build # -> dist/build/static/js/bundle.min.js (single, self-contained ~3MB)
+      - name: Install locked icon dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Download the tested bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: widget-tested-release-bundle
+          path: .
 
       - name: Resolve version paths
         id: v
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: |
-          REF="${{ github.event.inputs.tag || github.ref_name }}"
-          TAG="${REF#refs/tags/}"
-          MAJOR="v$(printf '%s' "${TAG#v}" | cut -d. -f1)"   # v1.0.7 -> v1
+          TAG="$RELEASE_TAG"
+          MAJOR="${TAG%%.*}"
           echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
           echo "Publishing $TAG  (floating alias: chat/$MAJOR/)"
+
+      # Header icons go first. A new bundle must never reach customers before
+      # the icon files that it loads by name. See scripts/build-lucide-icons.js.
+      - name: Build header icon set
+        run: node scripts/build-lucide-icons.js
+
+      - name: Verify downloaded bundle before publication
+        run: node scripts/release-bundle.cjs verify-committed
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      # Header icons go first. A new bundle must never reach customers before
-      # the icon files that it loads by name. See scripts/build-lucide-icons.js.
-      - name: Build header icon set
-        run: node scripts/build-lucide-icons.js
 
       - name: Upload header icons -> chat/icons/lucide/ (primary + failover origin)
         run: scripts/upload-lucide-icons.sh

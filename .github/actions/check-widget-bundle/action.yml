@@ -1,0 +1,91 @@
+name: Build and check the widget release bundle
+description: Build once, test the exact release file, and retain verified artifacts.
+inputs:
+  real_gemini:
+    description: Require real Gemini calls. False only when PR secrets are unavailable.
+    required: true
+  gemini_api_key:
+    description: Existing encrypted Gemini credential, used only by the live check.
+    required: false
+  check_committed_bundle:
+    description: Require the release tag's committed CDN fallback bytes to match.
+    default: "false"
+  bundle_artifact_name:
+    description: Name for the tested release bundle artifact.
+    default: widget-tested-bundle
+outputs:
+  commit_sha:
+    description: Commit used to build and test the bundle.
+    value: ${{ steps.identity.outputs.commit_sha }}
+  bundle_sha:
+    description: SHA256 of the tested bundle.
+    value: ${{ steps.identity.outputs.bundle_sha }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: npm
+    - name: Install locked dependencies
+      shell: bash
+      run: npm ci --legacy-peer-deps
+    - name: Check types and lint
+      shell: bash
+      run: |
+        npm run typecheck:browser
+        npx eslint e2e scripts/build-widget-bundle.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts
+    - name: Build the release bundle once
+      shell: bash
+      env:
+        CI: "false"
+      run: npm run build:release
+    - name: Require committed release and fallback bytes to match
+      if: inputs.check_committed_bundle == 'true'
+      shell: bash
+      run: node scripts/release-bundle.cjs verify-committed
+    - name: Check release and visual result contracts
+      shell: bash
+      run: |
+        npm run test:release-contract
+        npm run test:visual-contract
+    - name: Test exact bundle across desktop and mobile profiles
+      shell: bash
+      run: xvfb-run --auto-servernum npm run test:browser -- --max-failures=2
+    - name: Test screenshots with real Gemini
+      if: inputs.real_gemini == 'true'
+      shell: bash
+      env:
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        GEMINI_MODEL: gemini-3.1-flash-lite
+      run: npm run test:visual-live
+    - name: Explain unavailable visual credentials
+      if: inputs.real_gemini != 'true'
+      shell: bash
+      run: echo "Real Gemini checks require repository secrets. Fork and Dependabot PRs still run browser checks."
+    - name: Verify tested bundle identity
+      id: identity
+      shell: bash
+      run: node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"
+    - name: Save tested release bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.bundle_artifact_name }}
+        path: |
+          dist/build/static/js/bundle.min.js
+          dist/build/static/js/bundle.min.js.LICENSE.txt
+          output/playwright/bundle-manifest.json
+        if-no-files-found: error
+        retention-days: 14
+    - name: Save browser and Gemini evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: widget-browser-evidence
+        path: |
+          output/playwright/report
+          output/playwright/results
+          output/playwright/test-results.json
+          output/playwright/gemini-visual-review.json
+          output/playwright/bundle-manifest.json
+        retention-days: 14

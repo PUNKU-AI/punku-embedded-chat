@@ -1,8 +1,7 @@
 name: CI
 
-# Typecheck and test every PR and every push to main. The committed bundle in
-# dist/ ships to customer embeds on the next version tag, so broken source must
-# not reach main unnoticed. See publish-cdn.yml for the release build.
+# Typecheck and test every PR and every push to main. Releases use the same
+# bundle build and browser/Gemini checks before uploading the tested artifact.
 
 on:
   push:
@@ -44,42 +43,8 @@ jobs:
       options: --user pwuser --init --ipc=host
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Build and check the release bundle
+        uses: ./.github/actions/check-widget-bundle
         with:
-          node-version: "20"
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-      - name: Check browser test types and lint
-        run: |
-          npm run typecheck:browser
-          npx eslint e2e scripts/build-browser-test-bundle.cjs scripts/visual-audit*.mjs playwright.config.ts
-      - name: Build current source with bounded workers
-        env:
-          # Existing CRA warnings are reported by lint, not promoted during build.
-          CI: "false"
-        run: npm run build:browser-tests
-      - name: Test desktop and mobile layouts
-        run: xvfb-run --auto-servernum npm run test:browser -- --max-failures=2
-      - name: Check visual test expectations
-        run: npm run test:visual-contract
-      - name: Test screenshots with real Gemini
-        if: github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.1-flash-lite
-        run: npm run test:visual-live
-      - name: Explain unavailable visual credentials
-        if: github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
-        run: echo "Real Gemini checks run on trusted repository PRs and main pushes. GitHub withholds secrets from fork and Dependabot PRs."
-      - name: Save browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: widget-browser-evidence
-          path: |
-            output/playwright/report
-            output/playwright/results
-            output/playwright/test-results.json
-            output/playwright/gemini-visual-review.json
-          retention-days: 14
+          real_gemini: ${{ github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}

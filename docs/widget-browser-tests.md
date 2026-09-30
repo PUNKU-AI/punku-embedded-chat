@@ -1,6 +1,7 @@
 # Widget browser tests
 
-These tests load a production bundle built from the current source.
+These tests load `dist/build/static/js/bundle.min.js`, built from the current source.
+Each browser profile checks that the fixture serves that exact file.
 They keep the widget shadow root closed.
 Test instrumentation records the returned root without changing its mode.
 Playwright then sends real mouse, keyboard, and touch input.
@@ -49,7 +50,8 @@ The suite and bundle build use explicit worker limits.
 npm ci --legacy-peer-deps
 npx playwright install chromium firefox webkit
 npm run typecheck:browser
-CI=false npm run build:browser-tests
+CI=false npm run build:release
+npm run test:release-contract
 npm run test:browser
 ```
 
@@ -57,6 +59,7 @@ Run one profile with `npm run test:browser -- --project=iphone`.
 Do not increase the worker count on a shared machine.
 
 CI builds current source before running the matrix.
+CI and release validation use the same composite action.
 Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
 Chromium uses the full browser's new headless mode.
 CI uses the matching Playwright image with a fixed digest.
@@ -87,12 +90,29 @@ Trusted repository PRs and pushes to `main` run the real review.
 A missing key fails trusted runs.
 Fork and Dependabot PRs run browser tests, but skip the live review because GitHub withholds their secrets.
 CI saves the sanitized Gemini results with the browser evidence.
+The results include the build commit and SHA256 checksums for the bundle and license.
+The checker verifies those files before and after its API calls.
 
 Run the same checks locally after generating the browser report:
 
 ```sh
 npm run test:visual-live
 ```
+
+## Release gate
+
+The release workflow builds the bundle once before testing it.
+Browser checks, real Gemini checks, and checksum checks must pass before publication.
+The publish job downloads the tested artifact and verifies its commit and checksums.
+It uploads that artifact without rebuilding the JavaScript bundle.
+
+The tag's committed bundle and license must also match the tested files.
+This keeps jsDelivr and githack fallback files equal to the primary CDN file.
+
+Rebuild and commit `dist` before creating a release tag.
+Wait for CI on that commit to pass before pushing the tag.
+Tag-based fallback CDNs can serve a pushed tag before the publish workflow finishes.
+Old tags without these gate files cannot pass the new release workflow.
 
 ## Manual screenshot review
 

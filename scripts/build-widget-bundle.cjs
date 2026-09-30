@@ -1,5 +1,5 @@
 /* eslint-env node */
-// Keep this build serial. It uses the same source and configurations as release.
+// CI and release builds use this one serial production build.
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 process.env.NODE_ENV = 'production';
@@ -29,8 +29,7 @@ if (!process.argv[2]) {
   const config = require('../webpack.config');
   config.mode = 'production';
   config.parallelism = 1;
-  config.output.path = path.resolve(__dirname, '../output/playwright');
-  config.output.filename = 'bundle.min.js';
+  config.output.path = path.resolve(__dirname, '../dist');
   config.optimization = { minimizer: [new TerserPlugin({ parallel: 1 })] };
   for (const plugin of config.plugins) {
     if (plugin.options && 'parallel' in plugin.options) plugin.options.parallel = 1;
@@ -39,6 +38,9 @@ if (!process.argv[2]) {
     if (error || stats.hasErrors()) {
       console.error(error || stats.toString({ all: false, errors: true }));
       process.exitCode = 1;
-    } else console.log(stats.toString({ all: false, assets: true, warnings: true }));
+    } else {
+      require('./release-bundle.cjs').recordBundleIdentity();
+      console.log(stats.toString({ all: false, assets: true, warnings: true }));
+    }
   });
 }

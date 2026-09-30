@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditScreenshots, loadScreenshots } from "./visual-audit.mjs";
+import releaseBundle from "./release-bundle.cjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROFILES = ["desktop-chromium", "desktop-firefox", "desktop-webkit", "android", "iphone", "narrow-phone", "phone-landscape", "tablet"];
@@ -79,6 +80,7 @@ export async function main() {
   const report = { model: process.env.GEMINI_MODEL || "gemini-3.1-flash-lite", startedAt: new Date().toISOString(), passed: false, batches: [] };
   try {
     if (!process.env.GEMINI_API_KEY?.trim()) fail("GEMINI_API_KEY is missing from the widget repository's CI secrets.");
+    report.bundle = releaseBundle.verifyBundleIdentity();
     const browserReport = JSON.parse(await readFile(path.join(REPO_ROOT, "output/playwright/test-results.json"), "utf8"));
     const batches = collectScreenshots(browserReport);
     // Validate every image before the first paid request. The client validates again.
@@ -94,6 +96,7 @@ export async function main() {
       }
     }
     report.completedAt = new Date().toISOString();
+    releaseBundle.verifyBundleIdentity();
     report.passed = report.batches.every((batch) => batch.checks.every((check) => check.passed));
     await writeFile(RESULT_PATH, JSON.stringify(report, null, 2));
     if (!report.passed) fail("Real Gemini screenshot checks failed. See gemini-visual-review.json.");

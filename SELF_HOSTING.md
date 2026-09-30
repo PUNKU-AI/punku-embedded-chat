@@ -83,10 +83,24 @@ Defaults below — confirm/adjust the values in **§6 Decisions** before running
 The workflow is in this repo at **[`.github/workflows/publish-cdn.yml`](./.github/workflows/publish-cdn.yml)**. It is **dormant until configured** (guarded on the `CDN_DEPLOY_ROLE_ARN` variable), so it won't create failed runs before AWS is ready.
 
 On `git push --tags` (e.g. `v1.0.7`) it:
-1. `npm run build`
-2. uploads the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache)
-3. overwrites the floating copy → `chat/v1/bundle.min.js` (5-min cache)
-4. invalidates the floating path on CloudFront
+
+1. Builds the release bundle once with `npm run build:release`.
+2. Tests that file across eight browser and device profiles.
+3. Runs real Gemini checks on the resulting screenshots.
+4. Verifies that committed fallback files match the tested bundle and license.
+5. Downloads the tested artifact in the publish job and verifies its commit and checksums.
+6. Uploads the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache).
+7. Overwrites the floating copy → `chat/v1/bundle.min.js` (5-min cache).
+8. Invalidates the floating path on CloudFront.
+
+Failed checks block CDN uploads.
+The publish job does not rebuild the JavaScript bundle.
+CI uses the same build and browser/Gemini action.
+See [widget browser tests](./docs/widget-browser-tests.md) for the coverage and limitations.
+
+Rebuild and commit `dist` before creating a release tag.
+Wait for CI on that commit to pass before pushing the tag.
+Tag-based fallback CDNs can serve a pushed tag before this workflow finishes.
 
 **Activate it** by adding these **repo variables** (Settings → Secrets and variables → Actions → *Variables*):
 
@@ -97,7 +111,9 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 | `CDN_BUCKET` | `punku-cdn` |
 | `CDN_CLOUDFRONT_ID` | `<DISTRIBUTION_ID>` |
 
-GitHub keeps publishing to GitHub tags exactly as before; this just **adds** the S3 push. To backfill the current release once configured, run the workflow manually (`workflow_dispatch`) with `tag: v1.0.6`.
+GitHub tags remain available to fallback CDNs.
+Manual publication requires an existing version tag with the release gate files and matching committed bundle.
+Old tags that lack those files fail validation and cannot use this new workflow.
 
 ### Header icons (`header_icon_name`)
 
