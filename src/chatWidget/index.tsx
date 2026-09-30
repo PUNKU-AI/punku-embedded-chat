@@ -7,6 +7,7 @@ import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
+import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 
 type ProgrammaticMessage = {
   id: number;
@@ -274,6 +275,8 @@ export default function ChatWidget({
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => installNitroLinkRecovery(widgetRootRef.current), []);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef(open);
   const triggerPositionRef = useRef(triggerPositionOverride);
