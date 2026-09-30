@@ -244,7 +244,12 @@ export default function ChatWidget({
     idleExpiryHours: idle_expiration_hours
   }), [ttl_hours, idle_expiration_hours]);
 
-  const sessionData = SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig);
+  // Run once at mount. A call in the render body writes to localStorage on each
+  // render, and with a session_id prop it resets the stored history each time.
+  // flow_id and session_id are read at mount only.
+  const [sessionData] = useState(() =>
+    SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig)
+  );
 
   const [open, setOpen] = useState(start_open);
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
