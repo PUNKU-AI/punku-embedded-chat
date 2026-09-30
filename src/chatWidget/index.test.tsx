@@ -505,6 +505,65 @@ describe('ChatWidget', () => {
       );
     });
 
+    it('should call getOrCreateSession once across re-renders', () => {
+      // A valid stored session, so that opening the widget does not start a new one
+      (SessionStorage.getStoredSession as jest.Mock).mockReturnValue({
+        sessionId: 'mock-session-id',
+        messages: [],
+        createdAt: Date.now(),
+        lastActiveAt: Date.now(),
+        expiresAt: Date.now() + 86400000,
+        domain: 'localhost',
+        flowId: 'test-flow-id'
+      });
+      (SessionStorage.isSessionExpired as jest.Mock).mockReturnValue(false);
+
+      const { rerender } = render(<ChatWidget {...defaultProps} />);
+
+      const trigger = screen.getByTestId('chat-trigger');
+      fireEvent.click(trigger);
+      fireEvent.click(trigger);
+      rerender(<ChatWidget {...defaultProps} theme="dark" />);
+
+      expect(SessionStorage.getOrCreateSession).toHaveBeenCalledTimes(1);
+    });
+
+    describe('with the real SessionStorage', () => {
+      const { SessionStorage: RealSessionStorage } = jest.requireActual('../utils/sessionStorage');
+      const delegated = [
+        'getOrCreateSession',
+        'getStoredSession',
+        'isSessionExpired',
+        'updateMessages',
+        'clearSession'
+      ] as const;
+      const mocked = SessionStorage as unknown as Record<(typeof delegated)[number], jest.Mock>;
+
+      // The Jest config uses resetMocks, so these implementations end with each test
+      beforeEach(() => {
+        window.localStorage.clear();
+        delegated.forEach((name) => {
+          mocked[name].mockImplementation((...args: any[]) => RealSessionStorage[name](...args));
+        });
+      });
+
+      afterEach(() => {
+        window.localStorage.clear();
+      });
+
+      it('should keep stored messages after a re-render when session_id is set', () => {
+        render(<ChatWidget {...defaultProps} session_id="custom-session-id" start_open={true} />);
+
+        fireEvent.click(screen.getByTestId('add-message'));
+        // Close the widget: a re-render that does not change the messages
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+
+        const stored = RealSessionStorage.getStoredSession('test-flow-id');
+        expect(stored?.sessionId).toBe('custom-session-id');
+        expect(stored?.messages).toHaveLength(1);
+      });
+    });
+
     it('should start new session when button is clicked', async () => {
       jest.useFakeTimers();
 
