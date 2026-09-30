@@ -29,10 +29,14 @@ for (const position of ['left', 'top', 'bottom']) {
   });
 }
 
-test('hint stays visible at the opposite corner and after resize', async ({ page }) => {
+test('hint stays visible at the opposite corner and after resize', async ({ page }, testInfo) => {
   await loadWidget(page, { chat_position: 'top-left', closed_widget_hint_text: 'A long museum hint. '.repeat(12) });
   await assertHintVisible(page);
   await page.setViewportSize({ width: 320, height: 568 });
+  await page.bringToFront();
+  // Playwright's screenshot path synchronizes WebKit's virtual display after
+  // metric overrides. Check the rendered viewport without changing bounds.
+  await page.screenshot({ path: testInfo.outputPath('hint-resized.png') });
   await assertHintVisible(page);
 });
 
@@ -145,11 +149,21 @@ test(`${key} opens the Nitro-intercepted link`, async ({ page, context, hasTouch
   await loadWidget(page, { start_open: 'true', nitro: 'true' });
   await page.bringToFront();
   await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
+  // The chat schedules initial input focus. Wait for it before taking focus.
+  await expect.poll(() => page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    return window.__widgetRoots.get(host)!.activeElement?.classList.contains('cl-input-element');
+  })).toBe(true);
   // Focus is setup only. The keyboard generates a trusted activation event.
   await page.evaluate(() => {
     const host = document.querySelector('punku-chat')!;
     window.__widgetRoots.get(host)!.querySelector<HTMLAnchorElement>('.markdown-body a')!.focus();
   });
+  await expect.poll(() => page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    const root = window.__widgetRoots.get(host)!;
+    return root.activeElement === root.querySelector('.markdown-body a');
+  })).toBe(true);
   const popupPromise = context.waitForEvent('page');
   await page.keyboard.press(key);
   await assertDestination(await popupPromise);

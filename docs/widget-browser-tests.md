@@ -59,6 +59,8 @@ CI builds current source before running the matrix.
 Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
 Chromium uses the full browser's new headless mode.
 CI uses the matching Playwright image with a fixed digest.
+Resize checks save a screenshot to synchronize WebKit's virtual display before checking the rendered bounds.
+Keyboard checks wait for initial input focus before they focus a link.
 The matrix uses one worker.
 CI saves screenshots, failure traces, and the HTML report for 14 days.
 Local evidence stays under `output/playwright` and is ignored by Git.

@@ -24,7 +24,9 @@ export async function loadWidget(page: Page, props: Record<string, string> = {})
     if (new URL(route.request().url()).hostname === '127.0.0.1') return route.continue();
     return route.abort();
   });
+  await page.bringToFront();
   await page.goto('/fixture.html?' + new URLSearchParams(props));
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
   await expect.poll(() => page.evaluate(() => {
     const host = document.querySelector('punku-chat, punku-control');
     return !!host && !!window.__widgetRoots.get(host)?.querySelector('.cl-trigger, a');
