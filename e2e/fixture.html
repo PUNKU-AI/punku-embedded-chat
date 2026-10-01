@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Widget browser fixture</title>
+  <style>body{margin:0;font-family:Arial,sans-serif;background:#eef2f6}main{padding:24px}h1{font-size:22px}</style>
+  <script src="/nitro-fixture.js"></script>
+</head>
+<body>
+  <main><h1>Museum information</h1><p>Synthetic widget test. No customer data.</p></main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    if (params.get('control') === 'true') {
+      const host = document.createElement('punku-control');
+      document.body.append(host);
+      host.attachShadow({ mode: 'closed' }).innerHTML = '<a href="/destination.html?source=chat&count=2#details" target="_blank" rel="noopener noreferrer" style="position:fixed;left:20px;top:140px"><strong>Open information link</strong></a>';
+    } else {
+      const widget = document.createElement('punku-chat');
+      const props = {
+        online: 'true', host_url: location.origin, flow_id: 'browser-fixture',
+        widget_id: 'browser-fixture', branding: 'punku-ai', window_title: 'Museum information',
+        width: '300', height: '230', default_language: 'en',
+        welcome_message: 'Test [**Open information link**](/destination.html?source=chat&count=2#details).',
+        show_closed_widget_hint: 'true', closed_widget_hint_show_once: 'false',
+        closed_widget_hint_text: 'Hi! How can I help you?', start_open: 'false',
+      };
+      for (const [key, value] of Object.entries(props)) widget.setAttribute(key, value);
+      for (const [key, value] of params) {
+        if (key !== 'nitro' && key !== 'control') widget.setAttribute(key, value);
+      }
+      document.body.append(widget);
+      const script = document.createElement('script');
+      script.src = '/bundle.js';
+      document.head.append(script);
+    }
+  </script>
+</body>
+</html>

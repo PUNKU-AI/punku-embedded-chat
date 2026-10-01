@@ -1,8 +1,7 @@
 name: CI
 
-# Typecheck and test every PR and every push to main. The committed bundle in
-# dist/ ships to customer embeds on the next version tag, so broken source must
-# not reach main unnoticed. See publish-cdn.yml for the release build.
+# Typecheck and test every PR and every push to main. Releases use the same
+# bundle build and browser/Gemini checks before uploading the tested artifact.
 
 on:
   push:
@@ -35,3 +34,17 @@ jobs:
 
       - name: Tests
         run: npm test -- --watchAll=false --maxWorkers=2
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user pwuser --init --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and check the release bundle
+        uses: ./.github/actions/check-widget-bundle
+        with:
+          real_gemini: ${{ github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
