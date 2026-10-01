@@ -1160,14 +1160,11 @@ video {
 }
 
 .cl-closed-widget-hint-text {
-  max-height: var(--cl-closed-hint-text-max-height);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  pointer-events: none;
-}
-
-.cl-closed-widget-hint.cl-visible .cl-closed-widget-hint-text {
-  pointer-events: auto;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-height: 2.6em;
+  overflow: hidden;
 }
 
 .cl-closed-widget-hint.cl-hint-left {
@@ -3403,7 +3400,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       const next = layoutClosedWidgetHint(hint, trigger, preferredClosedHintPositionClass);
       if (next) {
         setClosedHintLayout((previous) =>
-          previous?.positionClass === next.positionClass && previous.scrollText === next.scrollText
+          previous?.positionClass === next.positionClass
             ? previous
             : next
         );
@@ -3433,7 +3430,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     showClosedWidgetHint,
     closed_widget_hint_text,
     preferredClosedHintPositionClass,
-    closedHintLayout?.scrollText,
     triggerStyle.top,
     triggerStyle.left,
     triggerStyle.bottom,
@@ -3491,9 +3487,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
               ...(closed_widget_hint_text_color ? { color: closed_widget_hint_text_color } : {}),
             }}
           >
-            {closedHintLayout?.scrollText ? (
-              <div className="cl-closed-widget-hint-text" tabIndex={showClosedWidgetHint ? 0 : -1}>{closed_widget_hint_text}</div>
-            ) : closed_widget_hint_text}
+            <div className="cl-closed-widget-hint-text">{closed_widget_hint_text}</div>
             <span className="cl-closed-widget-hint-arrow" />
           </div>
         )}

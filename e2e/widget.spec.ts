@@ -63,36 +63,41 @@ test('long side hints remain inside the bottom corner', async ({ page }) => {
   await assertHintVisible(page);
 });
 
-test('oversized hints keep all text reachable by scrolling', async ({ page }) => {
-  await loadWidget(page, { closed_widget_hint_text: 'Ask about museum tickets and exhibits. '.repeat(100) });
-  await assertHintVisible(page);
-  const text = await page.evaluateHandle(() => {
-    const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)!.querySelector<HTMLElement>('.cl-closed-widget-hint-text')!;
+for (const position of ['left', 'top', 'bottom']) {
+  test(`oversized ${position} hint shows two lines and keeps the trigger clickable`, async ({ page, hasTouch }) => {
+    const content = 'Hello!\n' + 'Ask about museum tickets and exhibits. '.repeat(100);
+    await loadWidget(page, {
+      closed_widget_hint_text: content,
+      closed_widget_hint_position: position,
+    });
+    await assertHintVisible(page);
+    const geometry = await page.evaluate(() => {
+      const host = document.querySelector('punku-chat')!;
+      const root = window.__widgetRoots.get(host)!;
+      const text = root.querySelector<HTMLElement>('.cl-closed-widget-hint-text')!;
+      const trigger = root.querySelector<HTMLElement>('.cl-trigger')!;
+      const triggerRect = trigger.getBoundingClientRect();
+      const hit = root.elementFromPoint(
+        triggerRect.x + triggerRect.width / 2,
+        triggerRect.y + triggerRect.height / 2,
+      );
+      return {
+        text: text.textContent,
+        textHeight: text.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(text).lineHeight),
+        triggerReceivesInput: hit === trigger || trigger.contains(hit),
+      };
+    });
+    expect(geometry.text).toBe(content);
+    expect(geometry.lineHeight).toBeGreaterThan(0);
+    expect(geometry.textHeight).toBeGreaterThanOrEqual(2 * geometry.lineHeight - 1);
+    expect(geometry.textHeight).toBeLessThanOrEqual(2 * geometry.lineHeight + 1);
+    expect(geometry.triggerReceivesInput).toBe(true);
+    await activate(page, '.cl-trigger', hasTouch);
+    await expect.poll(() => elementState(page, '.cl-closed-widget-hint')).toBeNull();
+    await expect.poll(async () => (await elementState(page, '.cl-chat-window'))?.visibility).toBe('visible');
   });
-  expect(await text.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  await page.bringToFront();
-  await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
-  const focusState = await text.evaluate((element) => {
-    const root = element.getRootNode() as ShadowRoot;
-    element.focus();
-    return {
-      connected: element.isConnected,
-      current: root.querySelector('.cl-closed-widget-hint-text') === element,
-      tabIndex: element.tabIndex,
-      focused: root.activeElement === element,
-      activeElement: root.activeElement?.tagName,
-      visibility: getComputedStyle(element).visibility,
-      display: getComputedStyle(element).display,
-    };
-  });
-  await test.info().attach('scroll-focus', { body: JSON.stringify(focusState), contentType: 'application/json' });
-  expect(focusState).toMatchObject({ connected: true, current: true, tabIndex: 0, focused: true });
-  await page.keyboard.press('PageDown');
-  await expect.poll(() => text.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await assertHintVisible(page);
-  await text.dispose();
-});
+}
 
 test('hint hides on opening and returns after closing when repeat is enabled', async ({ page, hasTouch }) => {
   await loadWidget(page);

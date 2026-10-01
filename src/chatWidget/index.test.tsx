@@ -244,7 +244,7 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text={hintText} />);
 
       const hint = screen.getByText((content, element) => {
-        return Boolean(element && element.classList.contains('cl-closed-widget-hint') && content.includes('How can I help you?'));
+        return Boolean(element && element.classList.contains('cl-closed-widget-hint-text') && content.includes('How can I help you?'));
       });
       expect(hint.textContent).toBe(hintText);
     });
@@ -403,13 +403,13 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />);
 
       const hint = screen.getByText(defaultClosedHintText);
-      expect(hint).toHaveClass('cl-visible');
+      expect(hint).toBeVisible();
 
       act(() => {
         jest.advanceTimersByTime(1000);
       });
 
-      expect(hint).not.toHaveClass('cl-visible');
+      expect(hint).not.toBeVisible();
       jest.useRealTimers();
     });
   });
@@ -417,35 +417,35 @@ describe('ChatWidget', () => {
   describe('Closed Widget Hint Show Once', () => {
     it('should show the hint only once per browsing session by default', () => {
       const firstMount = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
       firstMount.unmount();
 
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).not.toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).not.toBeVisible();
     });
 
     it('should show the hint on every mount when closed_widget_hint_show_once is false', () => {
       const firstMount = render(
         <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_show_once={false} />
       );
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
       firstMount.unmount();
 
       render(
         <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_show_once={false} />
       );
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
     });
 
     it('should not re-show the hint after the user closes the chat window', () => {
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
 
       fireEvent.click(screen.getByTestId('chat-trigger'));
       expect(screen.queryByText(defaultClosedHintText)).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('chat-trigger'));
-      expect(screen.getByText(defaultClosedHintText)).not.toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).not.toBeVisible();
     });
 
     it('should scope the shown flag to the flow id', () => {
@@ -453,7 +453,7 @@ describe('ChatWidget', () => {
       firstMount.unmount();
 
       render(<ChatWidget {...defaultProps} flow_id="another-flow-id" show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
     });
 
     it('should show the hint again in a new browsing session', () => {
@@ -462,7 +462,7 @@ describe('ChatWidget', () => {
       window.sessionStorage.clear();
 
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
     });
 
     it('should not mark the hint as shown when it is disabled', () => {
@@ -470,7 +470,7 @@ describe('ChatWidget', () => {
       firstMount.unmount();
 
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
-      expect(screen.getByText(defaultClosedHintText)).toHaveClass('cl-visible');
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
     });
   });
 

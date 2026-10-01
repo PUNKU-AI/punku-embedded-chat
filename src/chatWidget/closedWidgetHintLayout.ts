@@ -3,7 +3,6 @@ const HINT_GAP = 12;
 
 export type ClosedWidgetHintLayout = {
   positionClass: string;
-  scrollText: boolean;
 };
 
 const setStyle = (element: HTMLElement, property: string, value: string) => {
@@ -34,17 +33,8 @@ export function layoutClosedWidgetHint(
   const availableHeight = Math.max(0, viewportHeight - HINT_MARGIN * 2);
   const maximumX = minimumX + availableWidth;
   const maximumY = minimumY + availableHeight;
-  const style = getComputedStyle(hint);
-  const verticalPadding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-  const textHeight = Math.max(0, availableHeight - verticalPadding);
-  const text = hint.querySelector<HTMLElement>(".cl-closed-widget-hint-text");
-
   setStyle(hint, "max-width", pixels(Math.min(320, availableWidth, Math.max(0, viewportWidth - 96))));
   setStyle(hint, "max-height", pixels(availableHeight));
-  setStyle(hint, "--cl-closed-hint-text-max-height", pixels(textHeight));
-
-  const naturalTextHeight = text ? text.scrollHeight : hint.scrollHeight - verticalPadding;
-  const scrollText = naturalTextHeight > textHeight + 1;
   const bounds = hint.getBoundingClientRect();
   const width = Math.min(bounds.width, availableWidth);
   const height = Math.min(bounds.height, availableHeight);
@@ -82,5 +72,5 @@ export function layoutClosedWidgetHint(
   setStyle(hint, "bottom", "auto");
   setStyle(hint, "transform", "none");
   setStyle(hint, "--cl-closed-hint-arrow-y", pixels(Math.max(8, Math.min(triggerBounds.top + triggerBounds.height / 2 - y, height - 8))));
-  return { positionClass, scrollText };
+  return { positionClass };
 }

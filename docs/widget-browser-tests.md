@@ -20,7 +20,8 @@ Playwright then sends real mouse, keyboard, and touch input.
 | Tablet | WebKit | iPad emulation and touch |
 
 Hint checks cover text, colors, opacity, screen bounds, three placements, long text, resizing, opening, closing, timeout, and session persistence.
-Oversized hints must scroll so users can reach their text.
+Long hints show at most two text lines and end with an ellipsis.
+Geometry checks verify this limit and confirm that every placement keeps the chat trigger clickable.
 Unit tests verify that closed chats preserve focus and cancel pending input focus when closing or unmounting.
 Link checks cover nested Markdown text, branding links, exact URLs, query strings, fragments, opener protection, and referrer protection.
 Desktop checks also cover Enter, modified Enter, and middle-click.
@@ -78,6 +79,7 @@ Each of eight profiles provides four visible-hint screenshots and one disabled-h
 The runner requires all screenshots from the completed browser report before sending any request.
 It makes ten serial requests, with four images in each request and no retries.
 Missing, unreadable, clipped, or uncertain visible hints fail the check.
+Intentional two-line truncation is valid when every displayed line and the complete bubble border remain inside the viewport.
 Disabled-hint controls must return no visible hint.
 Free-text observations remain advisory because a floating hint can cover background page text.
 
