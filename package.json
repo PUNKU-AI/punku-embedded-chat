@@ -26,16 +26,47 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "npm install --legacy-peer-deps && npm run build:react && npm run build:bundle",
+    "build": "npm install --legacy-peer-deps && npm run build:release",
+    "build:release": "node scripts/build-widget-bundle.cjs",
     "build:react": "react-scripts build",
     "build:bundle": "webpack --config webpack.config.js",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:browser-tests": "npm run build:release",
+    "test:browser": "playwright test --workers=1",
+    "typecheck:browser": "tsc --noEmit -p tsconfig.e2e.json",
+    "test:visual-audit": "node --test --test-concurrency=1 scripts/visual-audit.test.mjs",
+    "audit:visual": "node scripts/visual-audit.mjs",
+    "test:visual-live": "node scripts/visual-audit-ci.mjs",
+    "test:visual-contract": "node --test --test-concurrency=1 scripts/visual-audit-ci.test.mjs",
+    "test:release-contract": "node --test --test-concurrency=1 scripts/release-*.test.cjs"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "e2e/**/*",
+          "playwright.config.ts"
+        ],
+        "rules": {
+          "jest/valid-title": "off",
+          "jest/expect-expect": "off",
+          "testing-library/prefer-screen-queries": "off"
+        }
+      },
+      {
+        "files": [
+          "scripts/*.mjs"
+        ],
+        "env": {
+          "node": true,
+          "es2021": true
+        }
+      }
     ]
   },
   "browserslist": {
@@ -51,6 +82,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "lucide-static": "1.47.0",
     "webpack-cli": "^5.1.4"
   },

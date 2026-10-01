@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './index';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
@@ -330,6 +330,120 @@ describe('ChatWindow', () => {
       await waitFor(() => {
         expect(input.placeholder).toBe('Sending...');
       });
+    });
+  });
+
+  describe('Input Autofocus', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    });
+
+    it('should preserve hint focus while the chat is closed', () => {
+      const { rerender } = render(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow {...defaultProps} open={false} />
+        </>
+      );
+      const hint = screen.getByRole('button', { name: 'Scroll the hint' });
+      hint.focus();
+
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(hint).toHaveFocus();
+
+      rerender(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow
+            {...defaultProps}
+            open={false}
+            messages={[{ message: 'Assistant reply', isSend: false }]}
+          />
+        </>
+      );
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(hint).toHaveFocus();
+    });
+
+    it('should focus the input 100 milliseconds after opening', () => {
+      const { rerender } = render(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow {...defaultProps} open={false} />
+        </>
+      );
+      const hint = screen.getByRole('button', { name: 'Scroll the hint' });
+      hint.focus();
+
+      rerender(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow {...defaultProps} open={true} />
+        </>
+      );
+      act(() => {
+        jest.advanceTimersByTime(99);
+      });
+      expect(hint).toHaveFocus();
+
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should cancel pending input focus when the chat closes', () => {
+      const { rerender } = render(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow {...defaultProps} open={true} />
+        </>
+      );
+      act(() => {
+        jest.advanceTimersByTime(50);
+      });
+
+      rerender(
+        <>
+          <button>Scroll the hint</button>
+          <ChatWindow {...defaultProps} open={false} />
+        </>
+      );
+      const hint = screen.getByRole('button', { name: 'Scroll the hint' });
+      hint.focus();
+
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(hint).toHaveFocus();
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('should cancel pending input focus when the chat unmounts', () => {
+      const { unmount } = render(<ChatWindow {...defaultProps} open={true} />);
+      const input = screen.getByRole('textbox');
+      const focus = jest.spyOn(input, 'focus');
+
+      act(() => {
+        jest.advanceTimersByTime(50);
+      });
+      unmount();
+
+      expect(jest.getTimerCount()).toBe(0);
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(focus).not.toHaveBeenCalled();
+      focus.mockRestore();
     });
   });
 
