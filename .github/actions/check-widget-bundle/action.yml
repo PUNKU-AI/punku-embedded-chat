@@ -25,16 +25,21 @@ runs:
   steps:
     - uses: actions/setup-node@v4
       with:
-        node-version: "20"
+        node-version: "24"
         cache: npm
     - name: Install locked dependencies
       shell: bash
-      run: npm ci --legacy-peer-deps
+      run: npm ci
+    - name: Audit all dependencies
+      shell: bash
+      run: npm run audit:dependencies
     - name: Check types and lint
       shell: bash
       run: |
+        npx tsc --noEmit
         npm run typecheck:browser
-        npx eslint e2e scripts/build-widget-bundle.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts
+        npx eslint src --ext .ts,.tsx --ignore-pattern '**/*.test.*'
+        npx eslint e2e scripts/build-widget-bundle.cjs scripts/jest-svg-transform.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts webpack.config.js babel.config.cjs src/controllers/index.ts src/controllers/index.test.ts
     - name: Build the release bundle once
       shell: bash
       env:

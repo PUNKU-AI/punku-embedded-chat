@@ -124,7 +124,7 @@ describe('ConfirmationModal', () => {
       render(<ConfirmationModal {...defaultProps} />);
 
       const confirmButton = document.querySelector('.cl-modal-btn-confirm');
-      expect(confirmButton).toHaveStyle({ color: 'white' });
+      expect(confirmButton).toHaveStyle({ color: 'rgb(255, 255, 255)' });
     });
   });
 

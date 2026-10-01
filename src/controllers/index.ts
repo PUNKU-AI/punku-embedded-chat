@@ -1,5 +1,3 @@
-import axios from "axios";
-
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 export class InvalidRequestHeaderError extends Error {
@@ -139,7 +137,7 @@ export async function sendMessage(
     
     const responseData = await response.json();
     
-    // Return axios-like format
+    // Keep the response format used by chat callers.
     return {
       data: responseData,
       status: response.status,
@@ -308,7 +306,11 @@ export async function sendFeedback(
   api_key?: string,
   additional_headers?: {[key: string]: string}
 ) {
-  const headers = buildRequestHeaders(api_key, additional_headers);
+  // Preserve case-insensitive overrides. Fetch otherwise joins duplicate names.
+  const headers = Object.fromEntries(
+    Object.entries(buildRequestHeaders(api_key, additional_headers))
+      .map(([name, value]) => [name.toLowerCase(), value])
+  );
 
   // Prepare the request body according to MessageUpdate model
   const requestBody = {
@@ -317,15 +319,35 @@ export async function sendFeedback(
     }
   };
 
-  // console.log(
-  //   `PUT ${baseUrl}/api/v1/monitor/messages/${message_id}`,
-  //   requestBody,
-  //   { headers }
-  // );
-
-  return axios.put(
+  const response = await fetch(
     `${baseUrl}/api/v1/monitor/messages/${message_id}`,
-    requestBody,
-    { headers }
+    {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(requestBody),
+      credentials: 'same-origin'
+    }
   );
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  // Feedback endpoints can return JSON, plain text, or no content.
+  const responseText = await response.text();
+  let responseData: unknown = responseText;
+  if (responseText) {
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      // A successful text response still confirms the feedback update.
+    }
+  }
+
+  return {
+    data: responseData,
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  };
 }

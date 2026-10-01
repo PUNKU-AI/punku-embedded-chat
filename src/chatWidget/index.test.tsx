@@ -211,9 +211,9 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} chat_position="bottom-left" left_offset={48} />);
 
       const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
+      expect((widgetRoot as HTMLElement).style).toMatchObject({
         left: '48px',
-        right: 'auto',
+        right: '',
       });
     });
 
@@ -221,9 +221,9 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} chat_position="bottom-right" right_offset={36} />);
 
       const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
+      expect((widgetRoot as HTMLElement).style).toMatchObject({
         right: '36px',
-        left: 'auto',
+        left: '',
       });
     });
 
@@ -701,11 +701,11 @@ describe('ChatWidget', () => {
       expect((window as any).punku?.trigger).toBeUndefined();
 
       const widgetRoot = document.querySelector('.cl-widget-root');
-      expect(widgetRoot).toHaveStyle({
+      expect((widgetRoot as HTMLElement).style).toMatchObject({
         right: '20px',
         bottom: '20px',
-        left: 'auto',
-        top: 'auto',
+        left: '',
+        top: '',
         zIndex: '9998',
       });
     });
@@ -756,11 +756,11 @@ describe('ChatWidget', () => {
       });
 
       expect(api.trigger.position).toBeNull();
-      expect(widgetRoot).toHaveStyle({
+      expect((widgetRoot as HTMLElement).style).toMatchObject({
         right: '20px',
         bottom: '20px',
-        left: 'auto',
-        top: 'auto',
+        left: '',
+        top: '',
         zIndex: '9998',
       });
     });

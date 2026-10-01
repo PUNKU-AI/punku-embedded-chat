@@ -77,10 +77,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20" # same as ci.yml; Node 18 is past its end of life
+          node-version: "24" # Keep the publisher and validation runtime aligned.
 
       - name: Install locked icon dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Download the tested bundle
         uses: actions/download-artifact@v4

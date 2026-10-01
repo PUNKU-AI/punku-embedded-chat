@@ -39,7 +39,7 @@ describe('ChatMessagePlaceholder', () => {
       render(<ChatMessagePlaceholder bot_message_style={customStyle} />);
 
       const botMessage = document.querySelector('.cl-bot_message');
-      expect(botMessage).toHaveStyle({ backgroundColor: 'blue', color: 'white' });
+      expect(botMessage).toHaveStyle({ backgroundColor: 'rgb(0, 0, 255)', color: 'rgb(255, 255, 255)' });
     });
 
     it('should render custom loading messages when provided', () => {

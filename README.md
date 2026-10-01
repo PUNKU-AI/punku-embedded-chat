@@ -6,6 +6,24 @@ Welcome to the PUNKU.AI Embedded Chat repository! 🎉
 
 The PUNKU.AI Embedded Chat is a powerful web component that enables seamless communication with the [PUNKU.AI app](https://app.punku.ai). This widget provides a chat interface, allowing you to integrate PUNKU.AI into your web applications effortlessly.
 
+## Development
+
+Use Node.js 24. Run `nvm use` to select the version in `.nvmrc`.
+
+```sh
+npm ci
+npm run audit:dependencies
+npm test
+npm run build:release
+npm start
+```
+
+The build writes `dist/build/static/js/bundle.min.js` and its license file.
+Webpack builds the widget directly. Babel handles TypeScript and JSX.
+Jest runs with two workers. The release build uses one worker and a 2 GB memory limit.
+Check for other test jobs before running these commands on a shared machine.
+The legacy `build:react` and `build:bundle` commands both run the complete release build.
+
 ## Features
 
 🌟 Seamless Integration: Easily integrate the PUNKU.AI chat widget into your website or web application with just a few lines of JavaScript.

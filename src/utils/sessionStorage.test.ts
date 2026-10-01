@@ -1,3 +1,4 @@
+/** @jest-environment-options {"url":"http://localhost"} */
 import { SessionStorage, StoredSession, SessionConfig } from './sessionStorage';
 
 // Mock uuid with CommonJS-compatible approach
@@ -45,10 +46,6 @@ describe('SessionStorage', () => {
       writable: true
     });
 
-    Object.defineProperty(window, 'location', {
-      value: { hostname: domain },
-      writable: true
-    });
   });
 
   beforeEach(() => {

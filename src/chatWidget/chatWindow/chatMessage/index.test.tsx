@@ -60,7 +60,7 @@ describe('ChatMessage', () => {
       );
 
       const messageElement = document.querySelector('.cl-user_message');
-      expect(messageElement).toHaveStyle({ backgroundColor: 'red' });
+      expect(messageElement).toHaveStyle({ backgroundColor: 'rgb(255, 0, 0)' });
     });
 
     it('should set a readable default user message text size', () => {
@@ -85,7 +85,7 @@ describe('ChatMessage', () => {
       render(<ChatMessage {...defaultProps} bot_message_style={customStyle} />);
 
       const messageElement = document.querySelector('.cl-bot_message');
-      expect(messageElement).toHaveStyle({ backgroundColor: 'blue' });
+      expect(messageElement).toHaveStyle({ backgroundColor: 'rgb(0, 0, 255)' });
     });
 
     it('should set a readable default bot message text size', () => {
@@ -110,7 +110,7 @@ describe('ChatMessage', () => {
       );
 
       const messageElement = document.querySelector('.cl-error_message');
-      expect(messageElement).toHaveStyle({ backgroundColor: 'orange' });
+      expect(messageElement).toHaveStyle({ backgroundColor: 'rgb(255, 165, 0)' });
     });
 
     it('should set a readable default error message text size', () => {
