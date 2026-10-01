@@ -5,8 +5,10 @@ The closed shadow root hides the internal anchor from its window capture handler
 NitroPack later replays the click on the widget host.
 That replay cannot activate the original link.
 
-The widget installs a native capture listener on its shadow root.
-This listener runs before NitroPack's delayed element handlers.
+The widget installs a native bubble listener on its shadow root.
+Native checkout handlers on anchors run first and prevent navigation when they open a checkout modal.
+The recovery listener then handles links that those handlers did not claim.
+Both handlers run before NitroPack's delayed element handlers.
 It recovers navigation only when NitroPack marks a trusted click for replay and native cancellation is present.
 It opens the original HTTP(S) destination synchronously with `noopener,noreferrer`.
 It also marks the event prevented to suppress NitroPack's replay.
@@ -25,7 +27,7 @@ Middle-click retains native navigation.
 
 The handler leaves Shift/Alt activation, download links, other targets, and other protocols untouched.
 Those actions can still fail when NitroPack cancels their native behavior.
-Future custom anchor handlers that cancel navigation need separate compatibility review.
+Custom anchor handlers must run synchronously and prevent navigation before the recovery listener runs.
 
 ## Validation
 

@@ -61,7 +61,8 @@ export function installNitroLinkRecovery(container: HTMLElement | null) {
     window.open(destination.href, "_blank", "noopener,noreferrer");
   };
 
+  // Native anchor handlers can claim checkout clicks before this fallback runs.
   // ShadowRoot listeners avoid NitroPack's delayed HTMLElement listener wrapper.
-  root.addEventListener("click", recoverLink, true);
-  return () => root.removeEventListener("click", recoverLink, true);
+  root.addEventListener("click", recoverLink, false);
+  return () => root.removeEventListener("click", recoverLink, false);
 }

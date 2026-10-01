@@ -7,6 +7,8 @@ import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
+import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
+import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 
@@ -252,6 +254,16 @@ export default function ChatWidget({
   );
 
   const [open, setOpen] = useState(start_open);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const closeCheckout = useCallback(() => setCheckoutUrl(null), []);
+  const openCheckout = useCallback((url: string): boolean => {
+    if (!getBookingkitCheckoutUrl(url)) return false;
+    if (openNativeBookingkitCheckout(url)) return true;
+    if (typeof HTMLDialogElement === "undefined" ||
+        typeof HTMLDialogElement.prototype.showModal !== "function") return false;
+    setCheckoutUrl(url);
+    return true;
+  }, []);
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
@@ -436,7 +448,7 @@ export default function ChatWidget({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || checkoutUrl) return;
 
     const handlePointerDown = (event: PointerEvent) => {
       const root = widgetRootRef.current;
@@ -473,7 +485,7 @@ export default function ChatWidget({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [closeWidget, open]);
+  }, [closeWidget, open, checkoutUrl]);
 
   const handleProgrammaticMessageHandled = useCallback((id: number) => {
     setProgrammaticMessage((current) => (
@@ -3517,6 +3529,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           updateLastMessage={updateLastMessage}
           open={open}
           onClose={() => setOpen(false)}
+          onCheckout={openCheckout}
           triggerRef={triggerRef}
           addMessage={addMessage}
           output_type={output_type}
@@ -3576,6 +3589,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           enable_client_error_reporting={enable_client_error_reporting}
         />
       </div>
+      <BookingkitCheckoutModal url={checkoutUrl} onClose={closeCheckout} language={currentLanguage} />
     </div>
   );
 }

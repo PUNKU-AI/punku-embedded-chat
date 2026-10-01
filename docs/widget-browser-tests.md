@@ -32,6 +32,8 @@ The Nitro fixture reproduces cancellation, a cached outside event path, delayed 
 An unprotected closed-root control must fail navigation under that fixture.
 Protected links must open exactly one destination after the replay queue settles.
 Pages without interception must keep native navigation.
+Checkout checks verify an in-page modal, one explicit fallback tab, unsupported-dialog recovery, and modified desktop clicks under Nitro interception.
+They serve a synthetic checkout page at the expected URL and block all provider requests.
 
 The fixture contains no copied vendor code, customer keys, or customer data.
 It forces the interception contract on every engine, including engines the vendor currently excludes.

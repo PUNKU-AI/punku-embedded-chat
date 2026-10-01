@@ -96,7 +96,7 @@ describe("installNitroLinkRecovery", () => {
     open = jest.spyOn(window, "open").mockReturnValue(null);
     cleanup = installNitroLinkRecovery(container);
     const registration = addListener.mock.calls.find(
-      ([type, , capture]) => type === "click" && capture === true
+      ([type, , capture]) => type === "click" && capture === false
     );
     expect(registration).toBeDefined();
     expect(typeof registration![1]).toBe("function");
@@ -233,9 +233,9 @@ describe("installNitroLinkRecovery", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("removes the same capture listener during cleanup", () => {
+  it("removes the same bubble listener during cleanup", () => {
     cleanup?.();
-    expect(removeListener).toHaveBeenCalledWith("click", listener, true);
+    expect(removeListener).toHaveBeenCalledWith("click", listener, false);
     cleanup = undefined;
   });
 

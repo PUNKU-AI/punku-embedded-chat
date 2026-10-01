@@ -1,0 +1,47 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import ChatWidget from "./index";
+
+const url = "https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D";
+const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
+const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
+const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: jest.fn() });
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value: function () { this.setAttribute("open", ""); },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value: function () { this.removeAttribute("open"); },
+  });
+});
+afterAll(() => {
+  if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
+  else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  if (originalShowModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", originalShowModal);
+  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
+  if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, "close", originalClose);
+  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+});
+beforeEach(() => {
+  jest.useFakeTimers();
+  localStorage.clear();
+});
+afterEach(() => {
+  jest.clearAllTimers();
+  jest.useRealTimers();
+});
+
+it("opens checkout through a real Markdown message and keeps the chat open on Escape", () => {
+  render(<ChatWidget flow_id="test-flow" input_value="" input_type="chat" output_type="chat" start_open default_language="en" welcome_message={`[Book tickets](${url})`} />);
+  fireEvent.click(screen.getByRole("link", { name: "Book tickets" }));
+  const dialog = screen.getByRole("dialog", { name: "Checkout" });
+  expect(screen.getByTitle("Checkout")).toHaveAttribute("src", url);
+  // The page key listener must not close the chat behind the modal.
+  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent(dialog, new Event("cancel", { cancelable: true }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText("Type your message...")).toBeVisible();
+});

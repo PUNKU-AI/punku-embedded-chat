@@ -5,6 +5,7 @@ import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
+import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
 
 // Pins a readable base text size on every message. The widget renders inside a
 // closed shadow root, so without this the font-size inherits from the host page
@@ -97,11 +98,13 @@ export default function ChatMessage({
   host_url,
   onFeedbackUpdate,
   onClientError,
+  onCheckout,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
+  onCheckout?: (url: string) => boolean;
   onClientError?: (
     error: unknown,
     phase: PunkuChatErrorPhase,
@@ -192,10 +195,10 @@ export default function ChatMessage({
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}
             components={{
-              a: ({ href, children, ...props }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+              a: ({ href, children, node, ...props }) => (
+                <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
                   {children}
-                </a>
+                </BookingkitCheckoutLink>
               ),
             }}
           >
