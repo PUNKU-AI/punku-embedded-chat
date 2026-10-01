@@ -12,7 +12,7 @@ it("opens checkout inside a closed shadow root and cancels the tab navigation", 
   const anchor = within(root as unknown as HTMLElement).getByRole("link");
   const click = new MouseEvent("click", { bubbles: true, composed: true, cancelable: true, button: 0 });
   anchor.dispatchEvent(click);
-  expect(onCheckout).toHaveBeenCalledWith(checkout);
+  expect(onCheckout).toHaveBeenCalledWith(checkout, anchor);
   expect(click.defaultPrevented).toBe(true);
   expect(host.shadowRoot).toBeNull();
   view.unmount();

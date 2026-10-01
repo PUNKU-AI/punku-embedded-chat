@@ -1,4 +1,5 @@
 import Markdown from "react-markdown";
+import type { Components } from "react-markdown";
 import { ChatMessageType } from "../../../types/chatWidget";
 import remarkGfm from "remark-gfm";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
@@ -104,7 +105,7 @@ export default function ChatMessage({
   additional_headers?: {[key: string]: string};
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
-  onCheckout?: (url: string) => boolean;
+  onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
   onClientError?: (
     error: unknown,
     phase: PunkuChatErrorPhase,
@@ -113,6 +114,15 @@ export default function ChatMessage({
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
+
+  // Keep the opener mounted so checkout can capture and restore its focus.
+  const markdownComponents = useMemo<Components>(() => ({
+    a: ({ href, children, node, ...props }) => (
+      <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
+        {children}
+      </BookingkitCheckoutLink>
+    ),
+  }), [onCheckout]);
 
   // Initialize feedback state from the message's feedback property
   const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(
@@ -194,13 +204,7 @@ export default function ChatMessage({
           <Markdown
             className={"markdown-body prose flex flex-col word-break-break-word"}
             remarkPlugins={[remarkGfm]}
-            components={{
-              a: ({ href, children, node, ...props }) => (
-                <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
-                  {children}
-                </BookingkitCheckoutLink>
-              ),
-            }}
+            components={markdownComponents}
           >
             {parsedMessage}
           </Markdown>

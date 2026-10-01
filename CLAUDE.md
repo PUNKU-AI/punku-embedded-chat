@@ -7,10 +7,10 @@ Embeddable chat widget built with React and bundled as a web component using `@r
 ### Commands
 ```bash
 npm start          # Start development server
-npm test           # Run tests in watch mode
-npm run build      # Build for production (React + Webpack bundle)
-npm run build:react   # Build React app only
-npm run build:bundle  # Bundle with Webpack only
+npm test           # Run tests with two workers
+npm test -- --watch # Run tests in watch mode
+npm run build      # Build the production widget with Webpack
+npm run audit:dependencies # Audit runtime and development dependencies
 ```
 
 ### Project Structure
@@ -58,7 +58,8 @@ Available themes: `default`, `dark`, `ocean`, `aurora`, `punku-ai-bookingkit`, `
 
 ### Running Tests
 ```bash
-npm test                           # Watch mode
+npm test                           # Single run, two workers
+npm test -- --watch                 # Watch mode, two workers
 npm test -- --watchAll=false       # Single run
 npm test -- --coverage             # With coverage
 npm test -- sessionStorage.test.ts # Specific file
@@ -67,7 +68,7 @@ npm test -- sessionStorage.test.ts # Specific file
 ### Test Structure
 - Tests located alongside source files as `*.test.ts` or `*.test.tsx`
 - Uses Jest + React Testing Library
-- Mocks configured in `src/__mocks__/` and `package.json` Jest config
+- Jest config is in `package.json`; Babel config is in `babel.config.cjs`
 
 ### Key Testing Patterns
 - Mock ESM modules in `package.json` `transformIgnorePatterns`

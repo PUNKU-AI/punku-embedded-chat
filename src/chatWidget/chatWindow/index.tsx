@@ -189,7 +189,7 @@ export default function ChatWindow({
   on_client_error?: (detail: PunkuChatErrorDetail) => void;
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
-  onCheckout?: (url: string) => boolean;
+  onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);

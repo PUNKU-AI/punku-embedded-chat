@@ -88,13 +88,20 @@ test('publisher verifies downloaded bytes before credentials and every upload', 
 });
 
 test('shared checks build once, test browsers and Gemini, verify identity, then save the bundle', () => {
+  const audit = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run audit:dependencies', 'dependency audit');
+  const types = uniqueStep(actionSteps, (step) => step.run?.includes('npx tsc --noEmit'), 'application type check');
   const build = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run build:release', 'release build');
   const browser = uniqueStep(actionSteps, (step) => step.run?.includes('npm run test:browser'), 'browser check');
   const gemini = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
   const identity = uniqueStep(actionSteps, (step) => step.id === 'identity', 'bundle identity check');
   const artifact = uniqueStep(actionSteps, (step) => step.uses?.startsWith('actions/upload-artifact@')
     && step.with.name === '${{ inputs.bundle_artifact_name }}', 'tested bundle artifact');
-  assertOrdered(actionSteps, [build, browser, gemini, identity, artifact]);
+  assertOrdered(actionSteps, [audit, types, build, browser, gemini, identity, artifact]);
+  assert.equal(types.if, undefined, 'Application checks must run for every release');
+  assert.match(types.run, /npx eslint src --ext \.ts,\.tsx/);
+  const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  assert.equal(packageJson.scripts['audit:dependencies'], 'npm audit --audit-level=low');
+  assert.equal(audit.if, undefined, 'Dependency checks must run for every release');
   assert.equal(condition(gemini.if), "inputs.real_gemini == 'true'");
   assert.equal(identity.run.trim(), 'node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"');
   for (const step of [build, browser, identity, artifact]) assert.equal(step.if, undefined);

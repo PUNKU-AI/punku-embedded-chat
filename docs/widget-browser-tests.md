@@ -33,7 +33,14 @@ An unprotected closed-root control must fail navigation under that fixture.
 Protected links must open exactly one destination after the replay queue settles.
 Pages without interception must keep native navigation.
 Checkout checks verify an in-page modal, one explicit fallback tab, unsupported-dialog recovery, and modified desktop clicks under Nitro interception.
+Desktop checks open checkout with Enter, close it with Escape, and use restored link focus to reopen it with Enter.
+All profiles verify opener focus after the close button and the active checkout frame's close message.
+These focus checks run with and without Nitro interception and require the chat to stay open without a popup.
 They serve a synthetic checkout page at the expected URL and block all provider requests.
+
+Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
+Local servers record the actual HTTP headers and body on both origins.
+Tests verify same-origin cookies, blocked cross-origin cookies, and no copied XSRF headers on every profile.
 
 The fixture contains no copied vendor code, customer keys, or customer data.
 It forces the interception contract on every engine, including engines the vendor currently excludes.
@@ -50,10 +57,13 @@ Check for other test jobs before starting this suite.
 The suite and bundle build use explicit worker limits.
 
 ```sh
-npm ci --legacy-peer-deps
+nvm use
+npm ci
+npm run audit:dependencies
 npx playwright install chromium firefox webkit
+npx tsc --noEmit
 npm run typecheck:browser
-CI=false npm run build:release
+npm run build:release
 npm run test:release-contract
 npm run test:browser
 ```
@@ -105,6 +115,8 @@ npm run test:visual-live
 
 ## Release gate
 
+The release workflow audits all dependencies, including development tools, before building the bundle.
+Any reported vulnerability fails the audit. The workflow does not omit packages or suppress findings.
 The release workflow builds the bundle once before testing it.
 Browser checks, real Gemini checks, and checksum checks must pass before publication.
 The publish job downloads the tested artifact and verifies its commit and checksums.

@@ -14,8 +14,8 @@ Everything the widget touches lives across **two repos**. Both are checked out l
 | **Main app** | `PUNKU-AI/PUNKU.AI` | `~/dev/Coding projects/PUNKU-AI/PUNKU.AI` | The app that **generates the embed snippet** handed to customers (see §4) |
 
 ### Build facts (this repo)
-- Build command: `npm run build` → runs CRA build, then webpack bundles `build/static/js/main.*.js` into a **single self-contained file**.
-- **The one and only CDN artifact:** `dist/build/static/js/bundle.min.js` (~3 MB) + `dist/build/static/js/bundle.min.js.LICENSE.txt`. No code-split chunks — hosting that one file is enough.
+- Build command: `npm run build` compiles the widget with Webpack, Babel, and Terser into a **single self-contained file**.
+- **The CDN artifacts:** `dist/build/static/js/bundle.min.js` + `dist/build/static/js/bundle.min.js.LICENSE.txt`. No code-split chunks — hosting that one bundle is enough.
 - Webpack output path is the default (`dist/`); see [`webpack.config.js`](./webpack.config.js).
 - Releases are **manual today**: `git tag v1.0.x && git push --tags`. jsDelivr auto-serves the tag. Tags so far: `v1.0.0`–`v1.0.6`. The embed uses `@v1`, which jsDelivr resolves to the latest `v1.x.x`.
 

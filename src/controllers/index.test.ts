@@ -1,5 +1,4 @@
 import { sendMessage, streamMessage, sendFeedback } from './index';
-import axios from 'axios';
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -593,46 +592,70 @@ describe('streamMessage', () => {
 describe('sendFeedback', () => {
   const baseUrl = 'http://localhost:3000';
   const messageId = 'test-message-id';
+  const responseHeaders = new Headers({ 'content-type': 'application/json' });
+
+  const mockSuccessfulResponse = (body = '{"success":true}', status = 200) => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status,
+      statusText: status === 204 ? 'No Content' : 'OK',
+      headers: responseHeaders,
+      text: () => Promise.resolve(body)
+    });
+  };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (axios.put as jest.Mock).mockReset();
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('should send positive feedback successfully', async () => {
-    (axios.put as jest.Mock).mockResolvedValueOnce({ data: { success: true } });
+    mockSuccessfulResponse();
 
-    await sendFeedback(baseUrl, messageId, 'positive');
+    const result = await sendFeedback(baseUrl, messageId, 'positive');
 
-    expect(axios.put).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       `${baseUrl}/api/v1/monitor/messages/${messageId}`,
-      { properties: { positive_feedback: true } },
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ properties: { positive_feedback: true } }),
+        credentials: 'same-origin'
+      }
+    );
+
+    expect(result).toEqual({
+      data: { success: true },
+      status: 200,
+      statusText: 'OK',
+      headers: responseHeaders
+    });
+  });
+
+  it('should send negative feedback successfully', async () => {
+    mockSuccessfulResponse();
+
+    await sendFeedback(baseUrl, messageId, 'negative');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/v1/monitor/messages/${messageId}`,
       expect.objectContaining({
-        headers: { 'Content-Type': 'application/json' }
+        method: 'PUT',
+        body: JSON.stringify({ properties: { positive_feedback: false } })
       })
     );
   });
 
-  it('should send negative feedback successfully', async () => {
-    (axios.put as jest.Mock).mockResolvedValueOnce({ data: { success: true } });
-
-    await sendFeedback(baseUrl, messageId, 'negative');
-
-    expect(axios.put).toHaveBeenCalledWith(
-      `${baseUrl}/api/v1/monitor/messages/${messageId}`,
-      { properties: { positive_feedback: false } },
-      expect.any(Object)
-    );
-  });
-
   it('should include API key in headers when provided', async () => {
-    (axios.put as jest.Mock).mockResolvedValueOnce({ data: { success: true } });
+    mockSuccessfulResponse();
 
     await sendFeedback(baseUrl, messageId, 'positive', 'test-api-key');
 
-    expect(axios.put).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
-      expect.any(Object),
       expect.objectContaining({
         headers: expect.objectContaining({
           'x-api-key': 'test-api-key'
@@ -641,26 +664,94 @@ describe('sendFeedback', () => {
     );
   });
 
-  it('should include additional headers when provided', async () => {
-    (axios.put as jest.Mock).mockResolvedValueOnce({ data: { success: true } });
+  it.each(['x-api-key', 'X-API-KEY', 'X-Api-Key'])(
+    'should preserve explicit headers and case-insensitive %s overrides', async (apiKeyHeader) => {
+    mockSuccessfulResponse();
 
     await sendFeedback(
       baseUrl,
       messageId,
       'positive',
-      undefined,
-      { 'X-Custom-Header': 'custom-value' }
+      'test-api-key',
+      {
+        [apiKeyHeader]: 'override-api-key',
+        authorization: 'Bearer explicit-token',
+        'x-custom-header': 'custom-value',
+        'x-xsrf-token': 'explicit-xsrf-token'
+      }
     );
 
-    expect(axios.put).toHaveBeenCalledWith(
+    expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
-      expect.any(Object),
       expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Custom-Header': 'custom-value'
-        })
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'override-api-key',
+          authorization: 'Bearer explicit-token',
+          'x-custom-header': 'custom-value',
+          'x-xsrf-token': 'explicit-xsrf-token'
+        }
       })
     );
+  });
+
+  it.each([window.location.origin, 'https://api.example.com'])(
+    'should not copy host cookies into feedback headers for %s',
+    async (targetOrigin) => {
+      const cookieRead = jest.spyOn(document, 'cookie', 'get')
+        .mockReturnValue('XSRF-TOKEN=host-session-token; other=private');
+      mockSuccessfulResponse();
+
+      await sendFeedback(targetOrigin, messageId, 'positive');
+
+      expect(cookieRead).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${targetOrigin}/api/v1/monitor/messages/${messageId}`,
+        expect.objectContaining({
+          headers: { 'content-type': 'application/json' },
+          credentials: 'same-origin'
+        })
+      );
+    }
+  );
+
+  it.each([
+    { status: 204, body: '' },
+    { status: 200, body: 'Feedback updated' }
+  ])('should accept successful status $status with body $body', async ({ status, body }) => {
+    mockSuccessfulResponse(body, status);
+
+    const result = await sendFeedback(baseUrl, messageId, 'positive');
+
+    expect(result.status).toBe(status);
+    expect(result.data).toBe(body);
+  });
+
+  it.each([401, 403, 429, 500])('should reject an HTTP %s response', async (status) => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status });
+
+    await expect(sendFeedback(baseUrl, messageId, 'positive'))
+      .rejects.toThrow(`HTTP error! status: ${status}`);
+  });
+
+  it('should propagate network failures to the feedback caller', async () => {
+    const networkError = new TypeError('Failed to fetch');
+    mockFetch.mockRejectedValueOnce(networkError);
+
+    await expect(sendFeedback(baseUrl, messageId, 'positive'))
+      .rejects.toBe(networkError);
+  });
+
+  it('should propagate failures while reading the feedback response', async () => {
+    const networkError = new TypeError('Failed to fetch');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.reject(networkError)
+    });
+
+    await expect(sendFeedback(baseUrl, messageId, 'positive'))
+      .rejects.toBe(networkError);
   });
 
   it('should reject invalid additional headers before sending feedback', async () => {
@@ -680,6 +771,6 @@ describe('sendFeedback', () => {
       headerName: 'X-Custom-Header'
     });
 
-    expect(axios.put).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

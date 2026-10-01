@@ -254,14 +254,15 @@ export default function ChatWidget({
   );
 
   const [open, setOpen] = useState(start_open);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
-  const closeCheckout = useCallback(() => setCheckoutUrl(null), []);
-  const openCheckout = useCallback((url: string): boolean => {
+  const [checkout, setCheckout] = useState<{ url: string; opener: HTMLAnchorElement } | null>(null);
+  const checkoutUrl = checkout?.url ?? null;
+  const closeCheckout = useCallback(() => setCheckout(null), []);
+  const openCheckout = useCallback((url: string, opener: HTMLAnchorElement): boolean => {
     if (!getBookingkitCheckoutUrl(url)) return false;
     if (openNativeBookingkitCheckout(url)) return true;
     if (typeof HTMLDialogElement === "undefined" ||
         typeof HTMLDialogElement.prototype.showModal !== "function") return false;
-    setCheckoutUrl(url);
+    setCheckout({ url, opener });
     return true;
   }, []);
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
@@ -3589,7 +3590,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           enable_client_error_reporting={enable_client_error_reporting}
         />
       </div>
-      <BookingkitCheckoutModal url={checkoutUrl} onClose={closeCheckout} language={currentLanguage} />
+      <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} />
     </div>
   );
 }
