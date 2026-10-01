@@ -5,6 +5,7 @@ interface BookingkitCheckoutModalProps {
   url: string | null;
   onClose: () => void;
   language: "en" | "de";
+  returnFocusTo?: HTMLElement;
 }
 
 const CHECKOUT_ORIGIN = "https://eu5.bookingkit.de";
@@ -13,6 +14,7 @@ export default function BookingkitCheckoutModal({
   url,
   onClose,
   language,
+  returnFocusTo,
 }: BookingkitCheckoutModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -28,9 +30,10 @@ export default function BookingkitCheckoutModal({
     if (!url || !dialog || !closeButton || !externalLink) return;
 
     const root = dialog.getRootNode();
-    const previousFocus = root instanceof ShadowRoot
+    // Pointer activation can clear focus before the modal mounts, especially in Safari.
+    const previousFocus = returnFocusTo ?? (root instanceof ShadowRoot
       ? root.activeElement
-      : dialog.ownerDocument.activeElement;
+      : dialog.ownerDocument.activeElement);
     let closeRequested = false;
 
     const requestClose = () => {
@@ -80,7 +83,7 @@ export default function BookingkitCheckoutModal({
       }
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
-  }, [url]);
+  }, [url, returnFocusTo]);
 
   if (!url) return null;
 

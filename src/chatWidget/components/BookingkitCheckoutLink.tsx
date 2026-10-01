@@ -2,7 +2,7 @@ import { AnchorHTMLAttributes, useLayoutEffect, useRef } from "react";
 import { getBookingkitCheckoutUrl } from "../bookingkitCheckout";
 
 type Props = AnchorHTMLAttributes<HTMLAnchorElement> & {
-  onCheckout?: (url: string) => boolean;
+  onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
 };
 
 type NitroClick = MouseEvent & {
@@ -23,7 +23,7 @@ export default function BookingkitCheckoutLink({ onCheckout, href, children, ...
         click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey ||
         (click.defaultPrevented && !(click.nitroPromise && click.nitroDefaultPrevented === false))
       ) return;
-      if (!onCheckout(checkoutUrl)) return;
+      if (!onCheckout(checkoutUrl, anchor)) return;
       click.preventDefault();
       // NitroPack replaces preventDefault(). Also cancel the native navigation.
       Event.prototype.preventDefault.call(click);

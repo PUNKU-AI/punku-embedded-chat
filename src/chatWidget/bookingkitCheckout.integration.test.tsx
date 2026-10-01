@@ -45,3 +45,35 @@ it("opens checkout through a real Markdown message and keeps the chat open on Es
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("Type your message...")).toBeVisible();
 });
+
+it.each(["Escape", "close button", "checkout message"])(
+  "returns keyboard focus to the booking link after %s, including repeated opens",
+  (closeMethod) => {
+    render(<ChatWidget flow_id="test-flow" input_value="" input_type="chat" output_type="chat" start_open default_language="en" welcome_message={`[Book tickets](${url})`} />);
+    // Pointer activation need not focus the anchor before it opens checkout.
+    screen.getByPlaceholderText("Type your message...").focus();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      fireEvent.click(screen.getByRole("link", { name: "Book tickets" }));
+      expect(screen.getByRole("button", { name: "Close checkout" })).toHaveFocus();
+
+      if (closeMethod === "Escape") {
+        fireEvent.keyDown(document, { key: "Escape" });
+        fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+      } else if (closeMethod === "close button") {
+        fireEvent.click(screen.getByRole("button", { name: "Close checkout" }));
+      } else {
+        const frame = screen.getByTitle("Checkout") as HTMLIFrameElement;
+        fireEvent(window, new MessageEvent("message", {
+          origin: "https://eu5.bookingkit.de",
+          source: frame.contentWindow,
+          data: { action: "closeLightbox" },
+        }));
+      }
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Type your message...")).toBeVisible();
+      expect(screen.getByRole("link", { name: "Book tickets" })).toHaveFocus();
+    }
+  }
+);
