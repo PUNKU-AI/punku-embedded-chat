@@ -96,11 +96,11 @@ async function expectVisible(page: Page, index: number) {
   expect((await states(page))[index].ariaHidden).toBe('false');
 }
 
-async function clickWidget(page: Page, index: number, hasTouch: boolean) {
-  const handle = await page.evaluateHandle((index) => {
+async function clickWidget(page: Page, index: number, hasTouch: boolean, selector = '.cl-trigger') {
+  const handle = await page.evaluateHandle(({ index, selector }) => {
     const host = window.__hintFixture.widgets[index];
-    return window.__widgetRoots.get(host)?.querySelector('.cl-trigger');
-  }, index);
+    return window.__widgetRoots.get(host)?.querySelector(selector);
+  }, { index, selector });
   const element = handle.asElement();
   expect(element).not.toBeNull();
   try {
@@ -166,7 +166,18 @@ for (const profile of profiles) {
     await clickWidget(page, index, hasTouch);
     await expect.poll(async () => (await states(page))[index].chatVisible).toBe(true);
     await expect.poll(async () => (await states(page))[index].hintExists).toBe(false);
-    await clickWidget(page, index, hasTouch);
+    // Mobile windows can cover raised launchers. Choose a visible native close control.
+    await page.waitForFunction((index) => {
+      const chat = window.__widgetRoots.get(window.__hintFixture.widgets[index])?.querySelector('.cl-chat-window');
+      return chat?.getAnimations().every((animation) => ['finished', 'idle'].includes(animation.playState));
+    }, index);
+    const closeSelector = hasTouch ? await page.evaluate((index) => {
+      const close = window.__widgetRoots.get(window.__hintFixture.widgets[index])?.querySelector('.cl-close-btn');
+      const rect = close?.getBoundingClientRect();
+      return rect && rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0 &&
+        rect.bottom <= window.innerHeight && rect.right <= window.innerWidth ? '.cl-close-btn' : '.cl-trigger';
+    }, index) : '.cl-trigger';
+    await clickWidget(page, index, hasTouch, closeSelector);
     await expect.poll(async () => (await states(page))[index].chatVisible).toBe(false);
     if (!profile.disabled) await expect.poll(async () => (await states(page))[index].opacity).toBe(0);
     expect((await states(page)).every((state) => state.iconLoaded)).toBe(true);
