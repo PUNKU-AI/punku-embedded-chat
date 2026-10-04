@@ -1924,6 +1924,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 
+/* Logo colors for themes */
+.theme-dark .cl-header-logo path,
+.theme-ocean .cl-header-logo path,
+.theme-aurora .cl-header-logo path,
+.theme-default .cl-header-logo path {
+  fill: #ffffff;
+}
+
 /* Welcome message styles */
 .cl-welcome-message {
   padding: 16px 0 0 0;

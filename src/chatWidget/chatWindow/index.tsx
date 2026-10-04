@@ -910,7 +910,7 @@ export default function ChatWindow({
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color="currentColor"
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                   size={24}
                 />
               </div>
@@ -924,7 +924,6 @@ export default function ChatWindow({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'inherit',
                   cursor: 'pointer',
                   padding: '4px',
                   display: 'flex',
@@ -943,7 +942,7 @@ export default function ChatWindow({
               >
                 <RefreshCw
                   size={16}
-                  color="currentColor"
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                 />
               </button>
             )}
@@ -956,7 +955,6 @@ export default function ChatWindow({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'inherit',
                   cursor: 'pointer',
                   padding: '4px',
                   display: show_close_button_on_desktop ? 'flex' : 'none',
@@ -975,7 +973,7 @@ export default function ChatWindow({
               >
                 <X
                   size={20}
-                  color="currentColor"
+                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
                 />
               </button>
             )}
