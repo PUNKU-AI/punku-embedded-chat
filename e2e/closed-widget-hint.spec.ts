@@ -201,16 +201,27 @@ test('desktop-first hidden embed does not consume the phone hint', async ({ page
   expect((await states(page))[0].hintVisible).toBe(false);
 });
 
+async function resizeHintFixture(page: Page, viewport: { width: number; height: number }) {
+  await page.setViewportSize(viewport);
+  // Mobile WebKit emulation can retain its device width after a viewport resize.
+  // Keep the fixture's CSS viewport explicit without remounting either widget.
+  await page.locator('meta[name="viewport"]').evaluate((meta, width) => {
+    meta.setAttribute('content', `width=${width},initial-scale=1`);
+  }, viewport.width);
+  await expect.poll(() => page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    desktop: matchMedia('(min-width: 768px)').matches,
+  }))).toEqual({ width: viewport.width, desktop: viewport.width >= 768 });
+}
+
 test('responsive switch does not repeat a consumed hint', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await loadHints(page, { scene: 'responsive-mobile-first' });
   await expectVisible(page, 1);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot();
+  await resizeHintFixture(page, { width: 390, height: 844 });
   await expect.poll(async () => (await states(page))[0].triggerVisible).toBe(true);
   await expect.poll(async () => (await states(page)).some((state) => state.hintVisible)).toBe(false);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.screenshot();
+  await resizeHintFixture(page, { width: 1280, height: 720 });
   await expect.poll(async () => (await states(page))[1].triggerVisible).toBe(true);
   // The desktop exposure already owns its timer. Returning does not create another exposure.
   expect((await states(page))[0].opacity).toBe(0);
