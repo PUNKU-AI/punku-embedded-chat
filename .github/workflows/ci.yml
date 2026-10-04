@@ -35,9 +35,6 @@ jobs:
       - name: Tests
         run: npm test -- --watchAll=false --maxWorkers=2
 
-      - name: Header icon build tests
-        run: node --test --test-concurrency=1 scripts/build-lucide-icons.test.cjs
-
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20

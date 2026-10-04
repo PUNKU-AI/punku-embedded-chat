@@ -28,3 +28,9 @@ In the embed snippet, use `header_icon` (not `header_icon_name`):
 | File | Client | Format |
 |------|--------|--------|
 | `tanzbar.svg` | Tanzbar (Tiroler Abend) | SVG (embedded JPEG) |
+| `tressbrueder-logo-green.svg` | TressBrüder | SVG, green `#3aaa35` |
+
+The TressBrüder file preserves the original logo geometry.
+It changes only the fill from `#fdfcf5` to `#3aaa35`.
+Set `header_icon` on the customer's embed to use this file.
+Adding this asset does not change existing embeds or shared icons.
