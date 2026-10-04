@@ -35,6 +35,9 @@ jobs:
       - name: Tests
         run: npm test -- --watchAll=false --maxWorkers=2
 
+      - name: Test development and deployment tools
+        run: node --test --test-concurrency=1 scripts/dev-server.test.cjs scripts/lint-compatibility.test.cjs scripts/publish-header-icon-overrides.test.cjs
+
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20

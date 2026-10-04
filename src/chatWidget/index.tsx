@@ -11,6 +11,7 @@ import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
+import { useHeaderIconOverride } from "./headerIconOverrides";
 
 type ProgrammaticMessage = {
   id: number;
@@ -253,6 +254,11 @@ export default function ChatWidget({
     SessionStorage.getOrCreateSession(flow_id, session_id, sessionConfig)
   );
 
+  const { headerIcon, onImageError: onHeaderIconError } = useHeaderIconOverride({
+    headerIcon: header_icon,
+    hostUrl: host_url,
+    flowId: flow_id,
+  });
   const [open, setOpen] = useState(start_open);
   const [checkout, setCheckout] = useState<{ url: string; opener: HTMLAnchorElement } | null>(null);
   const checkoutUrl = checkout?.url ?? null;
@@ -3561,7 +3567,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           theme={effectiveTheme}
           welcome_message={welcome_message}
           show_feedback={show_feedback}
-          header_icon={header_icon}
+          header_icon={headerIcon}
+          onHeaderIconError={onHeaderIconError}
           header_icon_name={header_icon_name}
           button_color={button_color}
           button_text_color={button_text_color}

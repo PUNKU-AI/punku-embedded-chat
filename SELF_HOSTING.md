@@ -136,6 +136,64 @@ https://cdn.punku.ai/chat/icons/lucide/manifest.json   (Lucide version and all n
 
 **When the platform updates `lucide-react`:** set `lucide-react` and `lucide-static` in this repo to the same version or a newer one, merge, and run `publish-icons.yml`. No widget release is necessary for new icons.
 
+### Header icon overrides for existing embeds
+
+The widget can load a customer-specific image from this public manifest:
+
+```
+https://cdn.punku.ai/chat/header-icon-overrides.json
+```
+
+An override requires an exact match for backend origin, flow ID, and page origin.
+An explicit `header_icon` in the embed takes priority.
+Other widgets keep their existing icons.
+The widget must first run a bundle that supports this manifest.
+
+Keep real customer identifiers in deployment configuration, outside this repository.
+Set the repository secret `WIDGET_HEADER_ICON_OVERRIDES_JSON` to a JSON array.
+Each entry must contain exactly these four fields:
+
+```json
+[
+  {
+    "backend_origin": "https://api.example.com",
+    "flow_id": "00000000-0000-4000-8000-000000000000",
+    "page_origin": "https://customer.example.com",
+    "header_icon": "https://cdn.example.com/customer-logo.svg"
+  }
+]
+```
+
+These values are placeholders.
+Use HTTPS origins without paths.
+Use HTTPS image URLs without credentials, query strings, or fragments.
+Never add secrets or authentication keys.
+The publisher rejects extra fields and duplicate matches.
+It limits configuration to 100 entries and 64 KiB.
+
+The publisher replaces each match with a SHA-256 selector.
+It hashes UTF-8 `JSON.stringify([backend_origin, lowercase_flow_id, page_origin])` after origin normalization.
+The public manifest contains only `selector` and `header_icon`.
+It does not contain customer origins or flow IDs.
+The selector is a matching key, not an authentication mechanism.
+
+Keep the configuration file private and outside the repository.
+Set the secret through standard input:
+
+```bash
+gh secret set WIDGET_HEADER_ICON_OVERRIDES_JSON --repo PUNKU-AI/punku-embedded-chat < /path/to/private-config.json
+```
+
+Run `publish-icons.yml` with `manifest_only` enabled to publish only the configured manifest.
+The workflow tests the publisher before it validates deployment configuration.
+This option skips dependency installation, the Lucide build, and shared icon uploads.
+The workflow uses the existing deploy role, primary bucket, and optional backup bucket.
+It sets a five-minute cache and invalidates only the manifest path.
+
+An unset or blank secret preserves the existing CDN manifest.
+Set the secret to `[]` to remove all overrides.
+This workflow does not change the widget release checks.
+
 ---
 
 ## 4. Switch the embed snippet (main app: `PUNKU-AI/PUNKU.AI`)

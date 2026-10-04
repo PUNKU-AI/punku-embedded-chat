@@ -14,7 +14,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "webpack serve --mode development --host 127.0.0.1",
+    "start": "node --max-old-space-size=2048 scripts/dev-server.cjs",
     "build": "npm run build:release",
     "build:release": "node scripts/build-widget-bundle.cjs",
     "build:react": "npm run build:release",
@@ -28,6 +28,7 @@
     "test:visual-live": "node scripts/visual-audit-ci.mjs",
     "test:visual-contract": "node --test --test-concurrency=1 scripts/visual-audit-ci.test.mjs",
     "test:release-contract": "node --test --test-concurrency=1 scripts/release-*.test.cjs",
+    "test:dev-server": "node --test --test-concurrency=1 scripts/dev-server.test.cjs",
     "audit:dependencies": "npm audit --audit-level=low"
   },
   "eslintConfig": {
@@ -36,6 +37,14 @@
       "react-app/jest"
     ],
     "overrides": [
+      {
+        "files": ["**/__tests__/**/*", "**/*.{spec,test}.*"],
+        "rules": {
+          "jest/no-jest-import": "off",
+          "no-restricted-imports": ["error", {"paths": ["jest"]}],
+          "no-restricted-modules": ["error", {"paths": ["jest"]}]
+        }
+      },
       {
         "files": [
           "e2e/**/*",
@@ -107,8 +116,13 @@
     "terser-webpack-plugin": "5.6.1",
     "typescript": "^5.9.3",
     "webpack": "5.111.1",
-    "webpack-cli": "7.2.3",
-    "webpack-dev-server": "6.0.0"
+    "webpack-cli": "7.2.3"
+  },
+  "overrides": {
+    "@typescript-eslint/parser": "8.71.0",
+    "@typescript-eslint/eslint-plugin": "8.71.0",
+    "@typescript-eslint/utils": "8.71.0",
+    "eslint-plugin-jest": "29.16.6"
   },
   "jest": {
     "transformIgnorePatterns": [

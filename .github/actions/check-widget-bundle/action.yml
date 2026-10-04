@@ -39,7 +39,7 @@ runs:
         npx tsc --noEmit
         npm run typecheck:browser
         npx eslint src --ext .ts,.tsx --ignore-pattern '**/*.test.*'
-        npx eslint e2e scripts/build-widget-bundle.cjs scripts/jest-svg-transform.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts webpack.config.js babel.config.cjs src/controllers/index.ts src/controllers/index.test.ts
+        npx eslint e2e scripts/build-widget-bundle.cjs scripts/dev-server*.cjs scripts/lint-compatibility.test.cjs scripts/publish-header-icon-overrides*.cjs scripts/jest-svg-transform.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts webpack.config.js babel.config.cjs src/controllers/index.ts src/controllers/index.test.ts
     - name: Build the release bundle once
       shell: bash
       env:

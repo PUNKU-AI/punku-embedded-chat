@@ -1,7 +1,7 @@
 name: Publish header icons to CDN
 
-# Uploads the Lucide header icon set to chat/icons/lucide/ on the CDN, without
-# a widget release. The widget loads `header_icon_name` icons from there.
+# Uploads the Lucide icon set and optional header icon overrides to the CDN.
+# Neither upload requires a widget release.
 #
 # Run it by hand:
 #   - once, before the first widget release that loads icons from the CDN
@@ -11,6 +11,11 @@ name: Publish header icons to CDN
 
 on:
   workflow_dispatch:
+    inputs:
+      manifest_only:
+        description: "Publish only the configured header icon overrides"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write # OIDC: assume the deploy role without storing static AWS keys
@@ -33,10 +38,21 @@ jobs:
           node-version: "24"
           cache: npm
 
+      - name: Test header icon override publisher
+        run: node --test --test-concurrency=1 scripts/publish-header-icon-overrides.test.cjs
+
+      - name: Validate header icon overrides
+        id: overrides
+        env:
+          WIDGET_HEADER_ICON_OVERRIDES_JSON: ${{ secrets.WIDGET_HEADER_ICON_OVERRIDES_JSON }}
+        run: node scripts/publish-header-icon-overrides.cjs
+
       - name: Install dependencies
+        if: ${{ !inputs.manifest_only }}
         run: npm ci
 
       - name: Build header icon set
+        if: ${{ !inputs.manifest_only }}
         run: node scripts/build-lucide-icons.js
 
       - name: Configure AWS credentials (OIDC)
@@ -46,4 +62,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload header icons -> chat/icons/lucide/ (primary + failover origin)
+        if: ${{ !inputs.manifest_only }}
         run: scripts/upload-lucide-icons.sh
+
+      - name: Upload header icon overrides (primary + failover origin)
+        if: steps.overrides.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          task_buckets=("$BUCKET")
+          if [ -n "${BUCKET_BACKUP:-}" ]; then
+            task_buckets+=("$BUCKET_BACKUP")
+          fi
+          for task_bucket in "${task_buckets[@]}"; do
+            aws s3 cp build-icons/header-icon-overrides.json "s3://$task_bucket/chat/header-icon-overrides.json" \
+              --content-type "application/json" --cache-control "public, max-age=300" --only-show-errors
+          done
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" \
+            --paths "/chat/header-icon-overrides.json" > /dev/null

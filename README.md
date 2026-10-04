@@ -23,6 +23,9 @@ Webpack builds the widget directly. Babel handles TypeScript and JSX.
 Jest runs with two workers. The release build uses one worker and a 2 GB memory limit.
 Check for other test jobs before running these commands on a shared machine.
 The legacy `build:react` and `build:bundle` commands both run the complete release build.
+`npm start` serves the test harness at `http://127.0.0.1:3000`.
+It rebuilds changes in a temporary directory and keeps the committed release files intact.
+Refresh the browser after each development build.
 
 ## Features
 
