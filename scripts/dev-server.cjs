@@ -30,6 +30,18 @@ function isInside(root, file) {
 
 function createStaticHandler(roots) {
   const resolvedRoots = roots.map((root) => fs.realpathSync(root));
+  const files = new Map();
+  function collect(root, directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isDirectory()) collect(root, filename);
+      if (entry.isFile()) {
+        const url = '/' + path.relative(root, filename).split(path.sep).join('/');
+        if (!files.has(url)) files.set(url, { root, filename });
+      }
+    }
+  }
+  for (const root of resolvedRoots) collect(root, root);
   return async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -53,21 +65,31 @@ function createStaticHandler(roots) {
       return;
     }
 
-    const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
-    for (const root of resolvedRoots) {
-      const candidate = path.resolve(root, relativePath);
-      if (!isInside(root, candidate)) continue;
+    const route = files.get(pathname === '/' ? '/index.html' : pathname);
+    if (route) {
       let file;
       let stat;
       try {
-        file = await fs.promises.realpath(candidate);
-        if (!isInside(root, file)) continue;
+        file = await fs.promises.realpath(route.filename);
+        if (!isInside(route.root, file)) {
+          response.writeHead(404);
+          response.end('File not found.');
+          return;
+        }
         stat = await fs.promises.stat(file);
       } catch (error) {
-        if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) continue;
+        if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) {
+          response.writeHead(404);
+          response.end('File not found.');
+          return;
+        }
         throw error;
       }
-      if (!stat.isFile()) continue;
+      if (!stat.isFile()) {
+        response.writeHead(404);
+        response.end('File not found.');
+        return;
+      }
 
       response.writeHead(200, {
         'Content-Type': CONTENT_TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
@@ -97,7 +119,7 @@ async function startDevServer() {
   config.parallelism = 1;
   delete config.devServer;
   const compiler = webpack(config);
-  const handler = createStaticHandler([outputRoot, path.resolve(__dirname, '../public')]);
+  let handler = createStaticHandler([outputRoot, path.resolve(__dirname, '../public')]);
   let ready = false;
   let stopped = false;
   const server = http.createServer((request, response) => {
@@ -114,6 +136,7 @@ async function startDevServer() {
   });
   const watcher = compiler.watch({ aggregateTimeout: 200 }, (error, stats) => {
     ready = Boolean(!error && stats && !stats.hasErrors());
+    if (ready) handler = createStaticHandler([outputRoot, path.resolve(__dirname, '../public')]);
     console.log(error || stats?.toString({ all: false, errors: true, warnings: true, timings: true }) || 'Build produced no result.');
   });
 
