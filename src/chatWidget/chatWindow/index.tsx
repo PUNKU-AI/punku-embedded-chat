@@ -95,6 +95,7 @@ export default function ChatWindow({
   welcome_message,
   show_feedback = false,
   header_icon,
+  onHeaderIconError,
   header_icon_name,
   background_color,
   bot_message_color,
@@ -162,6 +163,7 @@ export default function ChatWindow({
   welcome_message?: string;
   show_feedback?: boolean;
   header_icon?: string;
+  onHeaderIconError?: () => void;
   header_icon_name?: string;
   background_color?: string;
   bot_message_color?: string;
@@ -900,6 +902,7 @@ export default function ChatWindow({
             {header_icon ? (
               <img
                 src={header_icon}
+                onError={onHeaderIconError}
                 alt="Chat icon"
                 className="cl-header-logo"
                 width="36"

@@ -32,5 +32,10 @@ In the embed snippet, use `header_icon` (not `header_icon_name`):
 
 The TressBrüder file preserves the original logo geometry.
 It changes only the fill from `#fdfcf5` to `#3aaa35`.
-Set `header_icon` on the customer's embed to use this file.
-Adding this asset does not change existing embeds or shared icons.
+Embeds with `header_icon` can use this file directly.
+For fixed embeds, the widget can read optional header image overrides.
+Each override matches the backend origin, flow ID, and page origin through a SHA-256 selector.
+An explicit `header_icon` always takes priority.
+Configuration or image failures preserve the existing icon.
+The override configuration requires separate CDN publication.
+Adding this asset alone does not change existing embeds or shared icons.
