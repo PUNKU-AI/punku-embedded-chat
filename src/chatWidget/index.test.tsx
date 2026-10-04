@@ -1,4 +1,5 @@
 import React from 'react';
+import { ClosedWidgetHintStorage } from '../utils/closedWidgetHintStorage';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 
 // Mock the child components before importing ChatWidget
@@ -144,6 +145,11 @@ describe('ChatWidget', () => {
     jest.clearAllMocks();
     window.sessionStorage.clear();
     setViewportSize(1024, 768);
+    // JSDOM has no layout. Give the trigger and its anchor measurable bounds.
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 400, y: 400, left: 400, top: 400, right: 448, bottom: 448,
+      width: 48, height: 48, toJSON: () => ({})
+    });
     // Reset window global
     delete (window as any)['punku-chat-widget_api'];
     delete (window as any)['custom-widget_api'];
@@ -155,6 +161,11 @@ describe('ChatWidget', () => {
       messages: [],
       isNewSession: true
     });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
   });
 
   describe('Rendering', () => {
@@ -471,6 +482,103 @@ describe('ChatWidget', () => {
 
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
       expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+    });
+  });
+
+  describe('Responsive Hint Exposure', () => {
+    it('lets the visible desktop embed claim the hint after a hidden mobile embed mounts first', () => {
+      render(<>
+        <div style={{ display: 'none' }}>
+          <ChatWidget {...defaultProps} widget_id="mobile-test" show_closed_widget_hint={true} closed_widget_hint_text="Mobile hint" />
+        </div>
+        <ChatWidget {...defaultProps} widget_id="desktop-test" show_closed_widget_hint={true} closed_widget_hint_text="Desktop hint" />
+      </>);
+      expect(screen.getByText('Mobile hint')).not.toBeVisible();
+      expect(screen.getByText('Desktop hint')).toBeVisible();
+      expect(ClosedWidgetHintStorage.hasBeenShown(defaultProps.flow_id)).toBe(true);
+    });
+
+    it('starts the full timer after reveal, even when the hidden time exceeds that timer', () => {
+      jest.useFakeTimers();
+      const view = render(<div data-testid="responsive-container" style={{ display: 'none' }}>
+        <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />
+      </div>);
+      act(() => { jest.advanceTimersByTime(2000); });
+      expect(ClosedWidgetHintStorage.hasBeenShown(defaultProps.flow_id)).toBe(false);
+      const container = screen.getByTestId('responsive-container');
+      container.style.display = 'block';
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(20); });
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+      expect(ClosedWidgetHintStorage.hasBeenShown(defaultProps.flow_id)).toBe(true);
+      act(() => { jest.advanceTimersByTime(700); });
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(301); });
+      expect(screen.getByText(defaultClosedHintText)).not.toBeVisible();
+      view.unmount();
+    });
+
+    it('rechecks the shared flag before a hidden same-flow embed becomes visible', () => {
+      jest.useFakeTimers();
+      render(<>
+        <div data-testid="phone-container" style={{ display: 'none' }}>
+          <ChatWidget {...defaultProps} widget_id="phone-test" show_closed_widget_hint={true} closed_widget_hint_text="Phone hint" />
+        </div>
+        <div data-testid="desktop-container">
+          <ChatWidget {...defaultProps} widget_id="desktop-test" show_closed_widget_hint={true} closed_widget_hint_text="Desktop hint" />
+        </div>
+      </>);
+      expect(screen.getByText('Desktop hint')).toBeVisible();
+      screen.getByTestId('desktop-container').style.display = 'none';
+      screen.getByTestId('phone-container').style.display = 'block';
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(20); });
+      expect(screen.getByText('Phone hint')).not.toBeVisible();
+    });
+
+    it('keeps the owning hint and its original deadline during StrictMode replay', () => {
+      jest.useFakeTimers();
+      render(<React.StrictMode>
+        <ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />
+      </React.StrictMode>);
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+      act(() => { jest.advanceTimersByTime(700); });
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(301); });
+      expect(screen.getByText(defaultClosedHintText)).not.toBeVisible();
+    });
+
+    it('keeps a stable deadline when session storage is unavailable', () => {
+      jest.useFakeTimers();
+      jest.spyOn(ClosedWidgetHintStorage, 'hasBeenShown').mockReturnValue(false);
+      const markShown = jest.spyOn(ClosedWidgetHintStorage, 'markShown').mockImplementation(() => {});
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />);
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+      act(() => { jest.advanceTimersByTime(700); });
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(301); });
+      expect(screen.getByText(defaultClosedHintText)).not.toBeVisible();
+      expect(markShown).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not reclaim an old exposure after hint text changes away and back', () => {
+      const view = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text="First hint" />);
+      expect(screen.getByText('First hint')).toBeVisible();
+      view.rerender(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text="Changed hint" />);
+      expect(screen.getByText('Changed hint')).not.toBeVisible();
+      view.rerender(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text="First hint" />);
+      expect(screen.getByText('First hint')).not.toBeVisible();
+    });
+
+    it('cleans up the hint timer on unmount', () => {
+      jest.useFakeTimers();
+      const view = render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_auto_hide_ms={1000} />);
+      expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+      view.unmount();
+      expect(jest.getTimerCount()).toBe(0);
+      fireEvent.resize(window);
+      act(() => { jest.advanceTimersByTime(1001); });
+      expect(jest.getTimerCount()).toBe(0);
     });
   });
 

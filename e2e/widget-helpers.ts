@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-export async function loadWidget(page: Page, props: Record<string, string> = {}) {
+export async function loadWidget(page: Page, props: Record<string, string> = {}, fixturePath = '/fixture.html') {
   // Record returned roots without changing their mode. Opening the shadow root
   // would hide the production regression. No synthetic clicks activate links.
   await page.addInitScript(() => {
@@ -25,7 +25,7 @@ export async function loadWidget(page: Page, props: Record<string, string> = {})
     return route.abort();
   });
   await page.bringToFront();
-  await page.goto('/fixture.html?' + new URLSearchParams(props));
+  await page.goto(fixturePath + '?' + new URLSearchParams(props));
   await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
   await expect.poll(() => page.evaluate(() => {
     const host = document.querySelector('punku-chat, punku-control');

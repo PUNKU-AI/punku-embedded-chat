@@ -12,6 +12,7 @@ import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookin
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
+import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
 
 type ProgrammaticMessage = {
   id: number;
@@ -274,9 +275,14 @@ export default function ChatWidget({
   const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
-  const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(
-    () => !start_open && !(closed_widget_hint_show_once && ClosedWidgetHintStorage.hasBeenShown(flow_id))
-  );
+  const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(false);
+  const closedHintExposureRef = useRef<{
+    flowId: string;
+    text: string;
+    autoHideMs: number | undefined;
+    showOnce: boolean;
+    expiresAt: number | null;
+  } | null>(null);
   const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
   const [triggerPositionOverride, setTriggerPositionOverride] = useState<TriggerPosition | null>(null);
 
@@ -344,31 +350,55 @@ export default function ChatWidget({
   }, [messages, flow_id, isClearing]);
 
   useEffect(() => {
-    if (open || !show_closed_widget_hint || !closed_widget_hint_text.trim()) {
+    const trigger = triggerRef.current;
+    if (open || !show_closed_widget_hint || !closed_widget_hint_text.trim() || !trigger) {
+      closedHintExposureRef.current = null;
       setShowClosedWidgetHint(false);
       return;
     }
 
-    if (closed_widget_hint_show_once && ClosedWidgetHintStorage.hasBeenShown(flow_id)) {
-      setShowClosedWidgetHint(false);
-      return;
+    const previousExposure = closedHintExposureRef.current;
+    if (previousExposure && (previousExposure.flowId !== flow_id || previousExposure.text !== closed_widget_hint_text ||
+        previousExposure.autoHideMs !== closed_widget_hint_auto_hide_ms || previousExposure.showOnce !== closed_widget_hint_show_once)) {
+      closedHintExposureRef.current = null;
     }
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const stopWatching = observeClosedWidgetHintVisibility(trigger, (visible) => {
+      if (!visible) {
+        setShowClosedWidgetHint(false);
+        return;
+      }
 
-    setShowClosedWidgetHint(true);
+      let exposure = closedHintExposureRef.current;
+      if (!exposure) {
+        // Hidden responsive embeds must check again when they become visible.
+        if (closed_widget_hint_show_once && ClosedWidgetHintStorage.hasBeenShown(flow_id)) {
+          setShowClosedWidgetHint(false);
+          return;
+        }
+        exposure = {
+          flowId: flow_id,
+          text: closed_widget_hint_text,
+          autoHideMs: closed_widget_hint_auto_hide_ms,
+          showOnce: closed_widget_hint_show_once,
+          expiresAt: typeof closed_widget_hint_auto_hide_ms === "number" && closed_widget_hint_auto_hide_ms > 0
+            ? Date.now() + closed_widget_hint_auto_hide_ms : null,
+        };
+        closedHintExposureRef.current = exposure;
+        if (closed_widget_hint_show_once) ClosedWidgetHintStorage.markShown(flow_id);
+      }
 
-    if (closed_widget_hint_show_once) {
-      ClosedWidgetHintStorage.markShown(flow_id);
-    }
-
-    if (typeof closed_widget_hint_auto_hide_ms !== "number" || closed_widget_hint_auto_hide_ms <= 0) {
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setShowClosedWidgetHint(false);
-    }, closed_widget_hint_auto_hide_ms);
-
-    return () => clearTimeout(timeout);
+      // Keep the original deadline through observer updates and StrictMode replay.
+      const remaining = exposure.expiresAt === null ? null : exposure.expiresAt - Date.now();
+      setShowClosedWidgetHint(remaining === null || remaining > 0);
+      if (timeout === undefined && remaining !== null && remaining > 0) {
+        timeout = setTimeout(() => setShowClosedWidgetHint(false), remaining);
+      }
+    });
+    return () => {
+      stopWatching();
+      if (timeout !== undefined) clearTimeout(timeout);
+    };
   }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms, closed_widget_hint_show_once, flow_id]);
 
   // Function to start a new session

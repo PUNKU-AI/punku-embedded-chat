@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Closed widget hint regression fixture</title>
+  <style>
+    body { margin: 0; background: #eef2f6; color: #243448; font-family: Arial, sans-serif; }
+    main { max-width: 700px; padding: 24px; }
+    h1 { font-size: 22px; }
+    .hidden { display: none; }
+    .phone-only { display: block; }
+    .desktop-only { display: none; }
+    @media (min-width: 768px) {
+      .phone-only { display: none; }
+      .desktop-only { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Local widget hint checks</h1>
+    <p>This page uses synthetic identifiers and synthetic SVG icons.</p>
+    <p>It reproduces customer settings without customer credentials or backend calls.</p>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const profile = params.get('profile');
+    const scene = params.get('scene') || 'single';
+    const timer = params.get('timer') || '1200';
+    const profiles = {
+      wimsi: { title: 'Wimsi', text: 'Hallo, ich bin dein KI-Assistent. Wie kann ich dir helfen?', position: 'top', color: '#3aaa35' },
+      laura: { title: 'Laura', text: 'Hallo, ich bin Laura. Wie kann ich dir helfen?', position: 'top', timer: '5000', color: '#00718e' },
+      lancillotto: { title: 'Lancillotto', text: "Ciao, sono Lancillotto e vi guiderò all'acquisto dei vostri biglietti", position: 'left', timer: '10000', color: '#876035' },
+      'stadthafen-marina': { title: 'Marina', text: 'Lust aufs Wasser? \ud83d\udea3 Frag Marina!', position: 'left', timer: '10000', textColor: '#003a5d', color: '#003a5d', bottom: '80' },
+      franco: { title: 'Franco', text: "Let's Plan Your Ski Holiday", position: 'left', timer: '5000', color: '#3b80a7', bottom: '236' },
+      fiete: { title: 'Fiete', text: 'Moin! Ich bin Fiete und helfe dir rund um deinen Besuch im Dialoghaus.', position: 'left', color: '#4a4a4a', background: '#FFF7D6', textColor: '#4A4A4A', bottom: '100', chatPosition: 'bottom-left' },
+      timeride: { title: 'Carolin', enabled: false, color: '#a33950' },
+      elixia: { title: 'ELIXIA', enabled: false, color: '#f06a23' },
+      scheibenholz: { title: 'Marina', enabled: false, color: '#286b8b' },
+    };
+    const widgets = [];
+    const wrappers = [];
+    const outerHosts = [];
+    const createIcon = (color) => 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
+      '<circle cx="16" cy="16" r="14" fill="' + color + '"/>' +
+      '<path d="M8 19 16 7l8 12h-6v6h-4v-6z" fill="#fff"/></svg>'
+    );
+    const base = {
+      online: 'true', host_url: location.origin, flow_id: 'synthetic-hint-flow',
+      widget_id: 'synthetic-hint-widget', branding: 'punku-ai', window_title: 'Local museum assistant',
+      input_type: 'chat', output_type: 'chat', default_language: 'en',
+      width: '300', height: '230', welcome_message: 'Local welcome message. No request is sent.',
+      show_closed_widget_hint: 'true',
+      closed_widget_hint_text: 'Ask me about your visit.', start_open: 'false',
+      closed_widget_hint_position: 'left', show_close_button_on_desktop: 'true',
+      enable_client_error_reporting: 'false',
+      trigger_icon: createIcon('#3aaa35'), header_icon: createIcon('#3aaa35'),
+    };
+    function addWidget(attrs = {}, wrapperStyle = {}, wrapperClass = '', target = document.body) {
+      const wrapper = document.createElement('section');
+      wrapper.dataset.fixtureWrapper = String(wrappers.length);
+      wrapper.className = wrapperClass;
+      Object.assign(wrapper.style, wrapperStyle);
+      const widget = document.createElement('punku-chat');
+      const index = widgets.length;
+      const values = { ...base, ...attrs, widget_id: 'synthetic-hint-widget-' + index };
+      for (const [key, value] of Object.entries(values)) widget.setAttribute(key, value);
+      wrapper.append(widget);
+      target.append(wrapper);
+      widgets.push(widget);
+      wrappers.push(wrapper);
+      return widget;
+    }
+    function addResponsive(order, attrs = {}, timers = ['8000', '20000']) {
+      const common = { ...attrs, flow_id: 'synthetic-hint-responsive', chat_position: 'bottom-left', bottom_offset: '100' };
+      const phone = () => addWidget({ ...common, closed_widget_hint_auto_hide_ms: timers[0] }, {}, 'phone-only');
+      const desktop = () => addWidget({ ...common, closed_widget_hint_auto_hide_ms: timers[1] }, {}, 'desktop-only');
+      if (order === 'phone-first') { phone(); desktop(); }
+      else { desktop(); phone(); }
+    }
+    if (profile) {
+      const config = profiles[profile];
+      if (!config) throw new Error('Unknown synthetic customer profile.');
+      document.querySelector('h1').textContent = 'Local profile: ' + config.title;
+      const attrs = {
+        flow_id: 'synthetic-profile-' + profile, window_title: config.title,
+        closed_widget_hint_text: config.text || 'Hi, I am your AI assistant. How can I help you?',
+        closed_widget_hint_position: config.position || 'left',
+        trigger_icon: createIcon(config.color), header_icon: createIcon(config.color),
+        ...(config.timer ? { closed_widget_hint_auto_hide_ms: config.timer } : {}),
+        ...(config.bottom ? { bottom_offset: config.bottom } : {}),
+        ...(config.background ? { closed_widget_hint_background_color: config.background } : {}),
+        ...(config.textColor ? { closed_widget_hint_text_color: config.textColor } : {}),
+        ...(config.chatPosition ? { chat_position: config.chatPosition } : {}),
+        ...(config.enabled === false ? { show_closed_widget_hint: 'false' } : {}),
+      };
+      if (profile === 'fiete') addResponsive('phone-first', attrs);
+      else if (profile === 'franco') { addWidget(attrs); addWidget(attrs); }
+      else {
+        const widget = addWidget(attrs);
+        if (profile === 'elixia' || profile === 'scheibenholz') {
+          for (const name of ['show_closed_widget_hint', 'closed_widget_hint_text', 'closed_widget_hint_position']) widget.removeAttribute(name);
+        }
+      }
+    } else if (scene === 'responsive-mobile-first' || scene === 'responsive-desktop-first') {
+      addResponsive(scene === 'responsive-mobile-first' ? 'phone-first' : 'desktop-first');
+    } else if (scene === 'both-hidden') {
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, {}, 'hidden');
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, { display: 'none' });
+    } else if (scene === 'ancestor-hidden' || scene === 'ancestor-transparent') {
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, scene === 'ancestor-hidden' ? { visibility: 'hidden' } : { opacity: '0' });
+    } else if (scene === 'stylesheet-hidden') {
+      const sheet = document.createElement('style');
+      sheet.id = 'fixture-visibility-style';
+      sheet.textContent = '.style-gate { display: none; }';
+      document.head.append(sheet);
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, {}, 'style-gate');
+    } else if (scene === 'shadow-host') {
+      const outer = document.createElement('fixture-shadow-host');
+      outer.style.display = 'none';
+      document.body.append(outer);
+      outerHosts.push(outer);
+      const root = outer.attachShadow({ mode: 'closed' });
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, {}, '', root);
+      // loadWidget deliberately queries the document for its initial ready check.
+      // This disabled light-DOM widget makes that check independent of the outer root.
+      addWidget({ show_closed_widget_hint: 'false', flow_id: 'synthetic-shadow-control' });
+    } else if (scene === 'duplicate-visible' || scene === 'independent-flows') {
+      addWidget({ chat_position: 'bottom-left', flow_id: 'synthetic-hint-first' });
+      addWidget({ chat_position: 'bottom-right', flow_id: scene === 'duplicate-visible' ? 'synthetic-hint-first' : 'synthetic-hint-second' });
+    } else if (scene === 'repeat') {
+      addWidget({ closed_widget_hint_show_once: 'false', closed_widget_hint_auto_hide_ms: timer });
+    } else if (scene === 'blank') {
+      addWidget({ closed_widget_hint_text: '   ' });
+    } else if (scene === 'unmount') {
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, {}, 'hidden');
+      addWidget({ closed_widget_hint_auto_hide_ms: timer }, {}, 'hidden');
+    } else {
+      addWidget({ closed_widget_hint_auto_hide_ms: timer });
+    }
+    window.__hintFixture = { widgets, wrappers, outerHosts, addWidget };
+    const script = document.createElement('script');
+    script.src = '/bundle.js';
+    document.head.append(script);
+  </script>
+</body>
+</html>
