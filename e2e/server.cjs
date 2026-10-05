@@ -7,6 +7,7 @@ const path = require('node:path');
 const routes = {
   '/': ['fixture.html', 'text/html'],
   '/fixture.html': ['fixture.html', 'text/html'],
+  '/hint-fixture.html': ['hint-fixture.html', 'text/html'],
   '/nitro-fixture.js': ['nitro-fixture.js', 'text/javascript'],
   '/bundle.js': ['../dist/build/static/js/bundle.min.js', 'text/javascript'],
 };
