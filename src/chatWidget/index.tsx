@@ -981,6 +981,10 @@ video {
   display: none;
 }
 
+/* Use px or em for every length in this stylesheet. Never use rem.
+   rem resolves against the host page's <html> font-size, also inside the
+   shadow root. Hosts with html { font-size: 10px } (or 62.5%) shrank every
+   rem length to 62.5%: the trigger rendered at 30px instead of 48px. */
 :host {
   font-size: 16px;
   line-height: 1.5;
@@ -1147,8 +1151,8 @@ video {
 
 .cl-trigger {
   display: flex;
-  height: 3rem;
-  width: 3rem;
+  height: 48px;
+  width: 48px;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -1308,7 +1312,7 @@ video {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: 16px;
   --tw-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   --tw-shadow-colored: 0 0 10px var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
@@ -1370,8 +1374,8 @@ video {
 
 .cl-send-icon {
   margin: 0;
-  height: 1.5rem;
-  width: 1.5rem;
+  height: 24px;
+  width: 24px;
 }
 
 .cl-notsending-message {
@@ -1408,10 +1412,10 @@ video {
   flex-direction: column;
   --tw-bg-opacity: 1;
   background-color: rgb(255 255 255 / var(--tw-bg-opacity));
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  padding-left: 24px;
+  padding-right: 24px;
   font-size: 18px;
   line-height: 28px;
   font-weight: 400;
@@ -1443,10 +1447,10 @@ video {
   overflow-x: clip;
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity));
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -1469,10 +1473,10 @@ video {
 .cl-chat-message {
   display: flex;
   width: 100%;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 @-webkit-keyframes pulse {
@@ -1537,10 +1541,10 @@ video {
 .cl-input-element {
   height: 100%;
   width: 100%;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  padding-top: 1.25rem;
-  padding-bottom: 1.25rem;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 20px;
+  padding-bottom: 20px;
   font-weight: 300;
   font-size: 16px;
   line-height: 1.5;
@@ -1560,14 +1564,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 0.75rem;
-  border-top-right-radius: 0.125rem;
+  border-radius: 12px;
+  border-top-right-radius: 2px;
   --tw-bg-opacity: 1;
   background-color: rgb(59 130 246 / var(--tw-bg-opacity));
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   text-align: right;
   font-size: 16px;
   line-height: 1.5;
@@ -1582,14 +1586,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 0.75rem;
-  border-top-left-radius: 0.125rem;
+  border-radius: 12px;
+  border-top-left-radius: 2px;
   --tw-bg-opacity: 1;
   background-color: rgb(248 113 113 / var(--tw-bg-opacity));
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -1604,14 +1608,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 0.75rem;
-  border-top-left-radius: 0.125rem;
+  border-radius: 12px;
+  border-top-left-radius: 2px;
   --tw-bg-opacity: 1;
   background-color: rgb(229 231 235 / var(--tw-bg-opacity));
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -2075,10 +2079,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .cl-bot-message {
   width: fit-content;
   max-width: 90%;
-  border-radius: 0.75rem;
-  border-top-left-radius: 0.125rem;
+  border-radius: 12px;
+  border-top-left-radius: 2px;
   background-color: rgb(229 231 235);
-  padding: 0.5rem 1rem;
+  padding: 8px 16px;
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -2133,9 +2137,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const markdownBody = `
 
     .markdown-body {
-  --base-size-4: 0.25rem;
-  --base-size-8: 0.5rem;
-  --base-size-16: 1rem;
+  --base-size-4: 4px;
+  --base-size-8: 8px;
+  --base-size-16: 16px;
   --base-text-weight-normal: 400;
   --base-text-weight-medium: 500;
   --base-text-weight-semibold: 600;

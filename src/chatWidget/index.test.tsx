@@ -186,6 +186,14 @@ describe('ChatWidget', () => {
       expect(styleElement?.textContent).toContain('.cl-widget-root');
     });
 
+    it('should not size anything in rem, which follows the host page root font-size', () => {
+      const { container } = render(<ChatWidget {...defaultProps} />);
+
+      const css = container.querySelector('style')?.textContent ?? '';
+      expect(css).not.toMatch(/\d(?:\.\d+)?\s*rem\b|\.\d+\s*rem\b/);
+      expect(css).toMatch(/\.cl-trigger \{[^}]*height: 48px;[^}]*width: 48px;/);
+    });
+
     it('should not show chat window by default', () => {
       render(<ChatWidget {...defaultProps} />);
 
