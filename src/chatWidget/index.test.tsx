@@ -186,12 +186,22 @@ describe('ChatWidget', () => {
       expect(styleElement?.textContent).toContain('.cl-widget-root');
     });
 
-    it('should not size anything in rem, which follows the host page root font-size', () => {
+    it('should floor every rem length at its designed px size, so a small host root cannot shrink it', () => {
       const { container } = render(<ChatWidget {...defaultProps} />);
 
       const css = container.querySelector('style')?.textContent ?? '';
-      expect(css).not.toMatch(/\d(?:\.\d+)?\s*rem\b|\.\d+\s*rem\b/);
-      expect(css).toMatch(/\.cl-trigger \{[^}]*height: 48px;[^}]*width: 48px;/);
+      // rem follows the host page root font-size. A bare rem would shrink on a 10px root.
+      const remLengths = css.match(/(?<![\w.-])\d*\.?\d+\s*rem\b/gi) ?? [];
+      const flooredPattern = /max\((\d+)px, (\d*\.?\d+)rem\)/g;
+      let floored = 0;
+      let match: RegExpExecArray | null;
+      while ((match = flooredPattern.exec(css)) !== null) {
+        floored += 1;
+        expect(Number(match[1])).toBe(Number(match[2]) * 16);
+      }
+      expect(floored).toBeGreaterThan(0);
+      expect(remLengths).toHaveLength(floored);
+      expect(css).toMatch(/\.cl-trigger \{[^}]*height: max\(48px, 3rem\);[^}]*width: max\(48px, 3rem\);/);
     });
 
     it('should not show chat window by default', () => {

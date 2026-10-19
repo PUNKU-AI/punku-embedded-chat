@@ -981,10 +981,12 @@ video {
   display: none;
 }
 
-/* Use px or em for every length in this stylesheet. Never use rem.
+/* Size every length as max(designed px, rem), never as a bare rem.
    rem resolves against the host page's <html> font-size, also inside the
    shadow root. Hosts with html { font-size: 10px } (or 62.5%) shrank every
-   rem length to 62.5%: the trigger rendered at 30px instead of 48px. */
+   rem length to 62.5%: the trigger rendered at 30px instead of 48px. The px
+   floor keeps the designed size; hosts with a larger root keep their larger
+   widget, as before. */
 :host {
   font-size: 16px;
   line-height: 1.5;
@@ -1151,8 +1153,8 @@ video {
 
 .cl-trigger {
   display: flex;
-  height: 48px;
-  width: 48px;
+  height: max(48px, 3rem);
+  width: max(48px, 3rem);
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -1312,7 +1314,7 @@ video {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: max(16px, 1rem);
   --tw-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   --tw-shadow-colored: 0 0 10px var(--tw-shadow-color);
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
@@ -1374,8 +1376,8 @@ video {
 
 .cl-send-icon {
   margin: 0;
-  height: 24px;
-  width: 24px;
+  height: max(24px, 1.5rem);
+  width: max(24px, 1.5rem);
 }
 
 .cl-notsending-message {
@@ -1412,10 +1414,10 @@ video {
   flex-direction: column;
   --tw-bg-opacity: 1;
   background-color: rgb(255 255 255 / var(--tw-bg-opacity));
-  padding-top: 16px;
-  padding-bottom: 16px;
-  padding-left: 24px;
-  padding-right: 24px;
+  padding-top: max(16px, 1rem);
+  padding-bottom: max(16px, 1rem);
+  padding-left: max(24px, 1.5rem);
+  padding-right: max(24px, 1.5rem);
   font-size: 18px;
   line-height: 28px;
   font-weight: 400;
@@ -1447,10 +1449,10 @@ video {
   overflow-x: clip;
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity));
-  padding-left: 16px;
-  padding-right: 16px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-left: max(16px, 1rem);
+  padding-right: max(16px, 1rem);
+  padding-top: max(8px, 0.5rem);
+  padding-bottom: max(8px, 0.5rem);
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -1473,10 +1475,10 @@ video {
 .cl-chat-message {
   display: flex;
   width: 100%;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-top: max(8px, 0.5rem);
+  padding-bottom: max(8px, 0.5rem);
+  padding-left: max(8px, 0.5rem);
+  padding-right: max(8px, 0.5rem);
 }
 
 @-webkit-keyframes pulse {
@@ -1541,10 +1543,10 @@ video {
 .cl-input-element {
   height: 100%;
   width: 100%;
-  padding-left: 20px;
-  padding-right: 20px;
-  padding-top: 20px;
-  padding-bottom: 20px;
+  padding-left: max(20px, 1.25rem);
+  padding-right: max(20px, 1.25rem);
+  padding-top: max(20px, 1.25rem);
+  padding-bottom: max(20px, 1.25rem);
   font-weight: 300;
   font-size: 16px;
   line-height: 1.5;
@@ -1564,14 +1566,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 12px;
-  border-top-right-radius: 2px;
+  border-radius: max(12px, 0.75rem);
+  border-top-right-radius: max(2px, 0.125rem);
   --tw-bg-opacity: 1;
   background-color: rgb(59 130 246 / var(--tw-bg-opacity));
-  padding-left: 16px;
-  padding-right: 16px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-left: max(16px, 1rem);
+  padding-right: max(16px, 1rem);
+  padding-top: max(8px, 0.5rem);
+  padding-bottom: max(8px, 0.5rem);
   text-align: right;
   font-size: 16px;
   line-height: 1.5;
@@ -1586,14 +1588,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 12px;
-  border-top-left-radius: 2px;
+  border-radius: max(12px, 0.75rem);
+  border-top-left-radius: max(2px, 0.125rem);
   --tw-bg-opacity: 1;
   background-color: rgb(248 113 113 / var(--tw-bg-opacity));
-  padding-left: 16px;
-  padding-right: 16px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-left: max(16px, 1rem);
+  padding-right: max(16px, 1rem);
+  padding-top: max(8px, 0.5rem);
+  padding-bottom: max(8px, 0.5rem);
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -1608,14 +1610,14 @@ video {
   max-width: 90%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: 12px;
-  border-top-left-radius: 2px;
+  border-radius: max(12px, 0.75rem);
+  border-top-left-radius: max(2px, 0.125rem);
   --tw-bg-opacity: 1;
   background-color: rgb(229 231 235 / var(--tw-bg-opacity));
-  padding-left: 16px;
-  padding-right: 16px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-left: max(16px, 1rem);
+  padding-right: max(16px, 1rem);
+  padding-top: max(8px, 0.5rem);
+  padding-bottom: max(8px, 0.5rem);
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -2079,10 +2081,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .cl-bot-message {
   width: fit-content;
   max-width: 90%;
-  border-radius: 12px;
-  border-top-left-radius: 2px;
+  border-radius: max(12px, 0.75rem);
+  border-top-left-radius: max(2px, 0.125rem);
   background-color: rgb(229 231 235);
-  padding: 8px 16px;
+  padding: max(8px, 0.5rem) max(16px, 1rem);
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -2137,9 +2139,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const markdownBody = `
 
     .markdown-body {
-  --base-size-4: 4px;
-  --base-size-8: 8px;
-  --base-size-16: 16px;
+  --base-size-4: max(4px, 0.25rem);
+  --base-size-8: max(8px, 0.5rem);
+  --base-size-16: max(16px, 1rem);
   --base-text-weight-normal: 400;
   --base-text-weight-medium: 500;
   --base-text-weight-semibold: 600;
