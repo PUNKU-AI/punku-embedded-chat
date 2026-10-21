@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { activate, elementState, loadWidget } from './widget-helpers';
+import { activate, elementState, loadWidget, waitForInputFocus } from './widget-helpers';
 
 const checkoutUrl = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
 const checkoutLink = '.markdown-body a strong';
@@ -49,15 +49,8 @@ async function assertCheckoutLinkFocused(page: Page) {
   })).toEqual({ text: 'Book tickets', href: checkoutUrl });
 }
 
-async function waitForInputFocus(page: Page) {
-  // Wait for the initial input-focus timer before establishing the opener.
-  await expect.poll(() => page.evaluate(() => {
-    const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)?.activeElement?.classList.contains('cl-input-element');
-  })).toBe(true);
-}
-
 async function focusCheckoutLink(page: Page) {
+  // Wait for the initial input-focus timer before establishing the opener.
   await waitForInputFocus(page);
   // Focus is setup only. Real keyboard or pointer input opens checkout.
   await page.evaluate(() => {

@@ -38,6 +38,13 @@ All profiles verify opener focus after the close button and the active checkout 
 These focus checks run with and without Nitro interception and require the chat to stay open without a popup.
 They serve a synthetic checkout page at the expected URL and block all provider requests.
 
+Host page checks add a host element that is wider than the viewport.
+The open widget must not move the visual viewport after load, after a restored session, after a new answer, or when checkout opens and closes.
+Each check records the largest `visualViewport` offset from page start, so a pan that moves back still fails.
+The message list must still scroll to the newest message.
+When checkout closes, focus must return to the booking link, and the message list must scroll to show that link.
+These checks send messages through the widget API, because a Playwright click or tap scrolls the page on its own.
+
 Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
 Local servers record the actual HTTP headers and body on both origins.
 Tests verify same-origin cookies, blocked cross-origin cookies, and no copied XSRF headers on every profile.
