@@ -114,7 +114,10 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
     // The browser scrolled the caret into view on input. `height: auto` resets
     // that scroll position, so restore it after the new height is applied.
     const scrollTop = el.scrollTop;
-    // Shrink first, so scrollHeight reflects the current text and not the old height.
+    // Measure without a scrollbar: a classic (non-overlay) scrollbar narrows
+    // the text and can add a wrapped line to the measurement. Shrink first, so
+    // scrollHeight reflects the current text and not the old height.
+    el.style.overflowY = "hidden";
     el.style.height = "auto";
     let { height } = computeTextareaHeight({
       scrollHeight: el.scrollHeight,
@@ -137,17 +140,24 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
     // in the middle: keep the position the browser chose for the caret.
     const caretAtEnd = el.selectionEnd === el.value.length;
     el.scrollTop = caretAtEnd ? el.scrollHeight : scrollTop;
+    // Report the rendered border-box height: CSS min/max-height from
+    // input_style can differ from the height set above.
+    const rendered = el.offsetHeight;
     const previous = appliedHeight.current;
-    appliedHeight.current = height;
-    if (previous !== null && previous !== height) {
-      onHeightChange?.(height - previous);
+    appliedHeight.current = rendered;
+    if (previous !== null && previous !== rendered) {
+      onHeightChange?.(rendered - previous);
     }
   }, [maxLines, onHeightChange]);
+
+  // A host can change input_style at runtime (font size, line height, padding).
+  // The style object is recreated on each render, so compare its contents.
+  const styleKey = style ? JSON.stringify(style) : "";
 
   // Layout effect: the height is applied before paint, so the field never flashes.
   useLayoutEffect(() => {
     resize();
-  }, [value, resize]);
+  }, [value, styleKey, resize]);
 
   useEffect(() => {
     window.addEventListener("resize", resize);

@@ -7,10 +7,18 @@ import ChatInput, {
   isComposingEvent,
 } from './chatInput';
 
-// jsdom does no layout. The autosize reads scrollHeight and clientHeight, so
-// the tests provide them: scrollHeight is the simulated text height and
-// clientHeight follows the applied style height.
+// jsdom does no layout. The autosize reads scrollHeight, clientHeight and
+// offsetHeight, so the tests provide them: scrollHeight is the simulated text
+// height; clientHeight and offsetHeight follow the applied style height, capped
+// by a style max-height like a browser would.
 let simulatedScrollHeight = 64;
+// Each scrollHeight read records the overflow and height in force at that moment.
+let scrollHeightReads: Array<{ overflowY: string; height: string }> = [];
+const boxHeight = (el: HTMLTextAreaElement) => {
+  const height = parseFloat(el.style.height) || 0;
+  const maxHeight = parseFloat(el.style.maxHeight);
+  return Number.isFinite(maxHeight) ? Math.min(height, maxHeight) : height;
+};
 // Mirrors the widget CSS: 16px / 1.5 text, 20px vertical padding, no border.
 const metricsStyle = {
   fontSize: '16px', lineHeight: 1.5, paddingTop: '20px', paddingBottom: '20px',
@@ -23,18 +31,28 @@ const SIX_LINES = LINE * DEFAULT_MAX_LINES + 40;
 beforeAll(() => {
   Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', {
     configurable: true,
-    get: () => simulatedScrollHeight,
+    get(this: HTMLTextAreaElement) {
+      scrollHeightReads.push({ overflowY: this.style.overflowY, height: this.style.height });
+      return simulatedScrollHeight;
+    },
   });
   Object.defineProperty(HTMLTextAreaElement.prototype, 'clientHeight', {
     configurable: true,
     get(this: HTMLTextAreaElement) {
-      return parseFloat(this.style.height) || 0;
+      return boxHeight(this);
+    },
+  });
+  Object.defineProperty(HTMLTextAreaElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get(this: HTMLTextAreaElement) {
+      return boxHeight(this);
     },
   });
 });
 
 beforeEach(() => {
   simulatedScrollHeight = ONE_LINE;
+  scrollHeightReads = [];
 });
 
 function Harness({
@@ -42,11 +60,13 @@ function Harness({
   onSend = () => {},
   onHeightChange,
   disabled,
+  style = metricsStyle,
 }: {
   initialValue?: string;
   onSend?: () => void;
   onHeightChange?: (delta: number) => void;
   disabled?: boolean;
+  style?: React.CSSProperties;
 }) {
   const [value, setValue] = useState(initialValue);
   return (
@@ -58,7 +78,7 @@ function Harness({
       placeholder="Type your message..."
       ariaLabel="Your message"
       className="cl-input-element"
-      style={metricsStyle}
+      style={style}
       onHeightChange={onHeightChange}
     />
   );
@@ -185,6 +205,49 @@ describe('ChatInput', () => {
       render(<Harness onHeightChange={onHeightChange} />);
       fireEvent.change(field(), { target: { value: 'still one line' } });
       expect(onHeightChange).not.toHaveBeenCalled();
+    });
+
+    it('reports the rendered height when input_style caps it with a smaller max-height', () => {
+      const onHeightChange = jest.fn();
+      render(<Harness onHeightChange={onHeightChange} style={{ ...metricsStyle, maxHeight: '100px' }} />);
+      expect(field().style.height).toBe(`${ONE_LINE}px`);
+
+      simulatedScrollHeight = LINE * 10 + 40;
+      fireEvent.change(field(), { target: { value: Array(10).fill('line').join('\n') } });
+      // The autosize asks for six lines, the consumer max-height renders 100px.
+      expect(field().style.height).toBe(`${SIX_LINES}px`);
+      expect(field().style.overflowY).toBe('auto');
+      expect(onHeightChange).toHaveBeenCalledTimes(1);
+      expect(onHeightChange).toHaveBeenLastCalledWith(100 - ONE_LINE);
+    });
+
+    it('measures the text with the scrollbar hidden after it has overflowed', () => {
+      render(<Harness />);
+      simulatedScrollHeight = LINE * 10 + 40;
+      fireEvent.change(field(), { target: { value: Array(10).fill('line').join('\n') } });
+      expect(field().style.overflowY).toBe('auto');
+
+      scrollHeightReads = [];
+      simulatedScrollHeight = LINE * 4 + 40;
+      fireEvent.change(field(), { target: { value: Array(4).fill('line').join('\n') } });
+      const measurement = scrollHeightReads.find((read) => read.height === 'auto');
+      expect(measurement).toEqual({ overflowY: 'hidden', height: 'auto' });
+      expect(field().style.height).toBe(`${LINE * 4 + 40}px`);
+      expect(field().style.overflowY).toBe('hidden');
+    });
+
+    it('re-measures when the input style changes at runtime', () => {
+      const { rerender } = render(<Harness />);
+      expect(field().style.height).toBe(`${ONE_LINE}px`);
+
+      // A taller line height (2 × 16px) with the same text: one line is now 32px.
+      simulatedScrollHeight = 32 + 40;
+      rerender(<Harness style={{ ...metricsStyle, lineHeight: 2 }} />);
+      expect(field().style.height).toBe(`${32 + 40}px`);
+
+      // A fixed height in input_style is overridden by the measurement.
+      rerender(<Harness style={{ ...metricsStyle, lineHeight: 2, height: '300px' }} />);
+      expect(field().style.height).toBe(`${32 + 40}px`);
     });
   });
 
