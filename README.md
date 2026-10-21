@@ -376,7 +376,7 @@ Use the widget API to customize your widget:
 - **input_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the chat input field.
+  - Description: Styling options for the chat input field. The field is a textarea that grows with the text up to six lines and then scrolls inside itself. Enter sends the message and Shift+Enter inserts a line break. `fontSize`, `lineHeight`, `padding` and `maxHeight` are honoured. A fixed `height` is ignored, because the widget sets the height from the text.
 
 - **loading_messages:**
   - Type: JSON

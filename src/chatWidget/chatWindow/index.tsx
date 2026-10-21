@@ -3,6 +3,7 @@ import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from ".
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
+import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -203,7 +204,7 @@ export default function ChatWindow({
     bottom?: string;
     right?: string;
   }>({ left: "0", top: "0" });
-  const inputRef = useRef<HTMLInputElement>(null); /* User input Ref */
+  const inputRef = useRef<HTMLTextAreaElement>(null); /* User input Ref */
   useEffect(() => {
     if (triggerRef)
       setWindowPosition(
@@ -607,6 +608,20 @@ export default function ChatWindow({
     }, 100);
     return () => clearTimeout(focusTimer);
   }, [messages, open]);
+
+  /*
+   * The composer grows with the text and takes that height from the message
+   * list. When the list was scrolled to the bottom, keep it there, so the
+   * newest message stays visible while the visitor types a long message.
+   */
+  const handleInputHeightChange = useCallback((delta: number) => {
+    const list = messagesContainer.current;
+    if (!list || delta <= 0) return;
+    const distanceToBottom = list.scrollHeight - list.clientHeight - list.scrollTop;
+    if (distanceToBottom <= delta + 2) {
+      list.scrollTop = list.scrollHeight;
+    }
+  }, []);
 
   // Use translations based on language prop
   const t = translations[language] || translations.en;
@@ -1083,20 +1098,19 @@ export default function ChatWindow({
           <div ref={lastMessage}></div>
         </div>
         <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
-          <input
+          <ChatInput
+            ref={inputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleClick();
-            }}
-            type="text"
+            onChange={setValue}
+            onSend={handleClick}
             disabled={sendingMessage}
             placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
+            ariaLabel={t.inputLabel}
             style={{
               ...DEFAULT_INPUT_TEXT_STYLE,
               ...(input_style || {}),
             }}
-            ref={inputRef}
+            onHeightChange={handleInputHeightChange}
             className="cl-input-element"
           />
           <button
@@ -1111,7 +1125,8 @@ export default function ChatWindow({
               alignItems: 'center',
               justifyContent: 'center',
               border: 'none',
-              margin: '8px',
+              // Bottom-aligned next to the growing composer; 12px centres it on the last text line.
+              margin: '8px 8px 12px',
               cursor: 'pointer',
               // Only set button color if explicitly provided (otherwise CSS theme handles it)
               ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),

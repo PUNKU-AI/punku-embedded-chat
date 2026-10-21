@@ -25,6 +25,7 @@ Geometry checks verify this limit and confirm that every placement keeps the cha
 Unit tests verify that closed chats preserve focus and cancel pending input focus when closing or unmounting.
 Link checks cover nested Markdown text, branding links, exact URLs, query strings, fragments, opener protection, and referrer protection.
 Desktop checks also cover Enter, modified Enter, and middle-click.
+Composer checks cover the one-line start height, growth with a long two-sentence message, Shift+Enter line breaks, Enter sending, and the six-line cap with internal scrolling.
 Phone and tablet checks use touch.
 Every test checks for uncaught page errors.
 

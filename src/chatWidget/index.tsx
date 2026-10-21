@@ -1179,7 +1179,7 @@ video {
   align-items: center;
   justify-content: center;
   border: none;
-  margin: 8px;
+  margin: 8px 8px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1464,7 +1464,8 @@ video {
 .cl-input_container {
   display: flex;
   width: 100%;
-  align-items: center;
+  align-items: flex-end;
+  flex-shrink: 0;
   border-top-width: 1px;
   --tw-border-opacity: 1;
   border-color: rgb(229 231 235 / var(--tw-border-opacity));
@@ -1540,18 +1541,29 @@ video {
   justify-content: flex-end;
 }
 
+/* The composer is a textarea. Its height comes from the text (chatInput.tsx):
+   one line at first, at most six lines, then it scrolls inside itself. */
 .cl-input-element {
-  height: 100%;
+  display: block;
   width: 100%;
+  min-width: 0;
+  margin: 0;
   padding-left: max(20px, 1.25rem);
   padding-right: max(20px, 1.25rem);
   padding-top: max(20px, 1.25rem);
   padding-bottom: max(20px, 1.25rem);
+  border: 0;
+  border-radius: 0;
   font-weight: 300;
   font-size: 16px;
   line-height: 1.5;
   background-color: rgb(255 255 255);
   color: rgb(17 24 39);
+  resize: none;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .cl-input-element:focus {
