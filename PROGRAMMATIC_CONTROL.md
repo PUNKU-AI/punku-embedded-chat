@@ -84,6 +84,11 @@ chatWidget.resetTriggerPosition();
 chatWidget.trigger.resetPosition();
 ```
 
+`zIndex` is optional. While the trigger is relocated, it overrides the `z_index`
+widget prop (default 2147483000). A low value, such as `10003`, can put the
+widget below floating buttons of other tools, such as WhatsApp chat icons. Omit
+`zIndex` to keep the `z_index` value.
+
 The closed-widget hint follows the relocated trigger. For side hints, the widget
 checks whether the trigger center is on the left or right half of the viewport
 and places the hint on the opposite side of the trigger. Top and bottom hints

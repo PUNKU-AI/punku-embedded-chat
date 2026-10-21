@@ -259,6 +259,7 @@ Use the widget API to customize your widget:
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
+| z_index               | number    | No       |
 
 - **api_key:**
   - Type: String
@@ -577,6 +578,13 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: true
   - Description: Controls whether the programmatic trigger relocation APIs are exposed. Set to false to hide `setTriggerPosition`, `resetTriggerPosition`, `trigger.position`, and `window.punku.trigger.position`.
+
+- **z_index:**
+  - Type: Number
+  - Required: No
+  - Default: 2147483000
+  - Description: Stack order of the whole widget (trigger, hint and chat window) on the host page. The default puts the widget above floating buttons such as WhatsApp chat icons (up to 99999999). It stays below the banners of Cookiebot, Usercentrics, Didomi and OneTrust (2147483631 and higher). Some consent tools use lower values, for example Borlabs Cookie (999999) or CookieYes (9999999). If the trigger covers a button of such a banner, set a value below the banner's value. A `zIndex` given to `setTriggerPosition` overrides this value while the trigger is relocated.
+  - Note: Place the snippet directly in `<body>`. If a parent element creates a stacking context (for example with `transform`, `filter`, or a `z-index` on a positioned parent), no `z_index` value can lift the widget above other page elements.
 
 - **show_feedback:**
   - Type: Boolean

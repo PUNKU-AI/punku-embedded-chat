@@ -115,7 +115,7 @@ jest.mock('./utils', () => ({
 }));
 
 // Import after mocks
-import ChatWidget from './index';
+import ChatWidget, { DEFAULT_Z_INDEX } from './index';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -832,7 +832,7 @@ describe('ChatWidget', () => {
         bottom: '20px',
         left: '',
         top: '',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
     });
 
@@ -874,7 +874,7 @@ describe('ChatWidget', () => {
       expect(widgetRoot).toHaveStyle({
         left: '20px',
         top: '40px',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
 
       act(() => {
@@ -887,8 +887,49 @@ describe('ChatWidget', () => {
         bottom: '20px',
         left: '',
         top: '',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
+    });
+
+    it('should stack the widget above typical host overlays by default', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      // Above WhatsApp-style buttons, below the banners of large consent tools.
+      expect(DEFAULT_Z_INDEX).toBe(2147483000);
+      expect(document.querySelector('.cl-widget-root')).toHaveStyle({ zIndex: '2147483000' });
+    });
+
+    it.each([
+      [500, '500'],
+      [-1, '-1'],
+      [12.6, '13'],
+      [NaN, String(DEFAULT_Z_INDEX)],
+    ])('should apply the z_index prop %p to the widget root', (zIndex, expected) => {
+      render(<ChatWidget {...defaultProps} z_index={zIndex} />);
+
+      expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe(expected);
+    });
+
+    it('should let the relocation zIndex override the z_index prop', () => {
+      render(<ChatWidget {...defaultProps} z_index={500} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const widgetRoot = document.querySelector('.cl-widget-root') as HTMLElement;
+
+      act(() => {
+        api.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 });
+      });
+      expect(widgetRoot.style.zIndex).toBe('10003');
+
+      act(() => {
+        api.setTriggerPosition({ x: 100, y: 300 });
+      });
+      expect(widgetRoot.style.zIndex).toBe('500');
+
+      act(() => {
+        api.resetTriggerPosition();
+      });
+      expect(widgetRoot.style.zIndex).toBe('500');
     });
 
     it('should position the closed hint from the relocated trigger side by default', () => {
