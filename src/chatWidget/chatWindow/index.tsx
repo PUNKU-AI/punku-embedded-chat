@@ -195,7 +195,6 @@ export default function ChatWindow({
 }) {
   const [value, setValue] = useState<string>("");
   const ref = useRef<HTMLDivElement>(null);
-  const lastMessage = useRef<HTMLDivElement>(null);
   const messagesContainer = useRef<HTMLDivElement>(null);
   const [windowPosition, setWindowPosition] = useState<{
     left: string;
@@ -572,9 +571,15 @@ export default function ChatWindow({
     sendingMessage,
   ]);
 
+  /*
+   * Keep the newest message and streamed tokens in view. Scroll only the
+   * message list: scrollIntoView() also scrolls every scrollable ancestor,
+   * including the visual viewport. On a phone page wider than the screen that
+   * pans the visitor's view of the host page (#69).
+   */
   useEffect(() => {
-    if (lastMessage.current)
-      lastMessage.current.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainer.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   /*
@@ -598,12 +603,15 @@ export default function ChatWindow({
     };
   }, []);
 
-  /* Refocus the User input whenever a new response is returned from the LLM */
+  /*
+   * Refocus the User input whenever a new response is returned from the LLM.
+   * preventScroll: a plain focus() pans the host page like scrollIntoView() (#69).
+   */
 
   useEffect(() => {
     if (!open) return;
     const focusTimer = setTimeout(() => {
-      inputRef.current?.focus();
+      inputRef.current?.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
   }, [messages, open]);
@@ -613,6 +621,13 @@ export default function ChatWindow({
 
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
+
+  // The header icons follow the header colour rule: button_text_color applies
+  // only together with button_color. Otherwise the theme colours the header,
+  // and a light button_text_color would hide the icons on a white header.
+  const headerIconColor = button_color
+    ? button_text_color || '#FFFFFF'
+    : theme === "default" ? "#0f172a" : "white";
 
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
@@ -913,7 +928,7 @@ export default function ChatWindow({
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                   size={24}
                 />
               </div>
@@ -945,7 +960,7 @@ export default function ChatWindow({
               >
                 <RefreshCw
                   size={16}
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                 />
               </button>
             )}
@@ -976,7 +991,7 @@ export default function ChatWindow({
               >
                 <X
                   size={20}
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                 />
               </button>
             )}
@@ -1080,7 +1095,6 @@ export default function ChatWindow({
               loading_messages={loading_messages}
             />
           )}
-          <div ref={lastMessage}></div>
         </div>
         <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
           <input

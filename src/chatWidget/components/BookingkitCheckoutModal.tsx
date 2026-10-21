@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { revealInScrollContainer } from "../utils";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
@@ -69,7 +70,8 @@ export default function BookingkitCheckoutModal({
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
     }
-    closeButton.focus();
+    // preventScroll: a plain focus() can pan the host page on phones (#69).
+    closeButton.focus({ preventScroll: true });
 
     return () => {
       EventTarget.prototype.removeEventListener.call(closeButton, "click", requestClose);
@@ -81,7 +83,12 @@ export default function BookingkitCheckoutModal({
         if (typeof dialog.close === "function") dialog.close();
         else dialog.removeAttribute("open");
       }
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        // preventScroll keeps the host page still (#69). The message list can
+        // move while the modal is open, so scroll only the list to the opener.
+        previousFocus.focus({ preventScroll: true });
+        revealInScrollContainer(previousFocus);
+      }
     };
   }, [url, returnFocusTo]);
 

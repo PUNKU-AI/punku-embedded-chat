@@ -34,6 +34,14 @@ export async function loadWidget(page: Page, props: Record<string, string> = {},
   expect(await page.evaluate(() => document.querySelector('punku-chat, punku-control')?.shadowRoot)).toBeNull();
 }
 
+export async function waitForInputFocus(page: Page) {
+  // The open window focuses its input 100 ms after opening or a new message.
+  await expect.poll(() => page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    return window.__widgetRoots.get(host)?.activeElement?.classList.contains('cl-input-element');
+  })).toBe(true);
+}
+
 export async function elementState(page: Page, selector: string) {
   return page.evaluate((selector) => {
     const host = document.querySelector('punku-chat, punku-control');

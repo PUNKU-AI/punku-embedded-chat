@@ -4,8 +4,9 @@ import ChatWindow from './index';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
 
-// Mock scrollIntoView
+// jsdom has no scrolling. The widget must not call scrollIntoView (#69).
 Element.prototype.scrollIntoView = jest.fn();
+Element.prototype.scrollTo = jest.fn();
 
 // Mock the controllers
 jest.mock('../../controllers', () => ({
@@ -299,6 +300,48 @@ describe('ChatWindow', () => {
     });
   });
 
+  describe('Message List Scrolling', () => {
+    const scrollTo = Element.prototype.scrollTo as jest.Mock;
+
+    beforeEach(() => {
+      // jsdom has no layout. Give every element a known content height.
+      jest.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(640);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should scroll only the message list to its end when messages change', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} />);
+      scrollTo.mockClear();
+
+      rerender(
+        <ChatWindow {...defaultProps} messages={[{ message: 'Assistant reply', isSend: false }]} />
+      );
+
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('should follow a streamed message as its text grows', () => {
+      const streamed = (text: string): ChatMessageType[] => [
+        { message: 'Question', isSend: true },
+        { message: text, isSend: false, message_id: 'stream', streaming: true },
+      ];
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamed('Partial')} />);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={streamed('Partial answer, now longer')} />);
+
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+    });
+  });
+
   describe('Input Handling', () => {
     it('should update input value on change', () => {
       render(<ChatWindow {...defaultProps} />);
@@ -399,6 +442,22 @@ describe('ChatWindow', () => {
         jest.advanceTimersByTime(1);
       });
       expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should focus the input without scrolling the host page', () => {
+      render(<ChatWindow {...defaultProps} open={true} />);
+      const focus = jest.spyOn(screen.getByRole('textbox'), 'focus');
+
+      try {
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
+
+        expect(focus).toHaveBeenCalledTimes(1);
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      } finally {
+        focus.mockRestore();
+      }
     });
 
     it('should cancel pending input focus when the chat closes', () => {
@@ -1158,6 +1217,74 @@ describe('ChatWindow', () => {
       const headerIcon = document.querySelector('.cl-header-logo');
       expect(headerIcon).toBeInTheDocument();
       expect(headerIcon?.tagName.toLowerCase()).toBe('svg');
+    });
+  });
+
+  // Issue #70: the header icons follow the header colour rule.
+  describe('Header icon colour', () => {
+    const renderHeader = (props: Partial<React.ComponentProps<typeof ChatWindow>>) =>
+      render(
+        <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} {...props} />
+      );
+
+    const headerIconStrokes = () =>
+      ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'].map((selector) =>
+        document.querySelector(selector)?.getAttribute('stroke')
+      );
+
+    // Header text colour of each theme without button_color.
+    const themeHeaderColors = [
+      ['default', '#0f172a'],
+      ['dark', 'white'],
+      ['ocean', 'white'],
+      ['aurora', 'white'],
+      ['punku-ai-bookingkit', 'white'],
+      ['swarovski', 'white'],
+    ] as const;
+
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
+      renderHeader({ theme });
+
+      expect(headerIconStrokes()).toEqual([color, color, color]);
+    });
+
+    it.each(themeHeaderColors)(
+      'ignores button_text_color without button_color in the %s theme',
+      (theme, color) => {
+        renderHeader({ theme, button_text_color: '#FFEE00' });
+
+        expect(headerIconStrokes()).toEqual([color, color, color]);
+      }
+    );
+
+    it('keeps the default header icons dark when button_text_color is white', () => {
+      renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
+
+      const header = document.querySelector('.cl-header') as HTMLElement;
+      expect(header.getAttribute('style')).toBeNull();
+      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+    });
+
+    it.each(themeHeaderColors.map(([theme]) => theme))(
+      'uses button_text_color with button_color in the %s theme',
+      (theme) => {
+        renderHeader({ theme, button_color: '#123456', button_text_color: '#FFEE00' });
+
+        expect(headerIconStrokes()).toEqual(['#FFEE00', '#FFEE00', '#FFEE00']);
+      }
+    );
+
+    it('uses white icons with button_color and no button_text_color', () => {
+      renderHeader({ theme: 'default', button_color: '#123456' });
+
+      expect(headerIconStrokes()).toEqual(['#FFFFFF', '#FFFFFF', '#FFFFFF']);
+    });
+
+    it('keeps button_text_color for the send icon, which sits on the button colour', () => {
+      renderHeader({ theme: 'default', button_text_color: '#FFEE00' });
+
+      const sendIcon = document.querySelector('.cl-send-icon') as SVGElement;
+      expect(sendIcon.getAttribute('style')).toContain('stroke: #FFEE00');
     });
   });
 

@@ -107,3 +107,28 @@ export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de'
 	// Default to English if no supported language is found
 	return 'en';
 }
+/*
+ * Scroll the nearest scrolling ancestor, such as the message list, so that
+ * `element` is visible. focus() and scrollIntoView() also scroll the host page
+ * and the visual viewport. On a phone page wider than the screen, that pans the
+ * visitor's view (#69). This scrolls one widget container and nothing else.
+ */
+export function revealInScrollContainer(element: HTMLElement) {
+	const { body, documentElement } = element.ownerDocument;
+	for (
+		let parent = element.parentElement;
+		parent && parent !== body && parent !== documentElement;
+		parent = parent.parentElement
+	) {
+		if (!/auto|scroll|overlay/.test(getComputedStyle(parent).overflowY)) continue;
+		if (parent.scrollHeight <= parent.clientHeight) continue;
+		const top = parent.getBoundingClientRect().top + parent.clientTop;
+		const target = element.getBoundingClientRect();
+		const above = top - target.top;
+		const below = target.bottom - (top + parent.clientHeight);
+		// Show the whole element, or its top when it is taller than the container.
+		if (above > 0) parent.scrollTop -= above;
+		else if (below > 0) parent.scrollTop += Math.min(below, -above);
+		return;
+	}
+}
