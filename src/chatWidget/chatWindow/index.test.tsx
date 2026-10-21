@@ -303,10 +303,17 @@ describe('ChatWindow', () => {
   describe('Message List Scrolling', () => {
     const scrollTo = Element.prototype.scrollTo as jest.Mock;
 
+    beforeEach(() => {
+      // jsdom has no layout. Give every element a known content height.
+      jest.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(640);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
     it('should scroll only the message list to its end when messages change', () => {
       const { rerender } = render(<ChatWindow {...defaultProps} />);
-      const list = document.querySelector('.cl-messages_container') as HTMLElement;
-      Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 640 });
       scrollTo.mockClear();
 
       rerender(
@@ -314,7 +321,7 @@ describe('ChatWindow', () => {
       );
 
       expect(scrollTo).toHaveBeenCalledTimes(1);
-      expect(scrollTo.mock.contexts[0]).toBe(list);
+      expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
       expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     });
@@ -325,15 +332,13 @@ describe('ChatWindow', () => {
         { message: text, isSend: false, message_id: 'stream', streaming: true },
       ];
       const { rerender } = render(<ChatWindow {...defaultProps} messages={streamed('Partial')} />);
-      const list = document.querySelector('.cl-messages_container') as HTMLElement;
-      Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 900 });
       scrollTo.mockClear();
 
       rerender(<ChatWindow {...defaultProps} messages={streamed('Partial answer, now longer')} />);
 
       expect(scrollTo).toHaveBeenCalledTimes(1);
-      expect(scrollTo.mock.contexts[0]).toBe(list);
-      expect(scrollTo).toHaveBeenCalledWith({ top: 900, behavior: 'smooth' });
+      expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
     });
   });
 
@@ -443,13 +448,16 @@ describe('ChatWindow', () => {
       render(<ChatWindow {...defaultProps} open={true} />);
       const focus = jest.spyOn(screen.getByRole('textbox'), 'focus');
 
-      act(() => {
-        jest.advanceTimersByTime(100);
-      });
+      try {
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
 
-      expect(focus).toHaveBeenCalledTimes(1);
-      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
-      focus.mockRestore();
+        expect(focus).toHaveBeenCalledTimes(1);
+        expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      } finally {
+        focus.mockRestore();
+      }
     });
 
     it('should cancel pending input focus when the chat closes', () => {
