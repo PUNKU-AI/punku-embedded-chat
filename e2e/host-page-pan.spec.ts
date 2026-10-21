@@ -99,6 +99,17 @@ async function settle(page: Page) {
   }));
 }
 
+async function waitForAnswerDone(page: Page) {
+  // The input is disabled while an answer streams. It gets focus 100 ms after
+  // the last message change. WebKit can keep focus on the disabled input, so
+  // wait until the input is enabled, then let that focus timer run.
+  await expect.poll(() => page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    return window.__widgetRoots.get(host)?.querySelector<HTMLInputElement>('.cl-input-element')?.disabled;
+  })).toBe(false);
+  await settle(page);
+}
+
 async function expectHostViewUnmoved(page: Page) {
   await settle(page);
   expect(await hostView(page)).toMatchObject({ pageLeft: 0, pageTop: 0, largestPan: { left: 0, top: 0 } });
@@ -147,6 +158,7 @@ test('the open widget never pans a host page that is wider than the viewport', a
   await sendMessage(page, 'When does the museum open?');
   await expect.poll(async () => (await messageList(page)).hasLongAnswer).toBe(true);
   await expectListAtEnd(page);
+  await waitForAnswerDone(page);
   await waitForInputFocus(page);
   await expectHostViewUnmoved(page);
 });
@@ -179,6 +191,7 @@ test('checkout opens and closes without a pan and shows the restored link', asyn
 
   await sendMessage(page, 'Can I book tickets?');
   await expect.poll(async () => (await messageList(page)).hasLink).toBe(true);
+  await waitForAnswerDone(page);
   await waitForInputFocus(page);
 
   // Focus is setup only. Real keyboard input opens checkout.
@@ -195,6 +208,8 @@ test('checkout opens and closes without a pan and shows the restored link', asyn
   await sendMessage(page, 'What else can I see?');
   await expect.poll(async () => (await messageList(page)).hasLongAnswer).toBe(true);
   await expectListAtEnd(page);
+  // The modal makes the input inert, so its focus timer cannot take focus.
+  await waitForAnswerDone(page);
   expect((await messageList(page)).linkVisible).toBe(false);
 
   await page.keyboard.press('Escape');
