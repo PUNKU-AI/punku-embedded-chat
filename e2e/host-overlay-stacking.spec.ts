@@ -122,16 +122,38 @@ test('a Cookiebot-level consent banner still covers the widget', async ({ page }
   expect(await topmostAt(page, center(trigger))).toBe('consent-banner');
 });
 
-for (const { zIndex, topmost } of [
-  { zIndex: '100000000', topmost: 'punku-chat' },
-  { zIndex: '1000', topmost: 'whatsapp-button' },
+// The widget rounds and clamps z_index. 1e21 is invalid CSS (1e+21), and the
+// browser would compute auto. A negative value would hide the trigger.
+for (const { zIndex, computed, topmost } of [
+  { zIndex: '100000000', computed: '100000000', topmost: 'punku-chat' },
+  { zIndex: '1000', computed: '1000', topmost: 'whatsapp-button' },
+  { zIndex: '1e21', computed: '2147483647', topmost: 'punku-chat' },
+  { zIndex: '-5', computed: '0', topmost: 'whatsapp-button' },
 ]) {
   test(`z_index ${zIndex} puts ${topmost} on top`, async ({ page }) => {
     await injectHostElements(page, whatsApp);
     await loadWidget(page, { show_closed_widget_hint: 'false', z_index: zIndex });
 
-    expect(await widgetZIndex(page)).toBe(zIndex);
+    expect(await widgetZIndex(page)).toBe(computed);
     const trigger = await settledBox(page, '.cl-trigger');
     expect(await topmostAt(page, center(trigger))).toBe(topmost);
   });
 }
+
+test('a relocation zIndex of 1e21 is clamped like z_index', async ({ page }) => {
+  await injectHostElements(page, whatsApp);
+  await loadWidget(page, { show_closed_widget_hint: 'false', z_index: '1000' });
+
+  // Move the trigger onto the WhatsApp button.
+  const whatsAppButton = await hostBox(page, 'whatsapp-button');
+  const position = { x: Math.round(whatsAppButton.x + 6), y: Math.round(whatsAppButton.y + 6), zIndex: 1e21 };
+  expect(await page.evaluate((position) => {
+    const api = (window as unknown as Record<string, { setTriggerPosition(position: unknown): boolean }>)['browser-fixture_api'];
+    return api.setTriggerPosition(position);
+  }, position)).toBe(true);
+
+  await expect.poll(() => widgetZIndex(page)).toBe('2147483647');
+  const trigger = await settledBox(page, '.cl-trigger');
+  expect(overlap(trigger, whatsAppButton).width).toBeGreaterThan(0);
+  expect(await topmostAt(page, center(trigger))).toBe('punku-chat');
+});

@@ -71,7 +71,8 @@ By default, the widget exposes both the widget-scoped API and the shared
 const chatWidget = window['my-chat-widget_api'];
 
 // Move the closed trigger to a fixed viewport coordinate.
-chatWidget.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 });
+// The widget keeps its z_index value. See the zIndex note below.
+chatWidget.setTriggerPosition({ x: 100, y: 300 });
 
 // The trigger API exposes the same behavior.
 chatWidget.trigger.setPosition({ x: 100, y: 300 });
@@ -84,10 +85,20 @@ chatWidget.resetTriggerPosition();
 chatWidget.trigger.resetPosition();
 ```
 
-`zIndex` is optional. While the trigger is relocated, it overrides the `z_index`
-widget prop (default 2147483000). A low value, such as `10003`, can put the
-widget below floating buttons of other tools, such as WhatsApp chat icons. Omit
-`zIndex` to keep the `z_index` value.
+`zIndex` is optional. Omit it in most cases. Without it, the relocated trigger
+keeps the `z_index` widget prop (default 2147483000).
+
+```javascript
+// Only to change the stack order while the trigger is relocated.
+chatWidget.setTriggerPosition({ x: 100, y: 300, zIndex: 2147483000 });
+```
+
+While the trigger is relocated, `zIndex` overrides `z_index`. The widget treats
+it like `z_index`: it rounds the value and clamps it to the range 0 to
+2147483647. It ignores a value that is not a finite number. A low value, such as
+`10003`, puts the widget below floating buttons of other tools, such as WhatsApp
+chat icons (often 99999999). Read the `z_index` section of the README before you
+set a value.
 
 The closed-widget hint follows the relocated trigger. For side hints, the widget
 checks whether the trigger center is on the left or right half of the viewport

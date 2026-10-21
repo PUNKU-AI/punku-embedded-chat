@@ -221,19 +221,20 @@
             const safeRightX = Math.max(24, window.innerWidth - 96);
             const safeLowerY = Math.max(96, window.innerHeight - 140);
 
+            // No zIndex: the relocated trigger keeps the z_index prop value.
+            // A low zIndex here puts the widget below WhatsApp buttons.
             switch (placement) {
                 case "left":
-                    return { x: 24, y: safeLowerY, zIndex: 10003 };
+                    return { x: 24, y: safeLowerY };
                 case "right":
-                    return { x: safeRightX, y: 120, zIndex: 10003 };
+                    return { x: safeRightX, y: 120 };
                 case "top":
                     return {
                         x: Math.max(24, Math.round(window.innerWidth / 2) - 32),
                         y: 32,
-                        zIndex: 10003,
                     };
                 default:
-                    return { x: safeRightX, y: safeLowerY, zIndex: 10003 };
+                    return { x: safeRightX, y: safeLowerY };
             }
         }
 

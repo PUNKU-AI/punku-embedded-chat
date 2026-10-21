@@ -583,8 +583,7 @@ Use the widget API to customize your widget:
   - Type: Number
   - Required: No
   - Default: 2147483000
-  - Description: Stack order of the whole widget (trigger, hint and chat window) on the host page. The default puts the widget above floating buttons such as WhatsApp chat icons (up to 99999999). It stays below the banners of Cookiebot, Usercentrics, Didomi and OneTrust (2147483631 and higher). Some consent tools use lower values, for example Borlabs Cookie (999999) or CookieYes (9999999). If the trigger covers a button of such a banner, set a value below the banner's value. A `zIndex` given to `setTriggerPosition` overrides this value while the trigger is relocated.
-  - Note: Place the snippet directly in `<body>`. If a parent element creates a stacking context (for example with `transform`, `filter`, or a `z-index` on a positioned parent), no `z_index` value can lift the widget above other page elements.
+  - Description: Stack order of the whole widget (trigger, hint and chat window) on the host page. The default puts the widget above floating WhatsApp buttons and below the banners of large cookie consent tools. The widget rounds the value and clamps it to the range 0 to 2147483647. It uses the default for a value that is not a number. A `zIndex` given to `setTriggerPosition` overrides this value while the trigger is relocated. See [Stacking order on the host page](#stacking-order-on-the-host-page) before you change it.
 
 - **show_feedback:**
   - Type: Boolean
@@ -596,6 +595,72 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Stacking order on the host page
+
+The widget uses one z-index for the trigger, the hint and the chat window. The default is 2147483000. It puts the widget above most other elements of the host page.
+
+### Known values
+
+These values come from the published code of each product (October 2026). A product can change its value in a new version.
+
+| Host element | z-index | Covers the widget at the default? |
+|---|---|---|
+| Joinchat WhatsApp button | 9000 | No |
+| GetButton and WATI WhatsApp buttons | 16000160 | No |
+| Click to Chat and Elfsight WhatsApp buttons | 99999999 | No |
+| Complianz cookie banner | 99999 | No |
+| Borlabs Cookie dialog | 999999 | No |
+| CookieYes banner, overlay, preference dialog | 9999999, 99999999, 999999999 | No |
+| Iubenda cookie banner | 99999998 | No |
+| Cookiebot dialog | 2147483631 | Yes |
+| Usercentrics and Didomi banners | 2147483640 | Yes |
+| OneTrust banner | 2147483645 | Yes |
+| Intercom launcher | 2147483001 | Yes |
+| HubSpot chat | 2147483647 | Yes |
+
+Menus, lightboxes, popups and newsletter dialogs of the site itself often use values from 9999 to 999999. The widget now paints above them too. Before this default, the widget used 9998 and stayed below most of them.
+
+### When the widget covers a consent banner or a site element
+
+- Closed widget: the trigger and the hint can cover a button of a banner or menu in the same corner.
+- Open widget on a phone: the chat window fills the screen above the trigger. It covers a centered consent dialog of every tool with a value below 2147483000, for example Borlabs Cookie, Complianz, CookieYes or Iubenda. This happens with `start_open="true"`, or when a visitor opens the chat before they answer the consent dialog.
+- Open widget on a tablet: the chat window fills a large part of the screen and can cover a part of a centered dialog.
+- Open widget on a desktop: the chat window stays in its corner. It normally does not reach a centered dialog.
+
+To keep an element above the widget, set `z_index` below the value of that element:
+
+1. Open the page in a desktop browser.
+2. Right-click the banner or element, then click **Inspect**.
+3. In the Elements panel, select the outermost element of the banner. This is usually the element with `position: fixed`.
+4. In the **Computed** tab, find `z-index`. Note the value.
+5. Do steps 2 to 4 again for each floating button that the widget must cover, for example a WhatsApp button.
+6. Choose a value that is lower than the banner and higher than the button. Example: Complianz (99999) and Joinchat (9000) give `z_index="99990"`.
+7. Add the attribute to the snippet by hand. The PUNKU.AI snippet generator does not offer `z_index` yet:
+
+```html
+<punku-chat
+  flow_id="your-flow-id"
+  z_index="99990"
+></punku-chat>
+```
+
+Some pairs have no working value. Click to Chat (99999999) with Complianz (99999) is an example: the button is higher than the banner, so no value is above the button and below the banner. In this case, do one of these steps:
+
+- Lower the button. Click to Chat has a z-index setting.
+- Raise the banner. Iubenda has the option `banner.zIndex`.
+- Keep the banner above the widget. Visitors must be able to answer the consent dialog. The widget then stays below the button.
+
+### Value rules
+
+- A fractional value is rounded, for example 12.6 becomes 13.
+- A value below 0 becomes 0. A negative value would paint the widget below the page content, and the content could hide the trigger.
+- A value above 2147483647 becomes 2147483647.
+- A value that is not a number gives the default 2147483000.
+
+### Place the snippet directly in `<body>`
+
+If a parent element creates a stacking context, no `z_index` value can lift the widget above other page elements. Examples are a parent with `transform`, `filter`, `opacity` below 1, or a `z-index` on a positioned parent. Place the snippet directly in `<body>`.
 
 ## Client Error Notifications
 
