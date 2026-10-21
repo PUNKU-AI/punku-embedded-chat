@@ -39,6 +39,11 @@ beforeEach(() => {
   });
 });
 
+// Restore focus spies even when an assertion fails.
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 function sendMessage(data: unknown, source: Window | null, origin = checkoutOrigin) {
   fireEvent(window, new MessageEvent("message", { data, source, origin }));
 }
@@ -51,6 +56,7 @@ describe("BookingkitCheckoutModal", () => {
   });
 
   it("opens a native dialog and preserves the exact iframe and fallback URLs", () => {
+    const focus = jest.spyOn(HTMLElement.prototype, "focus");
     render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
     expect(showModal).toHaveBeenCalledTimes(1);
     const frame = screen.getByTitle("Checkout");
@@ -61,7 +67,11 @@ describe("BookingkitCheckoutModal", () => {
     expect(externalLink).toHaveAttribute("href", checkoutUrl);
     expect(externalLink).toHaveAttribute("target", "_blank");
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
-    expect(screen.getByRole("button", { name: "Close checkout" })).toHaveFocus();
+    const closeButton = screen.getByRole("button", { name: "Close checkout" });
+    expect(closeButton).toHaveFocus();
+    // A plain focus() can pan the host page on phones (#69).
+    expect(focus.mock.contexts).toEqual([closeButton]);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it("shows German controls", () => {
@@ -125,6 +135,7 @@ describe("BookingkitCheckoutModal", () => {
     const container = document.createElement("div");
     shadowRoot.appendChild(container);
     opener.focus();
+    const focusOpener = jest.spyOn(opener, "focus");
     const { rerender, unmount } = render(
       <BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />,
       { container },
@@ -134,8 +145,37 @@ describe("BookingkitCheckoutModal", () => {
     rerender(<BookingkitCheckoutModal url={null} onClose={jest.fn()} language="en" />);
     // eslint-disable-next-line testing-library/no-node-access -- Inspect focus inside the closed root.
     expect(shadowRoot.activeElement).toBe(opener);
+    // A plain focus() can pan the host page on phones (#69).
+    expect(focusOpener).toHaveBeenCalledWith({ preventScroll: true });
     unmount();
     host.remove();
+  });
+
+  it("scrolls only the opener's message list back to the opener", () => {
+    // jsdom has no layout. The list client area starts at y = 100 and is 200 px tall.
+    const list = document.createElement("div");
+    list.style.overflowY = "auto";
+    const opener = document.createElement("a");
+    opener.href = checkoutUrl;
+    opener.textContent = "Book tickets";
+    list.appendChild(opener);
+    document.body.appendChild(list);
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 200 });
+    list.getBoundingClientRect = () => ({ top: 100, bottom: 300 } as DOMRect);
+    const { rerender } = render(
+      <BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" returnFocusTo={opener} />,
+    );
+    // New messages scroll the list while the modal is open.
+    list.scrollTop = 1500;
+    opener.getBoundingClientRect = () => ({ top: -1300, bottom: -1280 } as DOMRect);
+
+    rerender(<BookingkitCheckoutModal url={null} onClose={jest.fn()} language="en" returnFocusTo={opener} />);
+
+    expect(opener).toHaveFocus();
+    expect(list.scrollTop).toBe(100);
+    expect(document.documentElement.scrollTop).toBe(0);
+    list.remove();
   });
 
   it("opens the explicit fallback during the click even when the host cancels navigation", () => {
