@@ -68,6 +68,7 @@ function createChatElement() {
             client_error_report_url: "string",
             enable_client_error_reporting: "boolean",
             enable_trigger_relocation: "boolean",
+            z_index: "number",
         },
     });
 }

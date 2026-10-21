@@ -32,9 +32,22 @@ const ANCHORED_CHAT_WINDOW_GAP = 32;
 const VIEWPORT_MARGIN = 16;
 const CLOSED_HINT_TOP_EDGE_THRESHOLD = DEFAULT_TRIGGER_SIZE + VIEWPORT_MARGIN;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
+// Above floating WhatsApp buttons (99999999 and lower). Below the banners of
+// large cookie consent tools (Cookiebot 2147483631, Usercentrics 2147483640,
+// OneTrust 2147483645), so the trigger cannot cover their buttons.
+export const DEFAULT_Z_INDEX = 2147483000;
+export const MAX_Z_INDEX = 2147483647;
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
+
+// CSS ignores a fractional z-index and an exponent such as 1e+21. The root
+// would then fall back to auto. A negative value paints the widget below the
+// page content, which can hide the trigger, so 0 is the minimum.
+const normalizeZIndex = (value: unknown): number | undefined =>
+  isFiniteNumber(value) ? Math.min(Math.max(Math.round(value), 0), MAX_Z_INDEX) : undefined;
+
+const getZIndex = (value: number | undefined) => normalizeZIndex(value) ?? DEFAULT_Z_INDEX;
 
 const getViewportSize = () => ({
   width: typeof window === "undefined" ? 1024 : window.innerWidth,
@@ -62,10 +75,11 @@ const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => 
     return null;
   }
 
+  const normalizedZIndex = normalizeZIndex(zIndex);
   return {
     x,
     y,
-    ...(isFiniteNumber(zIndex) ? { zIndex } : {}),
+    ...(normalizedZIndex !== undefined ? { zIndex: normalizedZIndex } : {}),
   };
 };
 
@@ -101,7 +115,9 @@ const getAnchoredChatWindowStyle = (
     )}px`,
     bottom: "",
     right: "",
-    zIndex: typeof triggerPosition.zIndex === "number" ? triggerPosition.zIndex + 1 : 9999,
+    zIndex: typeof triggerPosition.zIndex === "number"
+      ? Math.min(triggerPosition.zIndex + 1, MAX_Z_INDEX)
+      : 9999,
   };
 };
 
@@ -175,6 +191,7 @@ export default function ChatWidget({
   client_error_report_url,
   enable_client_error_reporting = true,
   enable_trigger_relocation = true,
+  z_index,
 }: {
   api_key?: string;
   input_value: string,
@@ -241,6 +258,7 @@ export default function ChatWidget({
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
   enable_trigger_relocation?: boolean;
+  z_index?: number;
 }) {
   // Initialize session with persistence
   const sessionConfig: SessionConfig = useMemo(() => ({
@@ -3526,7 +3544,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         position: "fixed",
         ...triggerStyle,
         transform: "none",
-        zIndex: activeTriggerPosition?.zIndex ?? 9998
+        // The root is a stacking context. This one value places the whole
+        // widget against the host page. Inner layers stack only inside it.
+        zIndex: activeTriggerPosition?.zIndex ?? getZIndex(z_index)
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>

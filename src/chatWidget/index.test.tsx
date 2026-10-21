@@ -115,7 +115,7 @@ jest.mock('./utils', () => ({
 }));
 
 // Import after mocks
-import ChatWidget from './index';
+import ChatWidget, { DEFAULT_Z_INDEX, MAX_Z_INDEX } from './index';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -832,7 +832,7 @@ describe('ChatWidget', () => {
         bottom: '20px',
         left: '',
         top: '',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
     });
 
@@ -874,7 +874,7 @@ describe('ChatWidget', () => {
       expect(widgetRoot).toHaveStyle({
         left: '20px',
         top: '40px',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
 
       act(() => {
@@ -887,8 +887,84 @@ describe('ChatWidget', () => {
         bottom: '20px',
         left: '',
         top: '',
-        zIndex: '9998',
+        zIndex: String(DEFAULT_Z_INDEX),
       });
+    });
+
+    it('should stack the widget above typical host overlays by default', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      // Above WhatsApp-style buttons, below the banners of large consent tools.
+      expect(DEFAULT_Z_INDEX).toBe(2147483000);
+      expect(document.querySelector('.cl-widget-root')).toHaveStyle({ zIndex: '2147483000' });
+    });
+
+    it.each([
+      [500, '500'],
+      [12.6, '13'],
+      // A negative value could hide the trigger behind the page content.
+      [-1, '0'],
+      // 1e21 serializes as 1e+21, which CSS rejects. Clamp to the 32-bit maximum.
+      [1e21, String(MAX_Z_INDEX)],
+      [2147483648, String(MAX_Z_INDEX)],
+      [NaN, String(DEFAULT_Z_INDEX)],
+      [Infinity, String(DEFAULT_Z_INDEX)],
+    ])('should apply the z_index prop %p to the widget root', (zIndex, expected) => {
+      render(<ChatWidget {...defaultProps} z_index={zIndex} />);
+
+      expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe(expected);
+    });
+
+    it('should let the relocation zIndex override the z_index prop', () => {
+      render(<ChatWidget {...defaultProps} z_index={500} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      const widgetRoot = document.querySelector('.cl-widget-root') as HTMLElement;
+
+      act(() => {
+        api.setTriggerPosition({ x: 100, y: 300, zIndex: 10003 });
+      });
+      expect(widgetRoot.style.zIndex).toBe('10003');
+
+      act(() => {
+        api.setTriggerPosition({ x: 100, y: 300 });
+      });
+      expect(widgetRoot.style.zIndex).toBe('500');
+
+      act(() => {
+        api.resetTriggerPosition();
+      });
+      expect(widgetRoot.style.zIndex).toBe('500');
+    });
+
+    it.each([
+      [10003.5, 10004, '10004', '10005'],
+      [1e21, MAX_Z_INDEX, String(MAX_Z_INDEX), String(MAX_Z_INDEX)],
+      [-5, 0, '0', '1'],
+    ])('should normalize the relocation zIndex %p like the z_index prop', (zIndex, stored, rootZIndex, windowZIndex) => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        expect(api.setTriggerPosition({ x: 100, y: 300, zIndex })).toBe(true);
+      });
+
+      expect(api.trigger.position).toEqual({ x: 100, y: 300, zIndex: stored });
+      expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe(rootZIndex);
+      // The window stays one layer above the trigger, but never above the maximum.
+      expect(screen.getByTestId('chat-window').style.zIndex).toBe(windowZIndex);
+    });
+
+    it('should ignore a relocation zIndex that is not a finite number', () => {
+      render(<ChatWidget {...defaultProps} z_index={500} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        api.setTriggerPosition({ x: 100, y: 300, zIndex: '10003' });
+      });
+
+      expect(api.trigger.position).toEqual({ x: 100, y: 300 });
+      expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe('500');
     });
 
     it('should position the closed hint from the relocated trigger side by default', () => {
