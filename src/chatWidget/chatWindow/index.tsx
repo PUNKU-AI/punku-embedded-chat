@@ -622,6 +622,13 @@ export default function ChatWindow({
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
 
+  // The header icons follow the header colour rule: button_text_color applies
+  // only together with button_color. Otherwise the theme colours the header,
+  // and a light button_text_color would hide the icons on a white header.
+  const headerIconColor = button_color
+    ? button_text_color || '#FFFFFF'
+    : theme === "default" ? "#0f172a" : "white";
+
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
@@ -921,7 +928,7 @@ export default function ChatWindow({
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                   size={24}
                 />
               </div>
@@ -953,7 +960,7 @@ export default function ChatWindow({
               >
                 <RefreshCw
                   size={16}
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                 />
               </button>
             )}
@@ -984,7 +991,7 @@ export default function ChatWindow({
               >
                 <X
                   size={20}
-                  color={button_text_color ? button_text_color : (theme === "default" && !button_color ? "#0f172a" : "white")}
+                  color={headerIconColor}
                 />
               </button>
             )}
