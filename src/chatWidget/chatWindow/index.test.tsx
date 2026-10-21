@@ -1161,6 +1161,74 @@ describe('ChatWindow', () => {
     });
   });
 
+  // Issue #70: the header icons follow the header colour rule.
+  describe('Header icon colour', () => {
+    const renderHeader = (props: Partial<React.ComponentProps<typeof ChatWindow>>) =>
+      render(
+        <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} {...props} />
+      );
+
+    const headerIconStrokes = () =>
+      ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'].map((selector) =>
+        document.querySelector(selector)?.getAttribute('stroke')
+      );
+
+    // Header text colour of each theme without button_color.
+    const themeHeaderColors = [
+      ['default', '#0f172a'],
+      ['dark', 'white'],
+      ['ocean', 'white'],
+      ['aurora', 'white'],
+      ['punku-ai-bookingkit', 'white'],
+      ['swarovski', 'white'],
+    ] as const;
+
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
+      renderHeader({ theme });
+
+      expect(headerIconStrokes()).toEqual([color, color, color]);
+    });
+
+    it.each(themeHeaderColors)(
+      'ignores button_text_color without button_color in the %s theme',
+      (theme, color) => {
+        renderHeader({ theme, button_text_color: '#FFEE00' });
+
+        expect(headerIconStrokes()).toEqual([color, color, color]);
+      }
+    );
+
+    it('keeps the default header icons dark when button_text_color is white', () => {
+      renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
+
+      const header = document.querySelector('.cl-header') as HTMLElement;
+      expect(header.getAttribute('style')).toBeNull();
+      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+    });
+
+    it.each(themeHeaderColors.map(([theme]) => theme))(
+      'uses button_text_color with button_color in the %s theme',
+      (theme) => {
+        renderHeader({ theme, button_color: '#123456', button_text_color: '#FFEE00' });
+
+        expect(headerIconStrokes()).toEqual(['#FFEE00', '#FFEE00', '#FFEE00']);
+      }
+    );
+
+    it('uses white icons with button_color and no button_text_color', () => {
+      renderHeader({ theme: 'default', button_color: '#123456' });
+
+      expect(headerIconStrokes()).toEqual(['#FFFFFF', '#FFFFFF', '#FFFFFF']);
+    });
+
+    it('keeps button_text_color for the send icon, which sits on the button colour', () => {
+      renderHeader({ theme: 'default', button_text_color: '#FFEE00' });
+
+      const sendIcon = document.querySelector('.cl-send-icon') as SVGElement;
+      expect(sendIcon.getAttribute('style')).toContain('stroke: #FFEE00');
+    });
+  });
+
   describe('Online/Offline Status', () => {
     it('should show online message when online', () => {
       render(<ChatWindow {...defaultProps} online={true} />);

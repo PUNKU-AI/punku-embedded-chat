@@ -113,7 +113,8 @@ async function headerState(page: Page) {
 async function expectGenericIcon(page: Page) {
   await expect.poll(() => headerState(page)).toMatchObject({
     tag: 'svg', className: 'lucide lucide-messagesquaretext cl-header-logo',
-    stroke: '#ffffff', childCount: 1, src: null, visible: true,
+    // Without button_color, button_text_color does not colour the header (#70).
+    stroke: '#0f172a', childCount: 1, src: null, visible: true,
   });
 }
 
