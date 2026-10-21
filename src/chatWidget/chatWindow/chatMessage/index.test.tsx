@@ -51,6 +51,39 @@ describe('ChatMessage', () => {
 
       const container = document.querySelector('.cl-error_message');
       expect(container).toBeInTheDocument();
+      expect(container?.querySelector('.cl-error-text')).toHaveTextContent('Hello, world!');
+      // The icon is decoration: the sentence carries the meaning.
+      expect(container?.querySelector('.cl-error-icon')).toHaveAttribute('aria-hidden', 'true');
+      // The chat window announces errors; a second announcement would repeat it.
+      expect(container).not.toHaveAttribute('role');
+    });
+
+    it('should not show a retry button without a retry handler', () => {
+      render(<ChatMessage {...defaultProps} error={true} />);
+
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('should show a retry button that calls the retry handler', () => {
+      const onRetry = jest.fn();
+      render(<ChatMessage {...defaultProps} error={true} onRetry={onRetry} retryLabel="Erneut versuchen" />);
+
+      const retryButton = screen.getByRole('button', { name: 'Erneut versuchen' });
+      expect(retryButton).toHaveAttribute('type', 'button');
+      fireEvent.click(retryButton);
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+
+    it('should label the retry button "Try again" by default', () => {
+      render(<ChatMessage {...defaultProps} error={true} onRetry={jest.fn()} />);
+
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+
+    it('should not show a retry button on answers', () => {
+      render(<ChatMessage {...defaultProps} message_id="welcome-message" onRetry={jest.fn()} />);
+
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
     });
 
     it('should apply custom user message style', () => {

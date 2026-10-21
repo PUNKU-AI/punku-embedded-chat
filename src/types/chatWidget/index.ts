@@ -16,4 +16,6 @@ export type ChatMessageType = {
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
     language?: "en" | "de";
     loading_messages?: string[];
+    /** The site's placeholder_sending text: shown when loading_messages is empty. */
+    sending_text?: string;
   };

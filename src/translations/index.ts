@@ -33,11 +33,80 @@ export const crystallineThinkingMessages = [
   { en: "Finishing up... ✨", de: "Fast fertig... ✨" }
 ];
 
+// The built-in thinking phrases, shown while the assistant prepares an answer.
+// German is the original list, unchanged. English has one phrase for each
+// German one, so English chats no longer show German phrases.
+export const thinkingMessages = {
+  en: [
+    "Thinking…",
+    "Thinking it through…",
+    "One moment, let me think…",
+    "Analyzing…",
+    "Hmm, interesting…",
+    "I see…",
+    "Let me go through this…",
+    "Considering the details…",
+    "Working on it…",
+    "Putting my thoughts into words…",
+    "Almost there…",
+    "Just a moment…",
+    "Putting it together…",
+    "Double-checking…",
+    "Nearly done…",
+    "One moment, please…",
+    "Taking a look…",
+    "Pondering…",
+    "Processing…",
+    "Hmm…",
+    "Let me think…",
+    "Gathering my thoughts…",
+    "Preparing the answer…",
+    "Sorting my thoughts…",
+    "Almost ready…",
+    "Working on this now…",
+    "Checking the information…",
+    "Compiling this…",
+    "Verifying the details…",
+    "Organizing my thoughts…",
+  ],
+  de: [
+    "Überlege…",
+    "Durchdenke das…",
+    "Moment, lass mich nachdenken…",
+    "Analysiere gerade…",
+    "Hmm, interessant…",
+    "Verstehe…",
+    "Lass mich das durchgehen…",
+    "Überdenke die Details…",
+    "Arbeite daran…",
+    "Formuliere meine Gedanken…",
+    "Fast da…",
+    "Noch kurz…",
+    "Setze das zusammen…",
+    "Prüfe nochmal…",
+    "Gleich fertig…",
+    "Einen Moment bitte…",
+    "Schaue mir das an…",
+    "Denke nach…",
+    "Verarbeite das…",
+    "Hmm…",
+    "Lass mich überlegen…",
+    "Sammle meine Gedanken…",
+    "Bereite die Antwort vor…",
+    "Sortiere meine Gedanken…",
+    "Bin gleich soweit…",
+    "Bearbeite das gerade…",
+    "Informationen werden überprüft…",
+    "Stelle das zusammen…",
+    "Prüfe die Informationen…",
+    "Ordne meine Gedanken…",
+  ],
+};
+
 export const translations = {
   en: {
     welcomeMessage: "Hello! How can I help you today?",
     placeholder: "Type your message...",
-    placeholderSending: "Thinking...",
     inputLabel: "Your message",
     onlineMessage: "Powered by PUNKU.AI",
     offlineMessage: "Offline - PUNKU.AI",
@@ -45,12 +114,17 @@ export const translations = {
     newSessionConfirm: "Are you sure you want to start a new conversation? This will clear your current chat history.",
     newSessionTitle: "Start New Conversation",
     confirmButton: "Yes, Start New",
-    cancelButton: "Cancel"
+    cancelButton: "Cancel",
+    typing: "The assistant is writing",
+    retry: "Try again",
+    errorNetwork: "The assistant could not be reached. Check your connection and try again.",
+    errorServer: "The assistant could not complete the response. Please try again.",
+    errorInterrupted: "The assistant response ended before it completed. Please try again.",
+    errorEmpty: "The assistant did not return a response. Please try again.",
   },
   de: {
     welcomeMessage: "Hallo! Wie kann ich Ihnen heute helfen?",
     placeholder: "Nachricht eingeben...",
-    placeholderSending: "Denke nach...",
     inputLabel: "Ihre Nachricht",
     onlineMessage: "Powered by PUNKU.AI",
     offlineMessage: "Offline - PUNKU.AI",
@@ -58,8 +132,16 @@ export const translations = {
     newSessionConfirm: "Sind Sie sicher, dass Sie ein neues Gespräch beginnen möchten? Dies wird Ihren aktuellen Chat-Verlauf löschen.",
     newSessionTitle: "Neues Gespräch beginnen",
     confirmButton: "Ja, Neu beginnen",
-    cancelButton: "Abbrechen"
+    cancelButton: "Abbrechen",
+    typing: "Der Assistent schreibt",
+    retry: "Erneut versuchen",
+    errorNetwork: "Der Assistent ist nicht erreichbar. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    errorServer: "Der Assistent konnte die Antwort nicht abschließen. Bitte versuchen Sie es erneut.",
+    errorInterrupted: "Die Antwort wurde abgebrochen, bevor sie fertig war. Bitte versuchen Sie es erneut.",
+    errorEmpty: "Der Assistent hat keine Antwort gesendet. Bitte versuchen Sie es erneut.",
   }
 };
+
+export type Translation = typeof translations.en;
 
 export type Language = 'en' | 'de';

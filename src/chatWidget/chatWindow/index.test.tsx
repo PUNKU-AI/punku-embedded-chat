@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ChatWindow from './index';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
@@ -26,14 +26,29 @@ jest.mock('remark-gfm', () => () => {});
 
 // Mock the components
 jest.mock('./chatMessage', () => {
-  return function MockChatMessage({ message, isSend }: { message: string; isSend: boolean }) {
-    return <div data-testid={isSend ? 'user-message' : 'bot-message'}>{message}</div>;
+  return function MockChatMessage({
+    message,
+    isSend,
+    onRetry,
+    retryLabel,
+  }: {
+    message: string;
+    isSend: boolean;
+    onRetry?: () => void;
+    retryLabel?: string;
+  }) {
+    return (
+      <div data-testid={isSend ? 'user-message' : 'bot-message'}>
+        {message}
+        {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
+      </div>
+    );
   };
 });
 
 jest.mock('../../chatPlaceholder', () => {
-  return function MockChatPlaceholder() {
-    return <div data-testid="chat-placeholder">Loading...</div>;
+  return function MockChatPlaceholder({ sending_text }: { sending_text?: string }) {
+    return <div data-testid="chat-placeholder">{sending_text || 'Loading...'}</div>;
   };
 });
 
@@ -359,10 +374,17 @@ describe('ChatWindow', () => {
       expect(input.placeholder).toBe('Enter your message');
     });
 
-    it('should show different placeholder when sending', async () => {
+    it('should keep the input enabled with its normal placeholder while sending', async () => {
       mockedSendMessage.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      render(<ChatWindow {...defaultProps} enable_streaming={false} placeholder_sending="Sending..." />);
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+          placeholder="Ask about tickets"
+          placeholder_sending="Sending..."
+        />
+      );
 
       const input = document.querySelector('.cl-input-element') as HTMLInputElement;
       const sendButton = document.querySelector('.cl-send-button') as HTMLButtonElement;
@@ -371,8 +393,12 @@ describe('ChatWindow', () => {
       fireEvent.click(sendButton);
 
       await waitFor(() => {
-        expect(input.placeholder).toBe('Sending...');
+        expect(sendButton).toBeDisabled();
       });
+      expect(input).not.toBeDisabled();
+      expect(input.placeholder).toBe('Ask about tickets');
+      // placeholder_sending is now the text of the thinking bubble.
+      expect(screen.getByTestId('chat-placeholder')).toHaveTextContent('Sending...');
     });
   });
 
@@ -1075,9 +1101,12 @@ describe('ChatWindow', () => {
         fireEvent.change(input, { target: { value: 'Hello' } });
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
+        const messageList = document.querySelector('.cl-messages_container') as HTMLElement;
         await waitFor(() => {
-          expect(screen.getAllByText(message, { exact: true })).toHaveLength(1);
+          expect(within(messageList).getAllByText(message, { exact: true })).toHaveLength(1);
         });
+        // Screen readers hear the same sentence once, from the status region.
+        expect(screen.getByRole('status')).toHaveTextContent(message);
 
         expect(screen.getByText('Hello', { exact: true })).toBeInTheDocument();
         expect(addMessage.mock.calls).toEqual([
@@ -1121,6 +1150,293 @@ describe('ChatWindow', () => {
           error: true
         });
       });
+    });
+  });
+
+  describe('Thinking and Error States', () => {
+    const networkSentence = 'The assistant could not be reached. Check your connection and try again.';
+
+    // Keeps the messages in state, like the widget does.
+    function StatefulChat({
+      sessionIsValid = () => true,
+      onNewSession = () => {},
+      ...props
+    }: Partial<React.ComponentProps<typeof ChatWindow>> & {
+      sessionIsValid?: () => boolean;
+      onNewSession?: () => void;
+    }) {
+      const [messages, setMessages] = React.useState<ChatMessageType[]>([]);
+      return (
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          enable_client_error_reporting={false}
+          {...props}
+          messages={messages}
+          addMessage={(message: ChatMessageType) => setMessages((previous) => [...previous, message])}
+          updateLastMessage={(message: ChatMessageType) =>
+            setMessages((previous) => [...previous.slice(0, -1), message])
+          }
+          removeLastMessage={() => setMessages((previous) => previous.slice(0, -1))}
+          onSessionValidate={sessionIsValid}
+          onStartNewSession={() => {
+            onNewSession();
+            setMessages([]);
+          }}
+        />
+      );
+    }
+
+    const failStream = (error: unknown) => (...args: any[]) => {
+      (args[12] as (error: unknown) => void)(error);
+      return Promise.reject(error);
+    };
+
+    const answerStream = (text: string) => (...args: any[]) => {
+      const onStreamData = args[10] as (data: any) => void;
+      const onStreamEnd = args[11] as (terminal: 'end') => void;
+      onStreamData({ event: 'add_message', data: { sender: 'Machine', id: 'assistant-message', text } });
+      onStreamData({ event: 'end', data: { result: {} } });
+      onStreamEnd('end');
+      return Promise.resolve();
+    };
+
+    const send = (text: string) => {
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: text } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    };
+
+    it('should let the visitor write while the assistant answers and send only afterwards', async () => {
+      let answer: (response: ReturnType<typeof successfulNonStreamingResponse>) => void = () => {};
+      mockedSendMessage
+        .mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }) as any)
+        .mockResolvedValueOnce(successfulNonStreamingResponse() as any);
+
+      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      send('First question');
+      await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(1));
+
+      send('Second question');
+      expect(input).not.toBeDisabled();
+      expect(input.value).toBe('Second question');
+      expect(mockedSendMessage).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        answer(successfulNonStreamingResponse());
+      });
+      await waitFor(() => expect(document.querySelector('.cl-send-button')).not.toBeDisabled());
+
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(2));
+      expect(mockedSendMessage.mock.calls[1][2]).toBe('Second question');
+      expect(input.value).toBe('');
+    });
+
+    it('should tell screen readers that the assistant writes, and clear that after the answer', async () => {
+      let finishStream = () => {};
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        finishStream = () => answerStream('Hello back')(...args);
+        return Promise.resolve();
+      });
+
+      render(<ChatWindow {...defaultProps} enable_streaming={true} />);
+      const status = screen.getByRole('status');
+      expect(status).toHaveAttribute('aria-live', 'polite');
+      expect(status.textContent).toBe('');
+
+      send('Hello');
+      await waitFor(() => expect(status).toHaveTextContent('The assistant is writing'));
+
+      act(() => {
+        finishStream();
+      });
+      await waitFor(() => expect(status.textContent).toBe(''));
+    });
+
+    it('should not announce an error restored from the session', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          messages={[
+            { message: 'Hello', isSend: true },
+            { message: networkSentence, isSend: false, error: true },
+          ]}
+        />
+      );
+
+      expect(screen.getByRole('status').textContent).toBe('');
+    });
+
+    it.each([
+      [
+        'a network failure',
+        new TypeError('Failed to fetch'),
+        'Der Assistent ist nicht erreichbar. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
+      ],
+      [
+        'a server failure',
+        new Error('HTTP error! status: 500, body: Internal Server Error'),
+        'Der Assistent konnte die Antwort nicht abschließen. Bitte versuchen Sie es erneut.',
+      ],
+      [
+        'an interrupted answer',
+        Object.assign(new Error('The assistant response ended before it completed.'), { code: 'ERR_PREMATURE_STREAM_END' }),
+        'Die Antwort wurde abgebrochen, bevor sie fertig war. Bitte versuchen Sie es erneut.',
+      ],
+      [
+        'an empty answer',
+        Object.assign(new Error('The assistant did not return a response.'), { code: 'ERR_EMPTY_ASSISTANT_RESPONSE' }),
+        'Der Assistent hat keine Antwort gesendet. Bitte versuchen Sie es erneut.',
+      ],
+    ])('should explain %s in plain German', async (_case, error, sentence) => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce(failStream(error));
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={true}
+          language="de"
+          addMessage={addMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+      send('Hallo');
+
+      await waitFor(() => {
+        expect(addMessage).toHaveBeenCalledWith({ message: sentence, isSend: false, error: true });
+      });
+      expect(screen.getByRole('status')).toHaveTextContent(sentence);
+    });
+
+    it('should never show technical error text to the visitor', async () => {
+      const addMessage = jest.fn();
+      mockedSendMessage.mockRejectedValueOnce(new Error('HTTP error! status: 502, body: <html>Bad gateway</html>'));
+
+      render(
+        <ChatWindow
+          {...defaultProps}
+          enable_streaming={false}
+          addMessage={addMessage}
+          enable_client_error_reporting={false}
+        />
+      );
+      send('Hello');
+
+      await waitFor(() => {
+        expect(addMessage).toHaveBeenCalledWith({
+          message: 'The assistant could not complete the response. Please try again.',
+          isSend: false,
+          error: true,
+        });
+      });
+    });
+
+    it('should send the question again with Try again and replace the error with the answer', async () => {
+      mockedStreamMessage
+        .mockImplementationOnce(failStream(new TypeError('Failed to fetch')))
+        .mockImplementationOnce(answerStream('Hello back'));
+
+      render(<StatefulChat />);
+      send('Hello');
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+      await waitFor(() => expect(screen.getByText('Hello back')).toBeInTheDocument());
+      const messageList = document.querySelector('.cl-messages_container') as HTMLElement;
+      expect(within(messageList).queryByText(networkSentence)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+      // The question is sent again, but its bubble is not repeated.
+      expect(screen.getAllByTestId('user-message').map((message) => message.textContent)).toEqual(['Hello']);
+      expect(mockedStreamMessage).toHaveBeenCalledTimes(2);
+      expect(mockedStreamMessage.mock.calls[1][2]).toBe('Hello');
+    });
+
+    it('should show the question again when Try again starts a new session', async () => {
+      let sessionValid = true;
+      const onNewSession = jest.fn();
+      mockedStreamMessage
+        .mockImplementationOnce(failStream(new TypeError('Failed to fetch')))
+        .mockImplementationOnce(answerStream('Hello back'));
+
+      render(<StatefulChat sessionIsValid={() => sessionValid} onNewSession={onNewSession} />);
+      send('Hello');
+      const retryButton = await screen.findByRole('button', { name: 'Try again' });
+
+      sessionValid = false;
+      fireEvent.click(retryButton);
+
+      await waitFor(() => expect(screen.getByText('Hello back')).toBeInTheDocument());
+      expect(onNewSession).toHaveBeenCalledTimes(1);
+      expect(screen.getAllByTestId('user-message').map((message) => message.textContent)).toEqual(['Hello']);
+    });
+
+    it('should offer Try again only when the newest message is an error', () => {
+      const messages: ChatMessageType[] = [
+        { message: 'First', isSend: true },
+        { message: networkSentence, isSend: false, error: true },
+        { message: 'Second', isSend: true },
+        { message: 'Answer', isSend: false },
+      ];
+      const removeLastMessage = jest.fn();
+      const { rerender } = render(
+        <ChatWindow {...defaultProps} messages={messages} removeLastMessage={removeLastMessage} />
+      );
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+
+      rerender(
+        <ChatWindow {...defaultProps} language="de" messages={messages.slice(0, 2)} removeLastMessage={removeLastMessage} />
+      );
+      expect(screen.getByRole('button', { name: 'Erneut versuchen' })).toBeInTheDocument();
+
+      // Without a way to remove the error, there is no Try again.
+      rerender(<ChatWindow {...defaultProps} messages={messages.slice(0, 2)} />);
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+
+    it('should refocus the input only after the answer is complete', () => {
+      jest.useFakeTimers();
+      try {
+        let finishStream = () => {};
+        mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+          (args[10] as (data: any) => void)({
+            event: 'add_message',
+            data: { sender: 'Machine', id: 'assistant-message', text: 'Hello' },
+          });
+          finishStream = () => answerStream('Hello back')(...args);
+          return Promise.resolve();
+        });
+
+        render(
+          <>
+            <button>Host page button</button>
+            <StatefulChat />
+          </>
+        );
+        const input = screen.getByRole('textbox');
+        send('Hello');
+
+        // The answer streams in while the visitor uses the host page.
+        const hostButton = screen.getByRole('button', { name: 'Host page button' });
+        hostButton.focus();
+        act(() => {
+          jest.advanceTimersByTime(500);
+        });
+        expect(hostButton).toHaveFocus();
+
+        hostButton.blur();
+        act(() => {
+          finishStream();
+        });
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
+        expect(input).toHaveFocus();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 

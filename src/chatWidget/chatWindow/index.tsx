@@ -11,7 +11,7 @@ import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
-import { translations, Language } from "../../translations";
+import { translations, Language, Translation } from "../../translations";
 import {
   createPunkuChatErrorDetail,
   dispatchPunkuChatError,
@@ -30,31 +30,35 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const getRequestErrorMessage = (error: unknown) => {
+/*
+ * The visitor sees a plain sentence in the chat's language, never technical
+ * text such as "HTTP error! status: 500, body: …". The technical detail still
+ * goes to console.error and to client-error reporting. A flow's own error text
+ * (ERR_BACKEND_STREAM) is written for visitors, so it is shown as sent.
+ */
+const getRequestErrorMessage = (error: unknown, t: Translation) => {
   if (error && typeof error === "object") {
-    const errorRecord = error as {
-      code?: string;
-      message?: string;
-      response?: { status?: number; data?: { detail?: string } };
-    };
+    const errorRecord = error as { code?: string; message?: string; name?: string };
 
-    if (errorRecord.code === "ERR_NETWORK") {
-      return "Network error";
-    }
-
-    if (
-      errorRecord.response?.status === 500 &&
-      errorRecord.response.data?.detail
-    ) {
-      return errorRecord.response.data.detail;
-    }
-
-    if (errorRecord.message) {
+    if (errorRecord.code === "ERR_BACKEND_STREAM" && errorRecord.message?.trim()) {
       return errorRecord.message;
+    }
+
+    if (errorRecord.code === "ERR_EMPTY_ASSISTANT_RESPONSE") {
+      return t.errorEmpty;
+    }
+
+    if (errorRecord.code === "ERR_PREMATURE_STREAM_END") {
+      return t.errorInterrupted;
+    }
+
+    // fetch() rejects with a TypeError when the network is down or blocked.
+    if (errorRecord.code === "ERR_NETWORK" || errorRecord.name === "TypeError") {
+      return t.errorNetwork;
     }
   }
 
-  return "Network error";
+  return t.errorServer;
 };
 
 const createStreamError = (message: string, code: string) =>
@@ -127,6 +131,7 @@ export default function ChatWindow({
   client_error_report_url,
   enable_client_error_reporting = true,
   onCheckout,
+  removeLastMessage,
 }: {
   api_key?: string;
   output_type: string,
@@ -194,8 +199,12 @@ export default function ChatWindow({
   client_error_report_url?: string;
   enable_client_error_reporting?: boolean;
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
+  /** Removes the newest message (the error that Try again replaces). */
+  removeLastMessage?: () => void;
 }) {
   const [value, setValue] = useState<string>("");
+  // Use translations based on language prop
+  const t = translations[language] || translations.en;
   const ref = useRef<HTMLDivElement>(null);
   const messagesContainer = useRef<HTMLDivElement>(null);
   const [windowPosition, setWindowPosition] = useState<{
@@ -230,6 +239,11 @@ export default function ChatWindow({
 
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Screen readers hear "the assistant is writing" and each new error from one
+  // status region that is always in the window. A region that appears together
+  // with its text is often not read, and an error restored from the session
+  // must not be read again on each page load.
+  const [statusAnnouncement, setStatusAnnouncement] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
 
@@ -269,23 +283,30 @@ export default function ChatWindow({
     ]
   );
 
-  const sendUserMessage = useCallback((message: string): boolean => {
+  const sendUserMessage = useCallback((message: string, options?: { retry?: boolean }): boolean => {
     if (!message || message.trim() === "" || sendingMessage) {
       return false;
     }
 
     // Check if session is still valid before sending message
+    let sessionCleared = false;
     if (onSessionValidate && !onSessionValidate()) {
       // console.log('Session expired, clearing messages and starting new session');
       // Session expired, clear messages and start new session
       if (onStartNewSession) {
         onStartNewSession();
+        sessionCleared = true;
       }
       // Note: Don't return here, continue with sending the message after session is cleared
     }
 
-    addMessage({ message, isSend: true });
+    // A retry sends the visitor's last message again; its bubble is already
+    // there, unless an expired session just cleared the conversation.
+    if (!options?.retry || sessionCleared) {
+      addMessage({ message, isSend: true });
+    }
     setSendingMessage(true);
+    setStatusAnnouncement(t.typing);
 
     if (!enable_streaming) {
       sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
@@ -350,13 +371,16 @@ export default function ChatWindow({
             sessionId.current = res.data.session_id;
           }
           setSendingMessage(false);
+          setStatusAnnouncement("");
         })
         .catch((err) => {
+          const errorText = getRequestErrorMessage(err, t);
           addMessage({
-            message: getRequestErrorMessage(err),
+            message: errorText,
             isSend: false,
             error: true,
           });
+          setStatusAnnouncement(errorText);
           notifyClientError(err, "send-message", {
             inputType: input_type,
             outputType: output_type,
@@ -390,10 +414,11 @@ export default function ChatWindow({
         setIsStreaming(false);
 
         const errorMessage = {
-          message: getRequestErrorMessage(error),
+          message: getRequestErrorMessage(error, t),
           isSend: false,
           error: true,
         };
+        setStatusAnnouncement(errorMessage.message);
 
         if (currentMessageId) {
           updateLastMessage({
@@ -462,7 +487,7 @@ export default function ChatWindow({
             handleStreamError(createStreamError(
               typeof detail === "string" && detail.trim()
                 ? detail
-                : "The assistant could not complete the response. Please try again.",
+                : t.errorServer,
               "ERR_BACKEND_STREAM"
             ));
           } else if (data.event === "end") {
@@ -502,6 +527,7 @@ export default function ChatWindow({
           // console.log('Stream completed');
           setSendingMessage(false);
           setIsStreaming(false);
+          setStatusAnnouncement("");
 
           // Ensure final message is marked as complete
           if (currentMessageId) {
@@ -536,6 +562,7 @@ export default function ChatWindow({
     output_type,
     sendingMessage,
     sessionId,
+    t,
     tweaks,
     updateLastMessage,
   ]);
@@ -547,6 +574,17 @@ export default function ChatWindow({
       setValue("");
     }
   }
+
+  // Try again: remove the error message and send the visitor's last message again.
+  const lastUserText = [...messages].reverse().find((message) => message.isSend)?.message;
+  const lastMessageIsError = messages.length > 0 && !!messages[messages.length - 1].error;
+  const handleRetry = lastMessageIsError && typeof lastUserText === "string" && removeLastMessage
+    ? () => {
+        if (sendingMessage) return;
+        removeLastMessage();
+        sendUserMessage(lastUserText, { retry: true });
+      }
+    : undefined;
 
   useEffect(() => {
     if (!programmaticMessage) return;
@@ -595,16 +633,19 @@ export default function ChatWindow({
 
   /*
    * Refocus the User input whenever a new response is returned from the LLM.
+   * The input stays enabled while the assistant answers, and a streamed answer
+   * changes the messages many times: wait until the answer is complete, so the
+   * visitor can use a link or the host page in the meantime.
    * preventScroll: a plain focus() pans the host page like scrollIntoView() (#69).
    */
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || sendingMessage) return;
     const focusTimer = setTimeout(() => {
       inputRef.current?.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
-  }, [messages, open]);
+  }, [messages, open, sendingMessage]);
 
   /*
    * The composer grows with the text and takes that height from the message
@@ -619,9 +660,6 @@ export default function ChatWindow({
       list.scrollTop = list.scrollHeight;
     }
   }, []);
-
-  // Use translations based on language prop
-  const t = translations[language] || translations.en;
 
   // Add theme-specific title modifications
   const displayTitle = window_title || t.windowTitle;
@@ -1082,6 +1120,8 @@ export default function ChatWindow({
               host_url={hostUrl}
               onClientError={notifyClientError}
               onCheckout={onCheckout}
+              onRetry={index === messages.length - 1 ? handleRetry : undefined}
+              retryLabel={t.retry}
             />
           ))}
           {sendingMessage && !isStreaming && (
@@ -1097,8 +1137,12 @@ export default function ChatWindow({
               theme={theme}
               language={language}
               loading_messages={loading_messages}
+              sending_text={placeholder_sending}
             />
           )}
+        </div>
+        <div className="cl-sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {statusAnnouncement}
         </div>
         <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
           <ChatInput
@@ -1106,8 +1150,9 @@ export default function ChatWindow({
             value={value}
             onChange={setValue}
             onSend={handleClick}
-            disabled={sendingMessage}
-            placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
+            // The visitor can write the next message while the assistant answers;
+            // it sends after the answer (the send button stays disabled until then).
+            placeholder={placeholder || t.placeholder}
             ariaLabel={t.inputLabel}
             style={{
               ...DEFAULT_INPUT_TEXT_STYLE,

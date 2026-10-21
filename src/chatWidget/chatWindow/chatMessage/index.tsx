@@ -2,7 +2,7 @@ import Markdown from "react-markdown";
 import type { Components } from "react-markdown";
 import { ChatMessageType } from "../../../types/chatWidget";
 import remarkGfm from "remark-gfm";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { CircleAlert, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
@@ -100,6 +100,8 @@ export default function ChatMessage({
   onFeedbackUpdate,
   onClientError,
   onCheckout,
+  onRetry,
+  retryLabel = "Try again",
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
@@ -111,6 +113,9 @@ export default function ChatMessage({
     phase: PunkuChatErrorPhase,
     context?: Record<string, unknown>
   ) => void;
+  /** Shown on the newest error message: sends the visitor's last message again. */
+  onRetry?: () => void;
+  retryLabel?: string;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -191,7 +196,13 @@ export default function ChatMessage({
           }}
           className={"cl-error_message"}
         >
-          {parsedMessage}
+          <CircleAlert className="cl-error-icon" size={18} aria-hidden="true" />
+          <span className="cl-error-text">{parsedMessage}</span>
+          {onRetry && (
+            <button type="button" className="cl-retry-btn" onClick={onRetry}>
+              {retryLabel}
+            </button>
+          )}
         </div>
       ) : (
         <div 
