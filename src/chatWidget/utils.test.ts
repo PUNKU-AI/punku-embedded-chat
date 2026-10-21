@@ -1,4 +1,10 @@
-import { getChatPosition, getAnimationOrigin, extractMessageFromOutput, detectBrowserLanguage } from './utils';
+import {
+  getChatPosition,
+  getAnimationOrigin,
+  extractMessageFromOutput,
+  detectBrowserLanguage,
+  revealInScrollContainer,
+} from './utils';
 
 describe('getChatPosition', () => {
   const mockTriggerPosition: DOMRect = {
@@ -212,5 +218,71 @@ describe('detectBrowserLanguage', () => {
       configurable: true
     });
     expect(detectBrowserLanguage()).toBe('en');
+  });
+});
+
+describe('revealInScrollContainer', () => {
+  // jsdom has no layout. Each test sets the list geometry: its client area
+  // starts at y = 100, is 200 px tall, and its content is 2000 px tall.
+  const box = (top: number, bottom: number) => ({ top, bottom } as DOMRect);
+
+  function setup(listStyle = 'overflow-y: auto') {
+    const list = document.createElement('div');
+    list.setAttribute('style', listStyle);
+    const message = document.createElement('div');
+    const link = document.createElement('a');
+    message.appendChild(link);
+    list.appendChild(message);
+    document.body.appendChild(list);
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 2000 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    list.getBoundingClientRect = () => box(100, 300);
+    list.scrollTop = 500;
+    const place = (top: number, bottom: number) => {
+      link.getBoundingClientRect = () => box(top, bottom);
+    };
+    return { list, link, place };
+  }
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    document.documentElement.scrollTop = 0;
+  });
+
+  it('scrolls the list up to an element above its visible area', () => {
+    const { list, link, place } = setup();
+    place(40, 60);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(440);
+  });
+
+  it('scrolls the list down to an element below its visible area', () => {
+    const { list, link, place } = setup();
+    place(350, 370);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(570);
+  });
+
+  it('shows the top of an element that is taller than the list', () => {
+    const { list, link, place } = setup();
+    place(250, 600);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(650);
+  });
+
+  it('leaves a visible element in place', () => {
+    const { list, link, place } = setup();
+    place(150, 170);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(500);
+  });
+
+  it('never scrolls the page when no ancestor scrolls', () => {
+    const { list, link, place } = setup('overflow: visible');
+    place(2000, 2020);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(500);
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(document.body.scrollTop).toBe(0);
   });
 });
