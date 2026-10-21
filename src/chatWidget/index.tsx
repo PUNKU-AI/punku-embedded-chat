@@ -1542,11 +1542,13 @@ video {
 }
 
 /* The composer is a textarea. Its height comes from the text (chatInput.tsx):
-   one line at first, at most six lines, then it scrolls inside itself. */
+   one line at first, at most six lines, then it scrolls inside itself. A fixed
+   row height (input_container_style) caps it, so it never leaves the row. */
 .cl-input-element {
   display: block;
   width: 100%;
   min-width: 0;
+  max-height: 100%;
   margin: 0;
   padding-left: max(20px, 1.25rem);
   padding-right: max(20px, 1.25rem);
@@ -1589,6 +1591,9 @@ video {
   text-align: right;
   font-size: 16px;
   line-height: 1.5;
+  /* Visitor text is plain text: keep the line breaks typed with Shift+Enter. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }

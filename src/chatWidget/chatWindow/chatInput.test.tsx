@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import ChatInput, {
   DEFAULT_MAX_LINES,
   computeTextareaHeight,
@@ -12,6 +12,10 @@ import ChatInput, {
 // height; clientHeight and offsetHeight follow the applied style height, capped
 // by a style max-height like a browser would.
 let simulatedScrollHeight = 64;
+// Width of the field, read by the ResizeObserver guard.
+let simulatedClientWidth = 300;
+// Height of the row around the field (the RTL container div); 0 = no layout.
+let simulatedRowHeight = 0;
 // Each scrollHeight read records the overflow and height in force at that moment.
 let scrollHeightReads: Array<{ overflowY: string; height: string }> = [];
 const boxHeight = (el: HTMLTextAreaElement) => {
@@ -48,10 +52,20 @@ beforeAll(() => {
       return boxHeight(this);
     },
   });
+  Object.defineProperty(HTMLTextAreaElement.prototype, 'clientWidth', {
+    configurable: true,
+    get: () => simulatedClientWidth,
+  });
+  Object.defineProperty(HTMLDivElement.prototype, 'clientHeight', {
+    configurable: true,
+    get: () => simulatedRowHeight,
+  });
 });
 
 beforeEach(() => {
   simulatedScrollHeight = ONE_LINE;
+  simulatedClientWidth = 300;
+  simulatedRowHeight = 0;
   scrollHeightReads = [];
 });
 
@@ -61,12 +75,14 @@ function Harness({
   onHeightChange,
   disabled,
   style = metricsStyle,
+  placeholder = 'Type your message...',
 }: {
   initialValue?: string;
   onSend?: () => void;
   onHeightChange?: (delta: number) => void;
   disabled?: boolean;
   style?: React.CSSProperties;
+  placeholder?: string;
 }) {
   const [value, setValue] = useState(initialValue);
   return (
@@ -75,7 +91,7 @@ function Harness({
       onChange={setValue}
       onSend={onSend}
       disabled={disabled}
-      placeholder="Type your message..."
+      placeholder={placeholder}
       ariaLabel="Your message"
       className="cl-input-element"
       style={style}
@@ -249,6 +265,70 @@ describe('ChatInput', () => {
       rerender(<Harness style={{ ...metricsStyle, lineHeight: 2, height: '300px' }} />);
       expect(field().style.height).toBe(`${32 + 40}px`);
     });
+
+    it('re-measures when the placeholder changes', () => {
+      // A long placeholder wraps to three lines in the empty field.
+      simulatedScrollHeight = LINE * 3 + 40;
+      const { rerender } = render(<Harness placeholder={'Ask about tickets, opening hours and exhibits. '.repeat(3)} />);
+      expect(field().style.height).toBe(`${LINE * 3 + 40}px`);
+
+      simulatedScrollHeight = ONE_LINE;
+      rerender(<Harness placeholder="Thinking..." />);
+      expect(field().style.height).toBe(`${ONE_LINE}px`);
+
+      simulatedScrollHeight = LINE * 3 + 40;
+      rerender(<Harness placeholder={'Ask about tickets, opening hours and exhibits. '.repeat(3)} />);
+      expect(field().style.height).toBe(`${LINE * 3 + 40}px`);
+    });
+
+    it('fills the row when the send button or a fixed row height makes it taller', () => {
+      const onHeightChange = jest.fn();
+      const smallPadding = { ...metricsStyle, paddingTop: '10px', paddingBottom: '10px' };
+      simulatedRowHeight = 60;
+      simulatedScrollHeight = LINE + 20;
+      render(<Harness style={smallPadding} onHeightChange={onHeightChange} />);
+      expect(field().style.height).toBe('60px');
+      expect(field().style.overflowY).toBe('hidden');
+
+      // Three lines are taller than the row: the field grows past the button.
+      simulatedScrollHeight = LINE * 3 + 20;
+      fireEvent.change(field(), { target: { value: 'one\ntwo\nthree' } });
+      expect(field().style.height).toBe(`${LINE * 3 + 20}px`);
+      expect(onHeightChange).toHaveBeenLastCalledWith(LINE * 3 + 20 - 60);
+    });
+
+    it('re-measures when the field width changes, but not for its own height changes', async () => {
+      const callbacks: Array<() => void> = [];
+      class FakeResizeObserver {
+        constructor(callback: () => void) { callbacks.push(callback); }
+        observe() {}
+        disconnect() {}
+      }
+      (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = FakeResizeObserver;
+      // The measurement runs in the next animation frame.
+      const nextFrame = () => act(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      }));
+      try {
+        render(<Harness initialValue="A line that wraps once the field is narrower." />);
+        expect(callbacks).toHaveLength(1);
+
+        // Same width: the observer fires for our own height change, nothing happens.
+        simulatedScrollHeight = LINE * 2 + 40;
+        act(() => callbacks[0]());
+        await nextFrame();
+        expect(field().style.height).toBe(`${ONE_LINE}px`);
+
+        // Narrower field: the text now wraps to two lines.
+        simulatedClientWidth = 200;
+        act(() => callbacks[0]());
+        expect(field().style.height).toBe(`${ONE_LINE}px`);
+        await nextFrame();
+        expect(field().style.height).toBe(`${LINE * 2 + 40}px`);
+      } finally {
+        delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+      }
+    });
   });
 
   describe('scroll containment', () => {
@@ -272,26 +352,25 @@ describe('computeTextareaHeight', () => {
   const base = { lineHeight: 24, paddingTop: 20, paddingBottom: 20, borderTop: 0, borderBottom: 0, maxLines: 6 };
 
   it('never goes below one line', () => {
-    expect(computeTextareaHeight({ ...base, scrollHeight: 0 })).toEqual({ height: 64, overflow: false });
-    expect(computeTextareaHeight({ ...base, scrollHeight: 50 })).toEqual({ height: 64, overflow: false });
+    expect(computeTextareaHeight({ ...base, scrollHeight: 0 })).toBe(64);
+    expect(computeTextareaHeight({ ...base, scrollHeight: 50 })).toBe(64);
   });
 
   it('follows the text between one and six lines', () => {
-    expect(computeTextareaHeight({ ...base, scrollHeight: 88 })).toEqual({ height: 88, overflow: false });
-    expect(computeTextareaHeight({ ...base, scrollHeight: 184 })).toEqual({ height: 184, overflow: false });
+    expect(computeTextareaHeight({ ...base, scrollHeight: 88 })).toBe(88);
+    expect(computeTextareaHeight({ ...base, scrollHeight: 184 })).toBe(184);
   });
 
-  it('caps at six lines and reports the overflow', () => {
-    expect(computeTextareaHeight({ ...base, scrollHeight: 208 })).toEqual({ height: 184, overflow: true });
+  it('caps at six lines', () => {
+    expect(computeTextareaHeight({ ...base, scrollHeight: 208 })).toBe(184);
   });
 
   it('adds the border to the border-box height', () => {
-    expect(computeTextareaHeight({ ...base, borderTop: 1, borderBottom: 1, scrollHeight: 88 }))
-      .toEqual({ height: 90, overflow: false });
+    expect(computeTextareaHeight({ ...base, borderTop: 1, borderBottom: 1, scrollHeight: 88 })).toBe(90);
   });
 
   it('treats a max of zero lines as one line', () => {
-    expect(computeTextareaHeight({ ...base, maxLines: 0, scrollHeight: 300 })).toEqual({ height: 64, overflow: true });
+    expect(computeTextareaHeight({ ...base, maxLines: 0, scrollHeight: 300 })).toBe(64);
   });
 });
 

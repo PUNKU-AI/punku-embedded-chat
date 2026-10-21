@@ -5,6 +5,7 @@ import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
+import { containScrollEvents } from "../scrollContainment";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
@@ -541,7 +542,9 @@ export default function ChatWindow({
   ]);
 
   function handleClick() {
-    if (sendUserMessage(value)) {
+    // Shift+Enter can leave a trailing line break; send the text without
+    // leading or trailing whitespace, as chat apps do.
+    if (sendUserMessage(value.trim())) {
       setValue("");
     }
   }
@@ -580,24 +583,10 @@ export default function ChatWindow({
 
   /*
    * Keep wheel/touch scrolling inside the message list instead of letting a
-   * host-page smooth-scroll library (Lenis, Locomotive, GSAP ScrollSmoother, …)
-   * hijack it. The widget renders in a closed shadow root, so the host page
-   * can't reach this container to opt out — but wheel/touchmove events are
-   * composed and bubble out to `window`, where those libraries listen. Stopping
-   * propagation here keeps native scrolling of the container working while
-   * preventing the page from scrolling instead. See fix for reps.energy (Lenis).
+   * host-page smooth-scroll library (Lenis and friends) hijack it. The
+   * composer applies the same rule; see scrollContainment.ts.
    */
-  useEffect(() => {
-    const el = messagesContainer.current;
-    if (!el) return;
-    const stopScrollPropagation = (e: Event) => e.stopPropagation();
-    el.addEventListener("wheel", stopScrollPropagation, { passive: true });
-    el.addEventListener("touchmove", stopScrollPropagation, { passive: true });
-    return () => {
-      el.removeEventListener("wheel", stopScrollPropagation);
-      el.removeEventListener("touchmove", stopScrollPropagation);
-    };
-  }, []);
+  useEffect(() => containScrollEvents(messagesContainer.current), []);
 
   /* Refocus the User input whenever a new response is returned from the LLM */
 

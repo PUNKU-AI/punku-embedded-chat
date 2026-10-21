@@ -6,6 +6,7 @@ import React, {
   useLayoutEffect,
   useRef,
 } from "react";
+import { containScrollEvents } from "../scrollContainment";
 
 /** The field grows with the text up to this many lines, then scrolls inside itself. */
 export const DEFAULT_MAX_LINES = 6;
@@ -22,7 +23,7 @@ export type ChatInputProps = {
   /** Consumer `input_style`; spread last so it can override the defaults. */
   style?: React.CSSProperties;
   maxLines?: number;
-  /** Reports a height change in px (positive = grew) after the field resized. */
+  /** Reports a change of the rendered height in px (positive = grew). */
   onHeightChange?: (delta: number) => void;
 };
 
@@ -61,16 +62,15 @@ export type TextareaMetrics = {
 
 /**
  * Border-box height for a textarea: at least one line, at most `maxLines`
- * lines. `overflow` is true when the text needs more than `maxLines` lines.
+ * lines. Whether the text overflows is measured after the height is applied.
  */
-export function computeTextareaHeight(metrics: TextareaMetrics): { height: number; overflow: boolean } {
+export function computeTextareaHeight(metrics: TextareaMetrics): number {
   const extra = metrics.paddingTop + metrics.paddingBottom + metrics.borderTop + metrics.borderBottom;
   const maxLines = Math.max(1, metrics.maxLines);
   const minHeight = metrics.lineHeight + extra;
   const maxHeight = metrics.lineHeight * maxLines + extra;
   const contentHeight = metrics.scrollHeight + metrics.borderTop + metrics.borderBottom;
-  const height = Math.min(Math.max(contentHeight, minHeight), maxHeight);
-  return { height, overflow: contentHeight > maxHeight + 0.5 };
+  return Math.min(Math.max(contentHeight, minHeight), maxHeight);
 }
 
 /** True while an input-method editor composes text (CJK, dictation, some Android keyboards). */
@@ -103,14 +103,23 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
 ) {
   const innerRef = useRef<HTMLTextAreaElement>(null);
   const appliedHeight = useRef<number | null>(null);
+  const measuredWidth = useRef<number | null>(null);
   useImperativeHandle(ref, () => innerRef.current as HTMLTextAreaElement);
 
   const resize = useCallback(() => {
     const el = innerRef.current;
     if (!el) return;
     const computed = getComputedStyle(el);
-    const extra = parsePx(computed.paddingTop) + parsePx(computed.paddingBottom)
-      + parsePx(computed.borderTopWidth) + parsePx(computed.borderBottomWidth);
+    const paddingTop = parsePx(computed.paddingTop);
+    const paddingBottom = parsePx(computed.paddingBottom);
+    const borderTop = parsePx(computed.borderTopWidth);
+    const borderBottom = parsePx(computed.borderBottomWidth);
+    const extra = paddingTop + paddingBottom + borderTop + borderBottom;
+    // input_style may switch the box model; style.height is written in that model.
+    const toStyleHeight = (borderBoxHeight: number) =>
+      `${computed.boxSizing === "content-box" ? borderBoxHeight - extra : borderBoxHeight}px`;
+    measuredWidth.current = el.clientWidth;
+
     // The browser scrolled the caret into view on input. `height: auto` resets
     // that scroll position, so restore it after the new height is applied.
     const scrollTop = el.scrollTop;
@@ -119,13 +128,13 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
     // scrollHeight reflects the current text and not the old height.
     el.style.overflowY = "hidden";
     el.style.height = "auto";
-    let { height } = computeTextareaHeight({
+    let height = computeTextareaHeight({
       scrollHeight: el.scrollHeight,
       lineHeight: getLineHeightPx(computed),
-      paddingTop: parsePx(computed.paddingTop),
-      paddingBottom: parsePx(computed.paddingBottom),
-      borderTop: parsePx(computed.borderTopWidth),
-      borderBottom: parsePx(computed.borderBottomWidth),
+      paddingTop,
+      paddingBottom,
+      borderTop,
+      borderBottom,
       maxLines,
     });
     // Never take more than half of the chat window (short phone-landscape windows).
@@ -133,15 +142,28 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
     if (chatWindow && chatWindow.clientHeight > 0) {
       height = Math.min(height, Math.max(Math.floor(chatWindow.clientHeight / 2), extra + 1));
     }
-    el.style.height = `${computed.boxSizing === "content-box" ? height - extra : height}px`;
-    // Measure the result: a consumer max-height in input_style can cap the field further.
+    el.style.height = toStyleHeight(height);
+
+    // Fill the row. The send button, or a fixed height from
+    // input_container_style, can make the row taller than the text needs. The
+    // field then takes the whole row height, as the one-line input did before.
+    const row = el.parentElement;
+    if (row) {
+      const rowStyle = getComputedStyle(row);
+      const rowHeight = row.clientHeight - parsePx(rowStyle.paddingTop) - parsePx(rowStyle.paddingBottom);
+      if (rowHeight > el.offsetHeight + 1) {
+        el.style.height = toStyleHeight(rowHeight);
+      }
+    }
+
+    // Measure the result: CSS max-height (a consumer input_style, or the row
+    // height) can cap the field further.
     el.style.overflowY = el.scrollHeight > el.clientHeight + 1 ? "auto" : "hidden";
     // Typing at the end: show the newest line with its bottom padding. Editing
     // in the middle: keep the position the browser chose for the caret.
     const caretAtEnd = el.selectionEnd === el.value.length;
     el.scrollTop = caretAtEnd ? el.scrollHeight : scrollTop;
-    // Report the rendered border-box height: CSS min/max-height from
-    // input_style can differ from the height set above.
+    // Report the rendered border-box height, not the requested one.
     const rendered = el.offsetHeight;
     const previous = appliedHeight.current;
     appliedHeight.current = rendered;
@@ -154,32 +176,42 @@ const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(function ChatI
   // The style object is recreated on each render, so compare its contents.
   const styleKey = style ? JSON.stringify(style) : "";
 
-  // Layout effect: the height is applied before paint, so the field never flashes.
+  // Layout effect: the height is applied before paint, so the field never
+  // flashes. The placeholder counts too: a long placeholder wraps in an empty field.
   useLayoutEffect(() => {
     resize();
-  }, [value, styleKey, resize]);
+  }, [value, placeholder, styleKey, resize]);
 
-  useEffect(() => {
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [resize]);
-
-  /*
-   * Same rule as the message list: keep wheel/touch scrolling inside the field
-   * when the text overflows, so a host-page smooth-scroll library (Lenis and
-   * friends) cannot hijack it through the composed event path.
-   */
+  // The same text wraps differently when the field gets narrower or wider
+  // (host `width` attribute, phone rotation, viewport resize).
   useEffect(() => {
     const el = innerRef.current;
     if (!el) return;
-    const stopScrollPropagation = (event: Event) => event.stopPropagation();
-    el.addEventListener("wheel", stopScrollPropagation, { passive: true });
-    el.addEventListener("touchmove", stopScrollPropagation, { passive: true });
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", resize);
+      return () => window.removeEventListener("resize", resize);
+    }
+    let frame: number | undefined;
+    const observer = new ResizeObserver(() => {
+      // Our own height changes notify as well; only a width change needs a new
+      // measurement. Run it in the next frame: a size change inside the
+      // callback itself raises "ResizeObserver loop" errors (WebKit).
+      if (el.clientWidth === measuredWidth.current || frame !== undefined) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = undefined;
+        resize();
+      });
+    });
+    observer.observe(el);
     return () => {
-      el.removeEventListener("wheel", stopScrollPropagation);
-      el.removeEventListener("touchmove", stopScrollPropagation);
+      observer.disconnect();
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [resize]);
+
+  // Same rule as the message list: scrolling inside the field must not reach
+  // a host smooth-scroll library.
+  useEffect(() => containScrollEvents(innerRef.current), []);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey) return;
