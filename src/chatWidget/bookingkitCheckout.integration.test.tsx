@@ -4,10 +4,10 @@ import ChatWidget from "./index";
 const url = "https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D";
 const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
 const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
-const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+const originalScroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTo");
 
 beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: jest.fn() });
+  Object.defineProperty(Element.prototype, "scrollTo", { configurable: true, value: jest.fn() });
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value: function () { this.setAttribute("open", ""); },
@@ -18,8 +18,8 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
-  else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  if (originalScroll) Object.defineProperty(Element.prototype, "scrollTo", originalScroll);
+  else delete (Element.prototype as Partial<Element>).scrollTo;
   if (originalShowModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", originalShowModal);
   else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
   if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, "close", originalClose);

@@ -51,6 +51,7 @@ describe("BookingkitCheckoutModal", () => {
   });
 
   it("opens a native dialog and preserves the exact iframe and fallback URLs", () => {
+    const focus = jest.spyOn(HTMLElement.prototype, "focus");
     render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
     expect(showModal).toHaveBeenCalledTimes(1);
     const frame = screen.getByTitle("Checkout");
@@ -61,7 +62,12 @@ describe("BookingkitCheckoutModal", () => {
     expect(externalLink).toHaveAttribute("href", checkoutUrl);
     expect(externalLink).toHaveAttribute("target", "_blank");
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
-    expect(screen.getByRole("button", { name: "Close checkout" })).toHaveFocus();
+    const closeButton = screen.getByRole("button", { name: "Close checkout" });
+    expect(closeButton).toHaveFocus();
+    // A plain focus() can pan the host page on phones (#69).
+    expect(focus.mock.contexts).toEqual([closeButton]);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    focus.mockRestore();
   });
 
   it("shows German controls", () => {
@@ -125,6 +131,7 @@ describe("BookingkitCheckoutModal", () => {
     const container = document.createElement("div");
     shadowRoot.appendChild(container);
     opener.focus();
+    const focusOpener = jest.spyOn(opener, "focus");
     const { rerender, unmount } = render(
       <BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />,
       { container },
@@ -134,6 +141,9 @@ describe("BookingkitCheckoutModal", () => {
     rerender(<BookingkitCheckoutModal url={null} onClose={jest.fn()} language="en" />);
     // eslint-disable-next-line testing-library/no-node-access -- Inspect focus inside the closed root.
     expect(shadowRoot.activeElement).toBe(opener);
+    // A plain focus() can pan the host page on phones (#69).
+    expect(focusOpener).toHaveBeenCalledWith({ preventScroll: true });
+    focusOpener.mockRestore();
     unmount();
     host.remove();
   });

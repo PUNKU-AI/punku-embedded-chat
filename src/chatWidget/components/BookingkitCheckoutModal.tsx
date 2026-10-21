@@ -69,7 +69,8 @@ export default function BookingkitCheckoutModal({
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
     }
-    closeButton.focus();
+    // preventScroll: a plain focus() can pan the host page on phones (#69).
+    closeButton.focus({ preventScroll: true });
 
     return () => {
       EventTarget.prototype.removeEventListener.call(closeButton, "click", requestClose);
@@ -81,7 +82,9 @@ export default function BookingkitCheckoutModal({
         if (typeof dialog.close === "function") dialog.close();
         else dialog.removeAttribute("open");
       }
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
     };
   }, [url, returnFocusTo]);
 
