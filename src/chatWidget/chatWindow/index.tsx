@@ -3,7 +3,9 @@ import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from ".
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
+import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
+import { containScrollEvents } from "../scrollContainment";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
@@ -202,7 +204,7 @@ export default function ChatWindow({
     bottom?: string;
     right?: string;
   }>({ left: "0", top: "0" });
-  const inputRef = useRef<HTMLInputElement>(null); /* User input Ref */
+  const inputRef = useRef<HTMLTextAreaElement>(null); /* User input Ref */
   useEffect(() => {
     if (triggerRef)
       setWindowPosition(
@@ -539,7 +541,9 @@ export default function ChatWindow({
   ]);
 
   function handleClick() {
-    if (sendUserMessage(value)) {
+    // Shift+Enter can leave a trailing line break; send the text without
+    // leading or trailing whitespace, as chat apps do.
+    if (sendUserMessage(value.trim())) {
       setValue("");
     }
   }
@@ -584,24 +588,10 @@ export default function ChatWindow({
 
   /*
    * Keep wheel/touch scrolling inside the message list instead of letting a
-   * host-page smooth-scroll library (Lenis, Locomotive, GSAP ScrollSmoother, …)
-   * hijack it. The widget renders in a closed shadow root, so the host page
-   * can't reach this container to opt out — but wheel/touchmove events are
-   * composed and bubble out to `window`, where those libraries listen. Stopping
-   * propagation here keeps native scrolling of the container working while
-   * preventing the page from scrolling instead. See fix for reps.energy (Lenis).
+   * host-page smooth-scroll library (Lenis and friends) hijack it. The
+   * composer applies the same rule; see scrollContainment.ts.
    */
-  useEffect(() => {
-    const el = messagesContainer.current;
-    if (!el) return;
-    const stopScrollPropagation = (e: Event) => e.stopPropagation();
-    el.addEventListener("wheel", stopScrollPropagation, { passive: true });
-    el.addEventListener("touchmove", stopScrollPropagation, { passive: true });
-    return () => {
-      el.removeEventListener("wheel", stopScrollPropagation);
-      el.removeEventListener("touchmove", stopScrollPropagation);
-    };
-  }, []);
+  useEffect(() => containScrollEvents(messagesContainer.current), []);
 
   /*
    * Refocus the User input whenever a new response is returned from the LLM.
@@ -615,6 +605,20 @@ export default function ChatWindow({
     }, 100);
     return () => clearTimeout(focusTimer);
   }, [messages, open]);
+
+  /*
+   * The composer grows with the text and takes that height from the message
+   * list. When the list was scrolled to the bottom, keep it there, so the
+   * newest message stays visible while the visitor types a long message.
+   */
+  const handleInputHeightChange = useCallback((delta: number) => {
+    const list = messagesContainer.current;
+    if (!list || delta <= 0) return;
+    const distanceToBottom = list.scrollHeight - list.clientHeight - list.scrollTop;
+    if (distanceToBottom <= delta + 2) {
+      list.scrollTop = list.scrollHeight;
+    }
+  }, []);
 
   // Use translations based on language prop
   const t = translations[language] || translations.en;
@@ -1097,20 +1101,19 @@ export default function ChatWindow({
           )}
         </div>
         <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
-          <input
+          <ChatInput
+            ref={inputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleClick();
-            }}
-            type="text"
+            onChange={setValue}
+            onSend={handleClick}
             disabled={sendingMessage}
             placeholder={sendingMessage ? (placeholder_sending || t.placeholderSending) : (placeholder || t.placeholder)}
+            ariaLabel={t.inputLabel}
             style={{
               ...DEFAULT_INPUT_TEXT_STYLE,
               ...(input_style || {}),
             }}
-            ref={inputRef}
+            onHeightChange={handleInputHeightChange}
             className="cl-input-element"
           />
           <button
@@ -1125,7 +1128,8 @@ export default function ChatWindow({
               alignItems: 'center',
               justifyContent: 'center',
               border: 'none',
-              margin: '8px',
+              // Bottom-aligned next to the growing composer; 12px centres it on the last text line.
+              margin: '8px 8px 12px',
               cursor: 'pointer',
               // Only set button color if explicitly provided (otherwise CSS theme handles it)
               ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
