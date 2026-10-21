@@ -581,8 +581,8 @@ Use the widget API to customize your widget:
 - **show_feedback:**
   - Type: Boolean
   - Required: No
-  - Default: false
-  - Description: Controls whether to display feedback buttons (thumbs up/down) for bot messages. When enabled, users can provide feedback on responses.
+  - Default: None (the prop has no effect)
+  - Description: The widget accepts this attribute, but it ignores the value. The feedback buttons (thumbs up and down) always show on bot replies. They do not show on the welcome message or on error messages. You cannot turn them off with this prop.
 
 - **link_color:**
   - Type: String
