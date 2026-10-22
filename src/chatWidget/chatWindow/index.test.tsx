@@ -467,7 +467,8 @@ describe('ChatWindow', () => {
 
       expect(scrollTo).toHaveBeenCalledTimes(1);
       expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
-      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      // A streamed answer is pinned at once, without a running smooth scroll.
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
     });
 
     // jsdom has no scrolling: set the list's position and report a scroll.
@@ -531,7 +532,22 @@ describe('ChatWindow', () => {
       scrollTo.mockClear();
 
       rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
-      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
+    });
+
+    it('should stop following when the next word comes before the scroll event of the visitor', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      scrollListTo(list, 440);
+      scrollTo.mockClear();
+
+      // The visitor scrolls up; the browser fires the scroll event one frame later.
+      Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 100 });
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
     });
 
     it('should show the visitor their own new message, even after scrolling up', () => {

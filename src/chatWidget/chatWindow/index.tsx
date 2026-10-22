@@ -703,10 +703,18 @@ export default function ChatWindow({
   useEffect(() => {
     const el = messagesContainer.current;
     if (!el) return;
+    const last = messages[messages.length - 1];
+    // A scroll up counts even before its scroll event fires (one frame later):
+    // the next streamed word must not pull the visitor back down.
+    if (el.scrollTop < lastListScrollTop.current - 2 && el.scrollHeight - el.clientHeight - el.scrollTop > 8) {
+      followNewest.current = false;
+    }
     // The visitor's own new message always shows, and the answer follows it.
-    if (messages[messages.length - 1]?.isSend) followNewest.current = true;
+    if (last?.isSend) followNewest.current = true;
     if (followNewest.current) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      // Pin a streamed answer at once. A smooth scroll per word keeps an
+      // animation running that can override the visitor's own scroll.
+      el.scrollTo({ top: el.scrollHeight, behavior: last?.streaming ? "auto" : "smooth" });
     } else {
       // The answer grows below a visitor who scrolled up. That fires no scroll
       // event, so check here whether the newest text is now far enough away.
