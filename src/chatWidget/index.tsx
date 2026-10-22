@@ -2356,7 +2356,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* "Powered by PUNKU.AI & bookingkit", or the site's online_message, wraps
-   to a second line on a narrow phone instead of losing its end. */
+   to a second line on a narrow phone instead of losing its end. A host page
+   can set hyphens: auto, and it inherits into the widget: brand names must
+   never break ("booking-kit"). */
 .cl-window .cl-header-status {
   min-width: 0;
   overflow: hidden;
@@ -2364,6 +2366,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}
+
+.cl-window .cl-header-status a {
+  white-space: nowrap;
 }
 
 /* The status dot stays centred on the first line. */

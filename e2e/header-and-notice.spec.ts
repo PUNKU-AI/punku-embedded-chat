@@ -92,6 +92,39 @@ test('a long status wraps to a second line instead of losing its end', async ({ 
   expect(result.newChat!.bottom).toBeLessThanOrEqual(result.header!.bottom);
 });
 
+test('brand names in the status never break, also on a host page with hyphenation', async ({ page }) => {
+  // Bootsverleih: a German host page with hyphens: auto split "booking-kit".
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.lang = 'de';
+      const style = document.createElement('style');
+      style.textContent = 'html { -webkit-hyphens: auto; hyphens: auto; }';
+      document.head.appendChild(style);
+    });
+  });
+  await openChat(page, { branding: 'punku-ai-bookingkit' });
+  // Where a line breaks depends on the header width and on each engine's
+  // hyphenation dictionary, so check the rules that prevent the break.
+  const status = await page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const element = root.querySelector<HTMLElement>('.cl-header-status')!;
+    const style = getComputedStyle(element) as CSSStyleDeclaration & { webkitHyphens?: string };
+    return {
+      hostHyphens: getComputedStyle(document.documentElement).hyphens || (getComputedStyle(document.documentElement) as CSSStyleDeclaration & { webkitHyphens?: string }).webkitHyphens,
+      hyphens: style.hyphens || style.webkitHyphens,
+      links: Array.from(element.querySelectorAll<HTMLElement>('a'))
+        .map((link) => ({ text: link.textContent, whiteSpace: getComputedStyle(link).whiteSpace })),
+    };
+  });
+  expect(status.hostHyphens).toBe('auto');
+  expect(status.hyphens).toBe('manual');
+  expect(status.links).toEqual([
+    { text: 'PUNKU.AI', whiteSpace: 'nowrap' },
+    { text: 'bookingkit', whiteSpace: 'nowrap' },
+  ]);
+  expect((await parts(page))!.statusCut).toBe(false);
+});
+
 test('the AI notice sits under the field in the chat language', async ({ page }) => {
   await openChat(page, { default_language: 'de' });
   const result = (await parts(page))!;
