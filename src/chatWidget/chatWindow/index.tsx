@@ -665,13 +665,67 @@ export default function ChatWindow({
    * preventScroll: a plain focus() pans the host page like scrollIntoView() (#69).
    */
 
+  /*
+   * When the chat opens, the visitor wants to type: focus the input. After an
+   * answer, never take focus from the host page, or from a link or button in
+   * the messages: the visitor works there. On a touch screen, keep the
+   * keyboard closed after an answer, so the visitor can read.
+   */
+  const wasOpen = useRef(false);
+  const focusOnOpen = useRef(false);
   useEffect(() => {
+    // A ref, not a local flag: a message change in the first 100 ms restarts
+    // the timer, and the chat still focuses its input for the opening.
+    if (open && !wasOpen.current) focusOnOpen.current = true;
+    if (!open) focusOnOpen.current = false;
+    wasOpen.current = open;
     if (!open || sendingMessage) return;
     const focusTimer = setTimeout(() => {
-      inputRef.current?.focus({ preventScroll: true });
+      const input = inputRef.current;
+      if (!input) return;
+      const opening = focusOnOpen.current;
+      focusOnOpen.current = false;
+      if (!opening) {
+        const root = input.getRootNode() as Document | ShadowRoot;
+        const host = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot ? root.host : null;
+        const pageFocus = document.activeElement;
+        const focusOnHostPage =
+          !!pageFocus &&
+          pageFocus !== document.body &&
+          pageFocus !== document.documentElement &&
+          pageFocus !== host &&
+          !chatWindowRef.current?.contains(pageFocus);
+        if (focusOnHostPage) return;
+        const chatFocus = root.activeElement;
+        if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
+        const touchScreen =
+          typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+        if (touchScreen) return;
+      }
+      input.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
   }, [messages, open, sendingMessage]);
+
+  /*
+   * When the chat closes from inside (the close button, Escape), the focus
+   * goes back to the launcher, so keyboard and screen-reader users keep their
+   * place. A click on the host page keeps the focus where the visitor put it.
+   */
+  const wasOpenForFocus = useRef(open);
+  useEffect(() => {
+    const closed = wasOpenForFocus.current && !open;
+    wasOpenForFocus.current = open;
+    if (!closed) return;
+    const chatWindow = chatWindowRef.current;
+    const trigger = triggerRef?.current;
+    if (!chatWindow || !trigger) return;
+    const root = chatWindow.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement;
+    if (focused && chatWindow.contains(focused)) {
+      trigger.focus({ preventScroll: true });
+    }
+  }, [open, triggerRef]);
 
   /*
    * The composer grows with the text and takes that height from the message
@@ -1111,7 +1165,16 @@ export default function ChatWindow({
           </div>
         </div>
 
-        <div className="cl-messages_container" ref={messagesContainer} style={background_color ? { backgroundColor: background_color } : undefined}>
+        {/* A named log of the conversation. The status region below reads new
+            answers once, so the log itself does not announce changes. */}
+        <div
+          className="cl-messages_container"
+          ref={messagesContainer}
+          role="log"
+          aria-live="off"
+          aria-label={t.messageList}
+          style={background_color ? { backgroundColor: background_color } : undefined}
+        >
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">
@@ -1180,6 +1243,8 @@ export default function ChatWindow({
               onCheckout={onCheckout}
               onRetry={index === messages.length - 1 ? handleRetry : undefined}
               retryLabel={t.retry}
+              helpfulLabel={t.helpful}
+              notHelpfulLabel={t.notHelpful}
             />
           ))}
           {sendingMessage && !isStreaming && (

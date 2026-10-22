@@ -7,7 +7,9 @@ export default function ChatTrigger({
     buttonColor,
     buttonTextColor,
     theme = "default",
-    triggerIcon
+    triggerIcon,
+    openLabel = "Open chat",
+    closeLabel = "Close chat",
 }: {
     style?: React.CSSProperties,
     open: boolean,
@@ -16,7 +18,11 @@ export default function ChatTrigger({
     buttonColor?: string,
     buttonTextColor?: string,
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski",
-    triggerIcon?: string
+    triggerIcon?: string,
+    /** The button's name for screen readers while the chat is closed. */
+    openLabel?: string,
+    /** The button's name for screen readers while the chat is open. */
+    closeLabel?: string,
 }) {
     const customStyles = {
         ...style,
@@ -27,24 +33,28 @@ export default function ChatTrigger({
     // For Swarovski theme, show diamond icon instead of chat bubble
     const isSwarovski = theme === "swarovski";
 
+    // The icons are decoration: the label says what the button does.
     return (
         <button ref={triggerRef} style={customStyles}
+            type="button"
+            aria-label={open ? closeLabel : openLabel}
+            aria-expanded={open}
             onClick={() => { setOpen(!open) }}
             onMouseDown={(e) => {
                 e.preventDefault()
             }}
             className={`cl-trigger ${theme ? `theme-${theme}` : ""}`}>
-            <X className={"cl-trigger-icon " + (open ? "cl-scale-100" : "cl-scale-0")} />
+            <X aria-hidden="true" className={"cl-trigger-icon " + (open ? "cl-scale-100" : "cl-scale-0")} />
             {triggerIcon ? (
                 <img
                     src={triggerIcon}
-                    alt="Chat icon"
+                    alt=""
                     className={"cl-trigger-icon cl-trigger-img " + (open ? "cl-scale-0" : "cl-scale-100")}
                 />
             ) : isSwarovski ? (
-                <Sparkles className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
+                <Sparkles aria-hidden="true" className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
             ) : (
-                <MessageSquare className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
+                <MessageSquare aria-hidden="true" className={"cl-trigger-icon " + (open ? "cl-scale-0" : "cl-scale-100")} />
             )}
         </button>
     )

@@ -1578,6 +1578,155 @@ describe('ChatWindow', () => {
     });
   });
 
+  describe('Accessibility and focus', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      delete (window as any).matchMedia;
+    });
+
+    const runFocusTimer = () => {
+      act(() => {
+        jest.advanceTimersByTime(150);
+      });
+    };
+
+    it('should name the message list as a log that does not announce by itself', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} />);
+
+      const log = screen.getByRole('log', { name: 'Conversation' });
+      expect(log).toHaveClass('cl-messages_container');
+      // The status region reads complete answers; the log would repeat them.
+      expect(log).toHaveAttribute('aria-live', 'off');
+
+      rerender(<ChatWindow {...defaultProps} language="de" />);
+      expect(screen.getByRole('log', { name: 'Unterhaltung' })).toBeInTheDocument();
+    });
+
+    it('should return the focus to the launcher when the chat closes from inside', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const { rerender } = render(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={true} />
+        </>
+      );
+      runFocusTimer();
+      expect(screen.getByRole('textbox')).toHaveFocus();
+
+      rerender(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={false} />
+        </>
+      );
+      expect(trigger.current).toHaveFocus();
+    });
+
+    it('should leave the focus on the host page when the chat closes from there', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const { rerender } = render(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={true} />
+        </>
+      );
+      runFocusTimer();
+      const hostField = screen.getByRole('textbox', { name: 'Host search' });
+      hostField.focus();
+
+      rerender(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={false} />
+        </>
+      );
+      expect(hostField).toHaveFocus();
+    });
+
+    it('should not take the focus from a host page field when an answer arrives', () => {
+      const hostPage = (messages: ChatMessageType[]) => (
+        <>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} messages={messages} />
+        </>
+      );
+      const { rerender } = render(hostPage([]));
+      runFocusTimer();
+
+      const hostField = screen.getByRole('textbox', { name: 'Host search' });
+      hostField.focus();
+      rerender(hostPage([{ message: 'Hello', isSend: true }, { message: 'Answer', isSend: false }]));
+      runFocusTimer();
+
+      expect(hostField).toHaveFocus();
+    });
+
+    it('should not take the focus from a link in the messages when an answer arrives', () => {
+      const chat = (messages: ChatMessageType[]) => <ChatWindow {...defaultProps} messages={messages} />;
+      const { rerender } = render(chat([]));
+      runFocusTimer();
+
+      // A focusable element inside the message list, as a link in an answer is.
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      const link = document.createElement('a');
+      link.href = 'https://example.com/tickets';
+      link.textContent = 'Tickets';
+      list.appendChild(link);
+      link.focus();
+
+      rerender(chat([{ message: 'Answer', isSend: false }]));
+      runFocusTimer();
+
+      expect(link).toHaveFocus();
+      link.remove();
+    });
+
+    it('should focus the input on opening, also when a message arrives in the first 100 ms', () => {
+      const chat = (open: boolean, messages: ChatMessageType[]) => (
+        <>
+          <button>Open the chat</button>
+          <ChatWindow {...defaultProps} open={open} messages={messages} />
+        </>
+      );
+      const { rerender } = render(chat(false, []));
+      // A host page button opens the chat and keeps the focus until then.
+      screen.getByRole('button', { name: 'Open the chat' }).focus();
+
+      rerender(chat(true, []));
+      act(() => {
+        jest.advanceTimersByTime(50);
+      });
+      rerender(chat(true, [{ message: 'Welcome back', isSend: false }]));
+      runFocusTimer();
+
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should focus the input on opening, but not after an answer, on a touch screen', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      const chat = (open: boolean, messages: ChatMessageType[]) => (
+        <ChatWindow {...defaultProps} open={open} messages={messages} />
+      );
+      const { rerender } = render(chat(false, []));
+
+      rerender(chat(true, []));
+      runFocusTimer();
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveFocus();
+
+      input.blur();
+      rerender(chat(true, [{ message: 'Answer', isSend: false }]));
+      runFocusTimer();
+      expect(input).not.toHaveFocus();
+    });
+  });
+
   describe('Session Management', () => {
     it('should show new session button when onStartNewSession is provided', () => {
       const onStartNewSession = jest.fn();

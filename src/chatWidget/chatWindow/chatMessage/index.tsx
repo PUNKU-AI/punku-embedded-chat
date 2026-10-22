@@ -102,6 +102,8 @@ export default function ChatMessage({
   onCheckout,
   onRetry,
   retryLabel = "Try again",
+  helpfulLabel = "Helpful",
+  notHelpfulLabel = "Not helpful",
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
@@ -116,6 +118,9 @@ export default function ChatMessage({
   /** Shown on the newest error message: sends the visitor's last message again. */
   onRetry?: () => void;
   retryLabel?: string;
+  /** Names of the feedback buttons for screen readers, in the chat language. */
+  helpfulLabel?: string;
+  notHelpfulLabel?: string;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -231,21 +236,25 @@ export default function ChatMessage({
           {!isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">
               <div className="feedback-buttons">
-                <button 
+                <button
+                  type="button"
                   className={`feedback-button thumbs-up ${selectedFeedback === 'thumbsUp' ? 'selected' : ''}`}
                   onClick={() => handleFeedback('thumbsUp')}
-                  aria-label="Thumbs up"
-                  title="Thumbs up"
+                  aria-label={helpfulLabel}
+                  aria-pressed={selectedFeedback === 'thumbsUp'}
+                  title={helpfulLabel}
                 >
-                  <ThumbsUp size={16} />
+                  <ThumbsUp size={16} aria-hidden="true" />
                 </button>
-                <button 
+                <button
+                  type="button"
                   className={`feedback-button thumbs-down ${selectedFeedback === 'thumbsDown' ? 'selected' : ''}`}
                   onClick={() => handleFeedback('thumbsDown')}
-                  aria-label="Thumbs down"
-                  title="Thumbs down"
+                  aria-label={notHelpfulLabel}
+                  aria-pressed={selectedFeedback === 'thumbsDown'}
+                  title={notHelpfulLabel}
                 >
-                  <ThumbsDown size={16} />
+                  <ThumbsDown size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -280,6 +289,13 @@ export default function ChatMessage({
         
         .feedback-button:hover {
           opacity: 1;
+        }
+
+        .feedback-button:focus-visible {
+          opacity: 1;
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+          border-radius: 4px;
         }
         
         .feedback-button.thumbs-up:hover {

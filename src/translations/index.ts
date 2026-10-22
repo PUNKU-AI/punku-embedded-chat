@@ -121,6 +121,11 @@ export const translations = {
     errorServer: "Sorry, we're experiencing technical issues. Please try again.",
     errorInterrupted: "The assistant response ended before it completed. Please try again.",
     errorEmpty: "The assistant did not return a response. Please try again.",
+    triggerOpen: "Open chat",
+    triggerClose: "Close chat",
+    messageList: "Conversation",
+    helpful: "Helpful",
+    notHelpful: "Not helpful",
   },
   de: {
     welcomeMessage: "Hallo! Wie kann ich Ihnen heute helfen?",
@@ -139,6 +144,11 @@ export const translations = {
     errorServer: "Entschuldigung, wir haben gerade technische Probleme. Bitte versuchen Sie es erneut.",
     errorInterrupted: "Die Antwort wurde abgebrochen, bevor sie fertig war. Bitte versuchen Sie es erneut.",
     errorEmpty: "Der Assistent hat keine Antwort gesendet. Bitte versuchen Sie es erneut.",
+    triggerOpen: "Chat öffnen",
+    triggerClose: "Chat schließen",
+    messageList: "Unterhaltung",
+    helpful: "Hilfreich",
+    notHelpful: "Nicht hilfreich",
   }
 };
 

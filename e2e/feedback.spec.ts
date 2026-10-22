@@ -109,7 +109,7 @@ test('feedback sends both votes without copying host XSRF cookies into headers',
     expect(headers.cookie).toContain('widget-session=synthetic-host-session');
     expect(headers.cookie).toContain('XSRF-TOKEN=synthetic-host-xsrf');
     expect(headers['x-api-key']).toBeUndefined();
-    await expect.poll(() => selectedFeedback(page)).toEqual([positive ? 'Thumbs up' : 'Thumbs down']);
+    await expect.poll(() => selectedFeedback(page)).toEqual([positive ? 'Helpful' : 'Not helpful']);
   }
 });
 
@@ -135,7 +135,7 @@ test('cross-origin feedback keeps explicit headers and excludes ambient cookies'
   expect(headers['x-api-key']).toBe('synthetic-override-key');
   expect(headers['x-widget-test']).toBe('synthetic-explicit-header');
   expect(headers.cookie).toBeUndefined();
-  await expect.poll(() => selectedFeedback(page)).toEqual(['Thumbs up']);
+  await expect.poll(() => selectedFeedback(page)).toEqual(['Helpful']);
 });
 
 test('failed feedback clears the selected vote and permits a successful retry', async ({ page, hasTouch }) => {
@@ -160,7 +160,7 @@ test('failed feedback clears the selected vote and permits a successful retry', 
     await activate(page, '.feedback-button.thumbs-down', hasTouch);
     await assertRequest(await requestPromise, false);
     // Hold the response until the optimistic state is visible. No timing guesses.
-    await expect.poll(() => selectedFeedback(page)).toEqual(['Thumbs down']);
+    await expect.poll(() => selectedFeedback(page)).toEqual(['Not helpful']);
   } finally {
     releaseFailure();
   }
@@ -175,6 +175,6 @@ test('failed feedback clears the selected vote and permits a successful retry', 
   expect(retryResponse.status()).toBe(200);
   await retryResponse.finished();
   await assertRequest(retryResponse.request(), true);
-  await expect.poll(() => selectedFeedback(page)).toEqual(['Thumbs up']);
+  await expect.poll(() => selectedFeedback(page)).toEqual(['Helpful']);
   expect(requestCount).toBe(2);
 });

@@ -43,6 +43,34 @@ describe('ChatTrigger', () => {
     });
   });
 
+  describe('Accessibility', () => {
+    it('should name the button by what it does and report the chat state', () => {
+      const { rerender } = render(<ChatTrigger {...defaultProps} open={false} />);
+
+      const button = screen.getByRole('button', { name: 'Open chat' });
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+
+      rerender(<ChatTrigger {...defaultProps} open={true} />);
+      expect(screen.getByRole('button', { name: 'Close chat' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('should use the labels it gets, for example in German', () => {
+      render(<ChatTrigger {...defaultProps} open={false} openLabel="Chat öffnen" closeLabel="Chat schließen" />);
+
+      expect(screen.getByRole('button', { name: 'Chat öffnen' })).toBeInTheDocument();
+    });
+
+    it('should hide the icons from screen readers', () => {
+      render(<ChatTrigger {...defaultProps} triggerIcon="https://example.com/icon.png" />);
+
+      document.querySelectorAll('svg.cl-trigger-icon').forEach((icon) => {
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+      });
+      expect(document.querySelector('img.cl-trigger-img')).toHaveAttribute('alt', '');
+    });
+  });
+
   describe('Icon Display', () => {
     it('should show MessageSquare icon when closed (non-swarovski theme)', () => {
       render(<ChatTrigger {...defaultProps} open={false} />);
