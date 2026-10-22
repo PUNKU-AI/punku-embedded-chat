@@ -3498,8 +3498,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
    * while the window is open. On other pages, the closed trigger stays behind
    * the on-screen keyboard, as before, and cannot cover a host form field.
    * A translate on the anchor restyles only the anchor. Relocated triggers
-   * keep their x and y. This runs before the closed hint layout effect, so
-   * the hint measures the moved trigger.
+   * keep their x and y. A hidden root (for example a phone-only embed on a
+   * desktop) has no box to measure, so it gets no translate until host CSS
+   * shows it. This runs before the closed hint layout effect, so the hint
+   * measures the moved trigger.
    */
   useLayoutEffect(() => {
     const root = widgetRootRef.current;
@@ -3512,16 +3514,27 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       bottom: effectiveBottomOffset,
       left: effectiveLeftOffset,
     };
-    const stop = subscribeVisualViewport((screen) => {
+    let screen: VisualViewportBox | null = null;
+    const update = () => {
       let transform = "";
-      if (screen && (open || document.documentElement.scrollWidth > screen.width + 1)) {
-        const { x, y } = getVisibleCornerShift(root.getBoundingClientRect(), screen, cornerPosition, offsets);
+      const box = root.getBoundingClientRect();
+      const shown = box.width > 0 || box.height > 0;
+      if (screen && shown && (open || document.documentElement.scrollWidth > screen.width + 1)) {
+        const { x, y } = getVisibleCornerShift(box, screen, cornerPosition, offsets);
         if (Math.abs(x) >= 0.5 || Math.abs(y) >= 0.5) transform = `translate(${x}px, ${y}px)`;
       }
       if (anchor.style.transform !== transform) anchor.style.transform = transform;
+    };
+    const stop = subscribeVisualViewport((box) => {
+      screen = box;
+      update();
     });
+    // The root gets a box when host CSS shows a hidden embed. No viewport event fires then.
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    observer?.observe(root);
     return () => {
       stop();
+      observer?.disconnect();
       anchor.style.transform = "";
     };
   }, [open, isRelocated, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);

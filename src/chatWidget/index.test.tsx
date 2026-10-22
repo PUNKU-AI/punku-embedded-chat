@@ -1109,6 +1109,37 @@ describe('ChatWidget', () => {
       expect(root().style.getPropertyValue('--cl-visual-viewport-top')).toBe('');
     });
 
+    it('gives a hidden root no shift, and shifts it when host CSS shows it', () => {
+      // A phone-only embed is display: none on a desktop. Its root has no box.
+      setPageWidth(455);
+      const jsdomResizeObserver = Object.getOwnPropertyDescriptor(window, 'ResizeObserver');
+      const resizeCallbacks: ResizeObserverCallback[] = [];
+      class FakeResizeObserver {
+        constructor(callback: ResizeObserverCallback) { resizeCallbacks.push(callback); }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+      Object.defineProperty(window, 'ResizeObserver', { configurable: true, value: FakeResizeObserver });
+      let shown = false;
+      const hiddenBox = { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) };
+      jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        return (shown || !this.classList.contains('cl-widget-root') ? rootBox : hiddenBox) as DOMRect;
+      });
+
+      try {
+        render(<ChatWidget {...defaultProps} start_open={false} />);
+        expect(anchorTransform()).toBe('');
+
+        shown = true;
+        act(() => resizeCallbacks.forEach((callback) => callback([], {} as ResizeObserver)));
+        expect(anchorTransform()).toBe('translate(-43px, -88px)');
+      } finally {
+        if (jsdomResizeObserver) Object.defineProperty(window, 'ResizeObserver', jsdomResizeObserver);
+        else delete (window as { ResizeObserver?: unknown }).ResizeObserver;
+      }
+    });
+
     it('moves the trigger above the on-screen keyboard while the window is open', () => {
       render(<ChatWidget {...defaultProps} start_open={true} />);
       expect(anchorTransform()).toBe('translate(-43px, -88px)');
