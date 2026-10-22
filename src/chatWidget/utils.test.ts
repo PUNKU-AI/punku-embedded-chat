@@ -4,8 +4,10 @@ import {
   extractMessageFromOutput,
   detectBrowserLanguage,
   revealInScrollContainer,
+  subscribeVisualViewport,
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
+  visualViewportInset,
 } from './utils';
 
 describe('getChatPosition', () => {
@@ -289,7 +291,7 @@ describe('revealInScrollContainer', () => {
   });
 });
 
-describe('trackVisualViewport', () => {
+describe('visual viewport tracking', () => {
   // jsdom has no visual viewport. Each test installs a fake one: a 412 x 839
   // phone screen at the top-left corner of a larger layout viewport.
   class FakeVisualViewport extends EventTarget {
@@ -302,30 +304,22 @@ describe('trackVisualViewport', () => {
 
   const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
   let viewport: FakeVisualViewport;
-  let frames: Map<number, FrameRequestCallback>;
-  const runFrames = () => {
-    const callbacks = Array.from(frames.values());
-    frames.clear();
-    callbacks.forEach((callback) => callback(0));
-  };
+  const stops: Array<() => void> = [];
   const variables = (element: HTMLElement) =>
     Object.values(VISUAL_VIEWPORT_PROPERTIES).map((property) => element.style.getPropertyValue(property));
+  const track = (element: HTMLElement) => {
+    const stop = trackVisualViewport(element);
+    stops.push(stop);
+    return stop;
+  };
 
   beforeEach(() => {
     viewport = new FakeVisualViewport();
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
-    frames = new Map();
-    let nextFrame = 1;
-    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      frames.set(nextFrame, callback);
-      return nextFrame++;
-    });
-    jest.spyOn(window, 'cancelAnimationFrame').mockImplementation((frame) => {
-      frames.delete(frame);
-    });
   });
 
   afterEach(() => {
+    stops.splice(0).forEach((stop) => stop());
     jest.restoreAllMocks();
     if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
     else delete (window as { visualViewport?: unknown }).visualViewport;
@@ -336,66 +330,122 @@ describe('trackVisualViewport', () => {
     viewport.offsetLeft = 43;
     viewport.offsetTop = 88;
 
-    trackVisualViewport(element);
+    track(element);
 
     expect(variables(element)).toEqual(['43px', '88px', '412px', '839px']);
   });
 
-  it('follows a pan and the on-screen keyboard in the next frame', () => {
+  it('follows a pan and the on-screen keyboard in the same event', () => {
     const element = document.createElement('div');
-    trackVisualViewport(element);
+    track(element);
 
     viewport.offsetLeft = 43;
     viewport.dispatchEvent(new Event('scroll'));
+    expect(variables(element)).toEqual(['43px', '0px', '412px', '839px']);
+
     viewport.height = 500;
     viewport.dispatchEvent(new Event('resize'));
-    // Both events share one frame.
-    expect(frames.size).toBe(1);
-    expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
-
-    runFrames();
-
     expect(variables(element)).toEqual(['43px', '0px', '412px', '500px']);
+  });
+
+  it('follows a window resize', () => {
+    // A wider host page makes the layout viewport larger and fires a window resize.
+    const element = document.createElement('div');
+    track(element);
+
+    viewport.width = 400;
+    window.dispatchEvent(new Event('resize'));
+
+    expect(variables(element)).toEqual(['0px', '0px', '400px', '839px']);
   });
 
   it('removes the box while the visitor pinch-zooms in, and sets it again at scale 1', () => {
     const element = document.createElement('div');
-    trackVisualViewport(element);
+    track(element);
 
     Object.assign(viewport, { scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
     viewport.dispatchEvent(new Event('resize'));
-    runFrames();
     expect(variables(element)).toEqual(['', '', '', '']);
 
     Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
     viewport.dispatchEvent(new Event('resize'));
-    runFrames();
     expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
   });
 
-  it('stops after cleanup and cancels a pending frame', () => {
+  it('writes a variable only when its value changes', () => {
     const element = document.createElement('div');
-    const stop = trackVisualViewport(element);
-    viewport.width = 300;
-    viewport.dispatchEvent(new Event('resize'));
-    expect(frames.size).toBe(1);
+    track(element);
+    const setProperty = jest.spyOn(element.style, 'setProperty');
+
+    viewport.dispatchEvent(new Event('scroll'));
+    expect(setProperty).not.toHaveBeenCalled();
+
+    viewport.offsetTop = 88;
+    viewport.dispatchEvent(new Event('scroll'));
+    expect(setProperty.mock.calls).toEqual([['--cl-visual-viewport-top', '88px']]);
+  });
+
+  it('stops after cleanup and keeps the last box', () => {
+    const element = document.createElement('div');
+    const stop = track(element);
 
     stop();
-    expect(frames.size).toBe(0);
-    viewport.dispatchEvent(new Event('scroll'));
-    runFrames();
+    viewport.width = 300;
+    viewport.dispatchEvent(new Event('resize'));
 
     // The last box stays, so a closing window does not jump.
     expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
   });
 
-  it('does nothing without a visual viewport', () => {
+  it('shares one set of event listeners between all listeners', () => {
+    const addListener = jest.spyOn(viewport, 'addEventListener');
+    const removeListener = jest.spyOn(viewport, 'removeEventListener');
+    const first = jest.fn();
+    const second = jest.fn();
+
+    const stopFirst = subscribeVisualViewport(first);
+    const stopSecond = subscribeVisualViewport(second);
+    expect(addListener.mock.calls.map(([type]) => type)).toEqual(['resize', 'scroll']);
+    expect(first).toHaveBeenCalledWith({ offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
+
+    viewport.height = 500;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(first).toHaveBeenLastCalledWith(expect.objectContaining({ height: 500 }));
+    expect(second).toHaveBeenLastCalledWith(expect.objectContaining({ height: 500 }));
+
+    stopFirst();
+    expect(removeListener).not.toHaveBeenCalled();
+    stopSecond();
+    expect(removeListener.mock.calls.map(([type]) => type)).toEqual(['resize', 'scroll']);
+  });
+
+  it('gives no box without a visual viewport', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: null });
     const element = document.createElement('div');
+    const listener = jest.fn();
 
-    const stop = trackVisualViewport(element);
+    const stop = track(element);
+    stops.push(subscribeVisualViewport(listener));
 
     expect(variables(element)).toEqual(['', '', '', '']);
+    expect(listener).toHaveBeenCalledWith(null);
     expect(() => stop()).not.toThrow();
+  });
+});
+
+describe('visualViewportInset', () => {
+  it('measures the top and left insets from the visible corner', () => {
+    expect(visualViewportInset('top', '20px')).toBe('calc(var(--cl-visual-viewport-top, 0px) + 20px)');
+    expect(visualViewportInset('left', '32px')).toBe('calc(var(--cl-visual-viewport-left, 0px) + 32px)');
+  });
+
+  it('adds the hidden strip of the layout viewport to the bottom and right insets', () => {
+    // 100% is the layout viewport. Without the variables, both terms cancel out.
+    expect(visualViewportInset('bottom', '20px')).toBe(
+      'calc(100% - var(--cl-visual-viewport-top, 0px) - var(--cl-visual-viewport-height, 100%) + 20px)'
+    );
+    expect(visualViewportInset('right', 'calc(var(--cl-bottom-offset) + 80px)')).toBe(
+      'calc(100% - var(--cl-visual-viewport-left, 0px) - var(--cl-visual-viewport-width, 100%) + calc(var(--cl-bottom-offset) + 80px))'
+    );
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './index';
+import { visualViewportInset } from '../utils';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
 
@@ -147,29 +148,47 @@ describe('ChatWindow', () => {
     it('should anchor to the bottom right by default', () => {
       render(<ChatWindow {...defaultProps} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: 'auto', right: '20px' });
+      // From the visible corner, not the layout viewport corner (#77).
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({
+        left: 'auto',
+        right: visualViewportInset('right', '20px'),
+        bottom: visualViewportInset('bottom', 'var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))'),
+      });
+    });
+
+    it('should keep the 641 px and wider window inside the visible area', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      // jsdom has no layout. The window stylesheet is the result.
+      // eslint-disable-next-line testing-library/no-node-access
+      const styles = Array.from(document.querySelectorAll('style'), (style) => style.textContent).join('\n');
+      expect(styles).toContain('--cl-visible-height: var(--cl-visual-viewport-height, 100vh);');
+      expect(styles).toContain('--cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));');
+      for (const cap of ['min(75vh, var(--cl-window-room))', 'min(70vh, var(--cl-window-room))']) {
+        expect(styles).toContain(`max-height: ${cap} !important;`);
+      }
     });
 
     it('should anchor to the bottom left for bottom-left position', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: '20px', right: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '20px'), right: 'auto' });
     });
 
     it('should apply custom left offset for left-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: '64px', right: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '64px'), right: 'auto' });
     });
 
     it('should apply custom right offset for right-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-right" right_offset={52} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ right: visualViewportInset('right', '52px'), left: 'auto' });
     });
 
     it('should use position override style when provided', () => {
@@ -1455,8 +1474,6 @@ describe('ChatWindow', () => {
 
     const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
     let viewport: FakeVisualViewport;
-    let frames: FrameRequestCallback[];
-    const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
     const box = () => {
       // The fixed window box has no accessible role. Its CSS variables are the result.
       // eslint-disable-next-line testing-library/no-node-access
@@ -1469,13 +1486,9 @@ describe('ChatWindow', () => {
     beforeEach(() => {
       viewport = new FakeVisualViewport();
       Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
-      frames = [];
-      jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
-      jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
     });
 
     afterEach(() => {
-      jest.restoreAllMocks();
       if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
       else delete (window as { visualViewport?: unknown }).visualViewport;
     });
@@ -1487,7 +1500,6 @@ describe('ChatWindow', () => {
       viewport.height = 500;
       act(() => {
         viewport.dispatchEvent(new Event('resize'));
-        runFrames();
       });
 
       expect(box()).toEqual(['43px', '88px', '412px', '500px']);
@@ -1504,7 +1516,6 @@ describe('ChatWindow', () => {
       viewport.width = 300;
       act(() => {
         viewport.dispatchEvent(new Event('resize'));
-        runFrames();
       });
       expect(box()).toEqual(['43px', '88px', '412px', '839px']);
     });

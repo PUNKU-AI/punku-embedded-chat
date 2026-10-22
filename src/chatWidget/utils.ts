@@ -149,35 +149,90 @@ export const VISUAL_VIEWPORT_PROPERTIES = {
 // Above this scale the visitor has pinch-zoomed in.
 const PINCH_ZOOM_SCALE = 1.01;
 
+/** The visual viewport box, in px from the layout viewport origin. */
+export type VisualViewportBox = Pick<VisualViewport, keyof typeof VISUAL_VIEWPORT_PROPERTIES>;
+type VisualViewportListener = (box: VisualViewportBox | null) => void;
+
+const visualViewportListeners = new Set<VisualViewportListener>();
+let observedViewport: VisualViewport | null = null;
+
+function readVisualViewport(): VisualViewportBox | null {
+	const viewport = observedViewport;
+	if (!viewport || viewport.scale > PINCH_ZOOM_SCALE) return null;
+	const { offsetLeft, offsetTop, width, height } = viewport;
+	return { offsetLeft, offsetTop, width, height };
+}
+
+function notifyVisualViewportListeners() {
+	const box = readVisualViewport();
+	visualViewportListeners.forEach((listener) => listener(box));
+}
+
+/*
+ * Call `listener` with the visual viewport box now, and after each visual
+ * viewport resize or scroll and each window resize. A wider host page makes
+ * the layout viewport larger, which fires a window resize. All listeners
+ * share one set of event listeners. The browser fires these events in the
+ * rendering steps of a frame, so the listeners update before that frame is
+ * painted. The box is null while the visitor has pinch-zoomed in, and
+ * without visualViewport. Returns a function that stops the updates.
+ */
+export function subscribeVisualViewport(listener: VisualViewportListener) {
+	if (visualViewportListeners.size === 0) {
+		observedViewport = window.visualViewport ?? null;
+		observedViewport?.addEventListener('resize', notifyVisualViewportListeners);
+		observedViewport?.addEventListener('scroll', notifyVisualViewportListeners);
+		window.addEventListener('resize', notifyVisualViewportListeners);
+	}
+	visualViewportListeners.add(listener);
+	listener(readVisualViewport());
+	return () => {
+		if (!visualViewportListeners.delete(listener) || visualViewportListeners.size > 0) return;
+		observedViewport?.removeEventListener('resize', notifyVisualViewportListeners);
+		observedViewport?.removeEventListener('scroll', notifyVisualViewportListeners);
+		window.removeEventListener('resize', notifyVisualViewportListeners);
+		observedViewport = null;
+	};
+}
+
 /*
  * Copy the visual viewport box to CSS variables on `element`, now and after
- * each visual viewport resize or scroll. When the visitor pinch-zooms in,
- * remove the variables: the element then stays on the layout viewport, and
- * the visitor can pan over it. Returns a function that stops the updates.
+ * each change. When the visitor pinch-zooms in, remove the variables: the
+ * element then stays on the layout viewport, and the visitor can pan over it.
+ * Returns a function that stops the updates. The last box stays.
  */
 export function trackVisualViewport(element: HTMLElement) {
-	const viewport = window.visualViewport;
-	if (!viewport) return () => {};
-
-	let frame: number | undefined;
-	const update = () => {
-		frame = undefined;
-		const zoomedIn = viewport.scale > PINCH_ZOOM_SCALE;
+	return subscribeVisualViewport((box) => {
 		for (const [key, property] of Object.entries(VISUAL_VIEWPORT_PROPERTIES)) {
-			if (zoomedIn) element.style.removeProperty(property);
-			else element.style.setProperty(property, `${viewport[key as keyof typeof VISUAL_VIEWPORT_PROPERTIES]}px`);
+			const value = box ? `${box[key as keyof VisualViewportBox]}px` : '';
+			// A changed variable restyles the whole element subtree. Write only changes.
+			if (element.style.getPropertyValue(property) === value) continue;
+			if (value) element.style.setProperty(property, value);
+			else element.style.removeProperty(property);
 		}
-	};
-	const scheduleUpdate = () => {
-		if (frame === undefined) frame = window.requestAnimationFrame(update);
-	};
+	});
+}
 
-	update();
-	viewport.addEventListener('resize', scheduleUpdate);
-	viewport.addEventListener('scroll', scheduleUpdate);
-	return () => {
-		viewport.removeEventListener('resize', scheduleUpdate);
-		viewport.removeEventListener('scroll', scheduleUpdate);
-		if (frame !== undefined) window.cancelAnimationFrame(frame);
-	};
+export type ViewportEdge = 'top' | 'right' | 'bottom' | 'left';
+
+/*
+ * A CSS inset that places a position: fixed box `offset` from one edge of the
+ * visible part of the page. It reads the trackVisualViewport variables from
+ * the box or an ancestor. In `right` and `bottom`, 100% is the layout
+ * viewport, so the inset adds the strip of the layout viewport that is
+ * outside the screen. Without the variables, the inset is `offset`, as for a
+ * plain fixed box.
+ */
+export function visualViewportInset(edge: ViewportEdge, offset: string) {
+	const { offsetLeft: left, offsetTop: top, width, height } = VISUAL_VIEWPORT_PROPERTIES;
+	switch (edge) {
+		case 'top':
+			return `calc(var(${top}, 0px) + ${offset})`;
+		case 'left':
+			return `calc(var(${left}, 0px) + ${offset})`;
+		case 'bottom':
+			return `calc(100% - var(${top}, 0px) - var(${height}, 100%) + ${offset})`;
+		case 'right':
+			return `calc(100% - var(${left}, 0px) - var(${width}, 100%) + ${offset})`;
+	}
 }

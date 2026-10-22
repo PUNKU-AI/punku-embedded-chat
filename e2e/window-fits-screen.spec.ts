@@ -1,5 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
-import { loadWidget, waitForInputFocus, widenHostPage } from './widget-helpers';
+import {
+  hostCorner, loadWidget, panToLayoutCorner, partsOutsideScreen, screenView, waitForInputFocus, widenHostPage,
+} from './widget-helpers';
 
 // Issue #77. A host element wider than a phone screen makes the layout
 // viewport larger than the screen. The phone window is a fixed box, so it
@@ -7,9 +9,6 @@ import { loadWidget, waitForInputFocus, widenHostPage } from './widget-helpers';
 // The open window must fit the visible part of the page (the visual viewport).
 
 const widgetId = 'browser-fixture';
-// Host marker in the bottom-right corner of the layout viewport. The tests
-// scroll it into view to pan the visible area, as a visitor can.
-const corner = '<div id="host-corner" style="position:fixed;right:0;bottom:0;width:1px;height:1px"></div>';
 const pageErrors = new WeakMap<Page, string[]>();
 
 test.beforeEach(({ page }, testInfo) => {
@@ -26,53 +25,12 @@ test.afterEach(({ page }) => {
 });
 
 async function openOnWidePage(page: Page, props: Record<string, string> = {}) {
-  await widenHostPage(page, corner);
+  await widenHostPage(page, hostCorner);
   await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false', ...props });
   await waitForInputFocus(page);
   const view = await screenView(page);
   expect(view.documentWidth).toBeGreaterThan(view.screen.width);
   return view;
-}
-
-async function screenView(page: Page) {
-  return page.evaluate(() => {
-    const viewport = window.visualViewport!;
-    // A fixed box with inset 0 shows the layout viewport, which the chat
-    // window followed before the fix.
-    const probe = document.createElement('div');
-    probe.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none';
-    document.body.append(probe);
-    const layout = probe.getBoundingClientRect();
-    probe.remove();
-    return {
-      documentWidth: document.documentElement.scrollWidth,
-      layout: { width: layout.width, height: layout.height },
-      screen: { left: viewport.offsetLeft, top: viewport.offsetTop, width: viewport.width, height: viewport.height },
-    };
-  });
-}
-
-async function partsOutsideScreen(page: Page, selectors: string[]) {
-  // Client coordinates and the visual viewport offsets both start at the
-  // layout viewport. Allow half a pixel for rounding.
-  return page.evaluate((selectors) => {
-    const host = document.querySelector('punku-chat')!;
-    const root = window.__widgetRoots.get(host)!;
-    const viewport = window.visualViewport!;
-    const left = viewport.offsetLeft;
-    const top = viewport.offsetTop;
-    const right = left + viewport.width;
-    const bottom = top + viewport.height;
-    const round = (value: number) => Math.round(value);
-    return selectors.flatMap((selector) => {
-      const element = root.querySelector<HTMLElement>(selector);
-      const box = element?.getBoundingClientRect();
-      if (!element || !box || box.width === 0 || box.height === 0) return [`${selector} is not shown`];
-      if (box.left >= left - 0.5 && box.top >= top - 0.5 && box.right <= right + 0.5 && box.bottom <= bottom + 0.5) return [];
-      return [`${selector} x ${round(box.left)}-${round(box.right)}, y ${round(box.top)}-${round(box.bottom)}; ` +
-        `screen x ${round(left)}-${round(right)}, y ${round(top)}-${round(bottom)}`];
-    });
-  }, selectors);
 }
 
 async function windowMoving(page: Page) {
@@ -98,17 +56,6 @@ async function chatWindowBox(page: Page) {
     const box = window.__widgetRoots.get(host)!.querySelector('.cl-chat-window')!.getBoundingClientRect();
     return { left: box.left, top: box.top, width: box.width };
   });
-}
-
-async function panToLayoutCorner(page: Page) {
-  await page.evaluate(() => document.getElementById('host-corner')!.scrollIntoView({ block: 'end', inline: 'end' }));
-  const view = await screenView(page);
-  // Chromium phones make the layout viewport larger than the screen, so the
-  // visible area moves inside it. Elsewhere the two are the same size.
-  if (view.layout.width > view.screen.width + 1) {
-    await expect.poll(async () => (await screenView(page)).screen.left).toBeGreaterThan(0);
-  }
-  return screenView(page);
 }
 
 test('the open window fits the screen on a host page wider than the screen', async ({ page, isMobile }) => {
