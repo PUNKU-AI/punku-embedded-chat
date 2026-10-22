@@ -26,6 +26,13 @@ Unit tests verify that closed chats preserve focus and cancel pending input focu
 Link checks cover nested Markdown text, branding links, exact URLs, query strings, fragments, opener protection, and referrer protection.
 Desktop checks also cover Enter, modified Enter, and middle-click.
 Composer checks cover the one-line start height, growth with a long two-sentence message, Shift+Enter line breaks, Enter sending, and the six-line cap with internal scrolling.
+Landscape window checks run on short screens: 641-1023 px wide and at most 500 px tall.
+For all four chat positions, the open window, its close button, its send button, and the trigger must stay inside the screen.
+The window fills the height beside the trigger, 12 px from it, and must not cover it.
+With `bottom_offset` 285, as on live pages, the window keeps 240 px: the header, one message line, and the input.
+A custom trigger size from `chat_trigger_style` keeps the 12 px gap.
+A window that `setTriggerPosition` anchors keeps its place.
+The Android profile repeats the checks at 740 x 360 and 844 x 390 on a wide host page, before and after a pan.
 Phone and tablet checks use touch.
 Every test checks for uncaught page errors.
 
@@ -47,12 +54,12 @@ When checkout closes, focus must return to the booking link, and the message lis
 These checks send messages through the widget API, because a Playwright click or tap scrolls the page on its own.
 On the same wide page, the open window, its close button, and its send button must stay inside the visual viewport.
 This applies after load, after a pan of the visible area, with `top_offset`, and after `setTriggerPosition`.
-The landscape phone profile skips these checks, because its layout rises above the screen on every page (#77).
+The landscape phone profile runs these checks too. The `top_offset` check applies only up to 640 px.
 The trigger keeps its offsets from the corner of the visual viewport, before and after a pan.
 The closed hint shows next to it, and the trigger does not overlap the open window.
 The Bookingkit checkout dialog and its close button stay inside the visual viewport. Up to 767 px, the dialog fills it.
 On a page that fits the screen, the trigger stays 20 px from the layout viewport corner, also next to a desktop scrollbar.
-The `android` profile also runs the open window at 839 × 412 px. This landscape size uses the 768–1023 px layout.
+The `android` profile also runs the open window at 839 × 412 px. This short landscape size puts the window beside the trigger.
 
 Playwright cannot open an on-screen keyboard. The keyboard checks install a visual viewport that is 45 % shorter, as the keyboard makes it on iOS Safari and in Chrome on Android 108 and later.
 On a page that fits the screen, the closed trigger stays at the layout viewport corner, behind the keyboard.
