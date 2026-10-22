@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES, visualViewportInset } from "../utils";
+import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES } from "../utils";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
@@ -10,9 +10,23 @@ interface BookingkitCheckoutModalProps {
 }
 
 const CHECKOUT_ORIGIN = "https://eu5.bookingkit.de";
-// The visible part of the page. Without the variables, the screen size.
-const VISIBLE_WIDTH = `var(${VISUAL_VIEWPORT_PROPERTIES.width}, 100vw)`;
-const VISIBLE_HEIGHT = `var(${VISUAL_VIEWPORT_PROPERTIES.height}, var(--cl-bk-screen-height))`;
+const VISIBLE_LEFT = `var(${VISUAL_VIEWPORT_PROPERTIES.offsetLeft}, 0px)`;
+const VISIBLE_TOP = `var(${VISUAL_VIEWPORT_PROPERTIES.offsetTop}, 0px)`;
+
+/*
+ * Insets for a screen-sized box at the visible part of the page (#77). The
+ * box is 100vw x `screenHeight`, the size the dialog had before. Viewport
+ * units keep that size when the on-screen keyboard opens, so the checkout
+ * does not shrink. The offset follows a pan of the visible area, but stays
+ * inside the layout viewport. On a page that fits the screen, the box is the
+ * layout viewport, as before, also when the browser pans the visible area to
+ * show a focused checkout field above the keyboard.
+ */
+const screenBoxInsets = (screenHeight: string) => `
+          top: max(0px, min(${VISIBLE_TOP}, calc(100% - ${screenHeight})));
+          right: max(0px, calc(100% - ${VISIBLE_LEFT} - 100vw));
+          bottom: max(0px, calc(100% - ${VISIBLE_TOP} - ${screenHeight}));
+          left: max(0px, min(${VISIBLE_LEFT}, calc(100% - 100vw)));`;
 
 export default function BookingkitCheckoutModal({
   url,
@@ -28,7 +42,7 @@ export default function BookingkitCheckoutModal({
   onCloseRef.current = onClose;
 
   /*
-   * Center the dialog on the visible part of the page. On a phone, a host page
+   * Place the dialog on the visible part of the page. On a phone, a host page
    * wider than the screen makes the layout viewport larger than the screen,
    * and the dialog was cut off at the right and the bottom (#77).
    */
@@ -137,20 +151,16 @@ export default function BookingkitCheckoutModal({
       />
       <style>{`
         .cl-bk-checkout-dialog {
-          --cl-bk-screen-height: 100vh;
           position: fixed;
-          /* The insets give the visible part of the page. margin: auto centers the dialog in it. */
-          top: ${visualViewportInset("top", "0px")};
-          right: ${visualViewportInset("right", "0px")};
-          bottom: ${visualViewportInset("bottom", "0px")};
-          left: ${visualViewportInset("left", "0px")};
+          /* margin: auto centers the dialog in the screen box. */${screenBoxInsets("100vh")}
           margin: auto;
           padding: 0;
           border: 0;
           border-radius: 12px;
-          width: min(810px, calc(${VISIBLE_WIDTH} - 32px));
+          width: min(810px, calc(100vw - 32px));
           max-width: none;
-          height: min(860px, calc(${VISIBLE_HEIGHT} - 40px));
+          height: min(860px, calc(100vh - 40px));
+          height: min(860px, calc(100dvh - 40px));
           max-height: none;
           overflow: hidden;
           background: #ffffff;
@@ -158,9 +168,10 @@ export default function BookingkitCheckoutModal({
           font: 16px/1.5 system-ui, sans-serif;
           box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
         }
-        /* A declaration with var() never falls back to an earlier declaration. Pick the unit here. */
+        /* A declaration with var() never falls back to an earlier one, so test dvh here. */
         @supports (height: 100dvh) {
-          .cl-bk-checkout-dialog { --cl-bk-screen-height: 100dvh; }
+          .cl-bk-checkout-dialog {${screenBoxInsets("100dvh")}
+          }
         }
         .cl-bk-checkout-dialog[open] {
           display: flex;
@@ -215,8 +226,9 @@ export default function BookingkitCheckoutModal({
         }
         @media (max-width: 767px) {
           .cl-bk-checkout-dialog {
-            width: ${VISIBLE_WIDTH};
-            height: ${VISIBLE_HEIGHT};
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
             border-radius: 0;
           }
         }

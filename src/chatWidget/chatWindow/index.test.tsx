@@ -153,8 +153,21 @@ describe('ChatWindow', () => {
       expect(chatWindow.style).toMatchObject({
         left: 'auto',
         right: visualViewportInset('right', '20px'),
-        bottom: visualViewportInset('bottom', 'calc(var(--cl-bottom-offset) + 80px)'),
+        bottom: visualViewportInset('bottom', 'var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))'),
       });
+    });
+
+    it('should keep the 641 px and wider window inside the visible area', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      // jsdom has no layout. The window stylesheet is the result.
+      // eslint-disable-next-line testing-library/no-node-access
+      const styles = Array.from(document.querySelectorAll('style'), (style) => style.textContent).join('\n');
+      expect(styles).toContain('--cl-visible-height: var(--cl-visual-viewport-height, 100vh);');
+      expect(styles).toContain('--cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));');
+      for (const cap of ['min(75vh, var(--cl-window-room))', 'min(70vh, var(--cl-window-room))']) {
+        expect(styles).toContain(`max-height: ${cap} !important;`);
+      }
     });
 
     it('should anchor to the bottom left for bottom-left position', () => {
@@ -1461,8 +1474,6 @@ describe('ChatWindow', () => {
 
     const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
     let viewport: FakeVisualViewport;
-    let frames: FrameRequestCallback[];
-    const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
     const box = () => {
       // The fixed window box has no accessible role. Its CSS variables are the result.
       // eslint-disable-next-line testing-library/no-node-access
@@ -1475,13 +1486,9 @@ describe('ChatWindow', () => {
     beforeEach(() => {
       viewport = new FakeVisualViewport();
       Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
-      frames = [];
-      jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
-      jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
     });
 
     afterEach(() => {
-      jest.restoreAllMocks();
       if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
       else delete (window as { visualViewport?: unknown }).visualViewport;
     });
@@ -1493,7 +1500,6 @@ describe('ChatWindow', () => {
       viewport.height = 500;
       act(() => {
         viewport.dispatchEvent(new Event('resize'));
-        runFrames();
       });
 
       expect(box()).toEqual(['43px', '88px', '412px', '500px']);
@@ -1510,7 +1516,6 @@ describe('ChatWindow', () => {
       viewport.width = 300;
       act(() => {
         viewport.dispatchEvent(new Event('resize'));
-        runFrames();
       });
       expect(box()).toEqual(['43px', '88px', '412px', '839px']);
     });

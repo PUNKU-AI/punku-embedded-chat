@@ -249,16 +249,19 @@ describe("BookingkitCheckoutModal", () => {
       expect(dialogBox()).toEqual(["43px", "88px", "412px", "839px"]);
     });
 
-    it("places and sizes the dialog from the visible box", () => {
+    it("places the dialog at the visible area, but keeps its screen size", () => {
       render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
       // jsdom has no layout. The dialog stylesheet is the result.
       // eslint-disable-next-line testing-library/no-node-access
       const css = Array.from(document.querySelectorAll("style"), (style) => style.textContent).join("\n");
 
-      expect(css).toContain("top: calc(var(--cl-visual-viewport-top, 0px) + 0px);");
-      expect(css).toContain("right: calc(100% - var(--cl-visual-viewport-left, 0px) - var(--cl-visual-viewport-width, 100%) + 0px);");
-      expect(css).toContain("width: min(810px, calc(var(--cl-visual-viewport-width, 100vw) - 32px));");
-      expect(css).toContain("height: var(--cl-visual-viewport-height, var(--cl-bk-screen-height));");
+      // The offsets follow the visible area, inside the layout viewport.
+      expect(css).toContain("top: max(0px, min(var(--cl-visual-viewport-top, 0px), calc(100% - 100dvh)));");
+      expect(css).toContain("left: max(0px, min(var(--cl-visual-viewport-left, 0px), calc(100% - 100vw)));");
+      expect(css).toContain("bottom: max(0px, calc(100% - var(--cl-visual-viewport-top, 0px) - 100vh));");
+      // Viewport units, not the visible height: the on-screen keyboard does not shrink the checkout.
+      expect(css).toContain("height: min(860px, calc(100dvh - 40px));");
+      expect(css).not.toContain("--cl-visual-viewport-height");
     });
 
     it("stops following the visible box when the checkout closes", () => {

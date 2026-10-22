@@ -115,8 +115,7 @@ jest.mock('./utils', () => ({
 }));
 
 // Import after mocks
-import ChatWidget, { DEFAULT_Z_INDEX, MAX_Z_INDEX } from './index';
-import { visualViewportInset } from './utils';
+import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX } from './index';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -242,7 +241,7 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        left: visualViewportInset('left', '48px'),
+        left: '48px',
         right: '',
       });
     });
@@ -252,30 +251,8 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: visualViewportInset('right', '36px'),
+        right: '36px',
         left: '',
-      });
-    });
-
-    it('should place the top corners from the visible screen corner', () => {
-      // The fixed root has no accessible role. Its inline insets are the result.
-      // eslint-disable-next-line testing-library/no-node-access
-      const rootStyle = () => (document.querySelector('.cl-widget-root') as HTMLElement).style;
-      const { unmount } = render(<ChatWidget {...defaultProps} chat_position="top-left" left_offset={30} />);
-      expect(rootStyle()).toMatchObject({
-        top: visualViewportInset('top', '20px'),
-        left: visualViewportInset('left', '30px'),
-        right: '',
-        bottom: '',
-      });
-      unmount();
-
-      render(<ChatWidget {...defaultProps} chat_position="top-right" right_offset={30} />);
-      expect(rootStyle()).toMatchObject({
-        top: visualViewportInset('top', '20px'),
-        right: visualViewportInset('right', '30px'),
-        left: '',
-        bottom: '',
       });
     });
 
@@ -851,8 +828,8 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: visualViewportInset('right', '20px'),
-        bottom: visualViewportInset('bottom', '20px'),
+        right: '20px',
+        bottom: '20px',
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -906,8 +883,8 @@ describe('ChatWidget', () => {
 
       expect(api.trigger.position).toBeNull();
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: visualViewportInset('right', '20px'),
-        bottom: visualViewportInset('bottom', '20px'),
+        right: '20px',
+        bottom: '20px',
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -1066,66 +1043,93 @@ describe('ChatWidget', () => {
   });
 
   describe('Visible screen (#77)', () => {
-    // jsdom has no visual viewport. Install a fake 412 x 839 phone screen,
-    // panned inside a larger layout viewport.
+    // jsdom has no visual viewport. Install a fake 412 x 839 phone screen.
+    // The layout viewport is 455 x 927, as on a host page 43 px wider than
+    // the screen in Chrome on Android, so the root sits at x 387-435, y 859-907.
     class FakeVisualViewport extends EventTarget {
-      offsetLeft = 43;
-      offsetTop = 88;
+      offsetLeft = 0;
+      offsetTop = 0;
       width = 412;
       height = 839;
       scale = 1;
     }
 
     const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    const rootBox = { x: 387, y: 859, left: 387, top: 859, right: 435, bottom: 907, width: 48, height: 48, toJSON: () => ({}) };
     let viewport: FakeVisualViewport;
-    let frames: FrameRequestCallback[];
-    const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
-    // The fixed root has no accessible role. Its inline style is the result.
+    // The fixed root and its trigger anchor have no accessible role. Their inline style is the result.
     // eslint-disable-next-line testing-library/no-node-access
-    const rootStyle = () => (document.querySelector('.cl-widget-root') as HTMLElement).style;
-    const rootBox = () =>
-      ['left', 'top', 'width', 'height'].map((side) => rootStyle().getPropertyValue(`--cl-visual-viewport-${side}`));
+    const root = () => document.querySelector('.cl-widget-root') as HTMLElement;
+    const anchorTransform = () => (root().children[1] as HTMLElement).style.transform;
+    const setPageWidth = (width: number) =>
+      Object.defineProperty(document.documentElement, 'scrollWidth', { configurable: true, value: width });
 
     beforeEach(() => {
       viewport = new FakeVisualViewport();
       Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
-      frames = [];
-      jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
-      jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+      const otherBox = HTMLElement.prototype.getBoundingClientRect;
+      jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains('cl-widget-root') ? rootBox as DOMRect : otherBox.call(this);
+      });
+      setPageWidth(412);
     });
 
     afterEach(() => {
+      delete (document.documentElement as { scrollWidth?: number }).scrollWidth;
       if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
       else delete (window as { visualViewport?: unknown }).visualViewport;
     });
 
-    it('gives the widget root the visible box while the widget is closed, and follows it', () => {
+    it('keeps the closed trigger at the layout viewport corner on a page that fits the screen', () => {
       render(<ChatWidget {...defaultProps} start_open={false} />);
-      expect(rootBox()).toEqual(['43px', '88px', '412px', '839px']);
 
-      viewport.offsetLeft = 0;
+      // The on-screen keyboard makes only the visible area smaller.
       viewport.height = 500;
       act(() => {
-        viewport.dispatchEvent(new Event('scroll'));
-        runFrames();
+        viewport.dispatchEvent(new Event('resize'));
       });
 
-      expect(rootBox()).toEqual(['0px', '88px', '412px', '500px']);
+      expect(anchorTransform()).toBe('');
+      expect(root().style).toMatchObject({ right: '20px', bottom: '20px' });
+    });
+
+    it('moves the closed trigger to the visible corner on a page wider than the screen, and follows a pan', () => {
+      setPageWidth(455);
+      render(<ChatWidget {...defaultProps} start_open={false} />);
+      expect(anchorTransform()).toBe('translate(-43px, -88px)');
+
+      Object.assign(viewport, { offsetLeft: 43, offsetTop: 88 });
+      act(() => {
+        viewport.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(anchorTransform()).toBe('');
+      // The root keeps its plain offsets. Only the anchor moves, so the widget is not restyled.
+      expect(root().style).toMatchObject({ right: '20px', bottom: '20px' });
+      expect(root().style.getPropertyValue('--cl-visual-viewport-top')).toBe('');
+    });
+
+    it('moves the trigger above the on-screen keyboard while the window is open', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+      expect(anchorTransform()).toBe('translate(-43px, -88px)');
+
+      viewport.height = 500;
+      act(() => {
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(anchorTransform()).toBe('translate(-43px, -427px)');
     });
 
     it('keeps a relocated trigger at its x and y in px', () => {
+      setPageWidth(455);
       render(<ChatWidget {...defaultProps} />);
 
       act(() => {
         expect((window as any)['punku-chat-widget_api'].setTriggerPosition({ x: 24, y: 120 })).toBe(true);
       });
 
-      expect(rootStyle()).toMatchObject({
-        left: '24px',
-        top: '120px',
-        right: '',
-        bottom: '',
-      });
+      expect(anchorTransform()).toBe('');
+      expect(root().style).toMatchObject({ left: '24px', top: '120px', right: '', bottom: '' });
     });
 
     it('stops following the visible box after unmount', () => {
@@ -1136,6 +1140,19 @@ describe('ChatWidget', () => {
 
       expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
       expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    });
+  });
+
+  describe('getVisibleCornerShift', () => {
+    const screen = { offsetLeft: 43, offsetTop: 88, width: 412, height: 839 };
+    const offsets = { top: 20, right: 30, bottom: 40, left: 50 };
+
+    it('measures each corner from the matching edges', () => {
+      // Boxes at the corners of a 455 x 927 layout viewport.
+      expect(getVisibleCornerShift({ left: 50, top: 20, right: 98, bottom: 68 }, screen, 'top-left', offsets)).toEqual({ x: 43, y: 88 });
+      expect(getVisibleCornerShift({ left: 377, top: 20, right: 425, bottom: 68 }, screen, 'top-right', offsets)).toEqual({ x: 0, y: 88 });
+      expect(getVisibleCornerShift({ left: 50, top: 839, right: 98, bottom: 887 }, screen, 'bottom-left', offsets)).toEqual({ x: 43, y: 0 });
+      expect(getVisibleCornerShift({ left: 377, top: 839, right: 425, bottom: 887 }, screen, 'bottom-right', offsets)).toEqual({ x: 0, y: 0 });
     });
   });
 
