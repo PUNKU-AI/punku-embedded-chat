@@ -4,6 +4,8 @@ import {
   extractMessageFromOutput,
   detectBrowserLanguage,
   revealInScrollContainer,
+  trackVisualViewport,
+  VISUAL_VIEWPORT_PROPERTIES,
 } from './utils';
 
 describe('getChatPosition', () => {
@@ -284,5 +286,116 @@ describe('revealInScrollContainer', () => {
     expect(list.scrollTop).toBe(500);
     expect(document.documentElement.scrollTop).toBe(0);
     expect(document.body.scrollTop).toBe(0);
+  });
+});
+
+describe('trackVisualViewport', () => {
+  // jsdom has no visual viewport. Each test installs a fake one: a 412 x 839
+  // phone screen at the top-left corner of a larger layout viewport.
+  class FakeVisualViewport extends EventTarget {
+    offsetLeft = 0;
+    offsetTop = 0;
+    width = 412;
+    height = 839;
+    scale = 1;
+  }
+
+  const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+  let viewport: FakeVisualViewport;
+  let frames: Map<number, FrameRequestCallback>;
+  const runFrames = () => {
+    const callbacks = Array.from(frames.values());
+    frames.clear();
+    callbacks.forEach((callback) => callback(0));
+  };
+  const variables = (element: HTMLElement) =>
+    Object.values(VISUAL_VIEWPORT_PROPERTIES).map((property) => element.style.getPropertyValue(property));
+
+  beforeEach(() => {
+    viewport = new FakeVisualViewport();
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+    frames = new Map();
+    let nextFrame = 1;
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.set(nextFrame, callback);
+      return nextFrame++;
+    });
+    jest.spyOn(window, 'cancelAnimationFrame').mockImplementation((frame) => {
+      frames.delete(frame);
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
+    else delete (window as { visualViewport?: unknown }).visualViewport;
+  });
+
+  it('sets the visible box at once', () => {
+    const element = document.createElement('div');
+    viewport.offsetLeft = 43;
+    viewport.offsetTop = 88;
+
+    trackVisualViewport(element);
+
+    expect(variables(element)).toEqual(['43px', '88px', '412px', '839px']);
+  });
+
+  it('follows a pan and the on-screen keyboard in the next frame', () => {
+    const element = document.createElement('div');
+    trackVisualViewport(element);
+
+    viewport.offsetLeft = 43;
+    viewport.dispatchEvent(new Event('scroll'));
+    viewport.height = 500;
+    viewport.dispatchEvent(new Event('resize'));
+    // Both events share one frame.
+    expect(frames.size).toBe(1);
+    expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
+
+    runFrames();
+
+    expect(variables(element)).toEqual(['43px', '0px', '412px', '500px']);
+  });
+
+  it('removes the box while the visitor pinch-zooms in, and sets it again at scale 1', () => {
+    const element = document.createElement('div');
+    trackVisualViewport(element);
+
+    Object.assign(viewport, { scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
+    viewport.dispatchEvent(new Event('resize'));
+    runFrames();
+    expect(variables(element)).toEqual(['', '', '', '']);
+
+    Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
+    viewport.dispatchEvent(new Event('resize'));
+    runFrames();
+    expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
+  });
+
+  it('stops after cleanup and cancels a pending frame', () => {
+    const element = document.createElement('div');
+    const stop = trackVisualViewport(element);
+    viewport.width = 300;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(frames.size).toBe(1);
+
+    stop();
+    expect(frames.size).toBe(0);
+    viewport.dispatchEvent(new Event('scroll'));
+    runFrames();
+
+    // The last box stays, so a closing window does not jump.
+    expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
+  });
+
+  it('does nothing without a visual viewport', () => {
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: null });
+    const element = document.createElement('div');
+
+    const stop = trackVisualViewport(element);
+
+    expect(variables(element)).toEqual(['', '', '', '']);
+    expect(() => stop()).not.toThrow();
   });
 });

@@ -45,6 +45,9 @@ Each check records the largest `visualViewport` offset from page start, so a pan
 The message list must still scroll to the newest message.
 When checkout closes, focus must return to the booking link, and the message list must scroll to show that link.
 These checks send messages through the widget API, because a Playwright click or tap scrolls the page on its own.
+On the same wide page, the open window, its close button, and its send button must stay inside the visual viewport.
+This applies after load, after a pan of the visible area, with `top_offset`, and after `setTriggerPosition`.
+The landscape phone profile skips these checks, because its layout rises above the screen on every page (#77).
 
 Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
 Local servers record the actual HTTP headers and body on both origins.

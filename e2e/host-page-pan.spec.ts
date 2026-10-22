@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { elementState, loadWidget, waitForInputFocus } from './widget-helpers';
+import { elementState, loadWidget, waitForInputFocus, widenHostPage } from './widget-helpers';
 
 // Issue #69. A host element wider than a phone screen makes the layout viewport
 // wider than the visual viewport. scrollIntoView() and a plain focus() inside
@@ -28,16 +28,6 @@ test.beforeEach(({ page }) => {
 test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
-
-async function widenHostPage(page: Page) {
-  // The live page in #69 was 433 px wide on a 390 px phone.
-  const banner = '<div style="width:calc(100vw + 43px);height:40px;background:#c8d3df"></div>';
-  await page.route(/\/fixture\.html(\?|$)/, async (route) => {
-    const response = await route.fetch();
-    const body = (await response.text()).replace('<main>', `${banner}<main>`);
-    await route.fulfill({ response, body });
-  });
-}
 
 async function recordHostPan(page: Page) {
   // Keep the largest offset, so a pan that later moves back still fails.
