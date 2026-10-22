@@ -6,6 +6,7 @@ import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
+import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
@@ -32,17 +33,13 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
 
 /*
  * The visitor sees a plain sentence in the chat's language, never technical
- * text such as "HTTP error! status: 500, body: …". The technical detail still
- * goes to console.error and to client-error reporting. A flow's own error text
- * (ERR_BACKEND_STREAM) is written for visitors, so it is shown as sent.
+ * text such as "HTTP error! status: 500, body: …" or a flow's own error text
+ * (ERR_BACKEND_STREAM, for example "Error building Component …: 401"). The
+ * technical detail still goes to console.error and to client-error reporting.
  */
 const getRequestErrorMessage = (error: unknown, t: Translation) => {
   if (error && typeof error === "object") {
-    const errorRecord = error as { code?: string; message?: string; name?: string };
-
-    if (errorRecord.code === "ERR_BACKEND_STREAM" && errorRecord.message?.trim()) {
-      return errorRecord.message;
-    }
+    const errorRecord = error as { code?: string; name?: string };
 
     if (errorRecord.code === "ERR_EMPTY_ASSISTANT_RESPONSE") {
       return t.errorEmpty;
@@ -239,11 +236,14 @@ export default function ChatWindow({
 
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  // Screen readers hear "the assistant is writing" and each new error from one
-  // status region that is always in the window. A region that appears together
-  // with its text is often not read, and an error restored from the session
-  // must not be read again on each page load.
+  // Screen readers hear "the assistant is writing", each complete answer and
+  // each new error from one status region that is always in the window. A
+  // region that appears together with its text is often not read, and messages
+  // restored from the session must not be read again on each page load.
   const [statusAnnouncement, setStatusAnnouncement] = useState("");
+  // Set when a send starts, before React renders sendingMessage: two
+  // activations in one task (Enter twice, Try again twice) send only once.
+  const sendingRef = useRef(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
 
@@ -284,7 +284,7 @@ export default function ChatWindow({
   );
 
   const sendUserMessage = useCallback((message: string, options?: { retry?: boolean }): boolean => {
-    if (!message || message.trim() === "" || sendingMessage) {
+    if (!message || message.trim() === "" || sendingMessage || sendingRef.current) {
       return false;
     }
 
@@ -305,13 +305,14 @@ export default function ChatWindow({
     if (!options?.retry || sessionCleared) {
       addMessage({ message, isSend: true });
     }
+    sendingRef.current = true;
     setSendingMessage(true);
     setStatusAnnouncement(t.typing);
 
     if (!enable_streaming) {
       sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
         .then((res) => {
-          let visibleAssistantMessageAdded = false;
+          const answers: string[] = [];
 
           const addAssistantOutput = (output: any, messageId?: string) => {
             const assistantMessage = extractMessageFromOutput(output);
@@ -324,7 +325,7 @@ export default function ChatWindow({
               message_id: messageId,
               isSend: false,
             });
-            visibleAssistantMessageAdded = true;
+            answers.push(assistantMessage);
           };
 
           if (
@@ -360,7 +361,7 @@ export default function ChatWindow({
             }
           }
 
-          if (!visibleAssistantMessageAdded) {
+          if (answers.length === 0) {
             throw createStreamError(
               "The assistant did not return a response. Please try again.",
               "ERR_EMPTY_ASSISTANT_RESPONSE"
@@ -370,8 +371,9 @@ export default function ChatWindow({
           if (res.data && res.data.session_id) {
             sessionId.current = res.data.session_id;
           }
+          sendingRef.current = false;
           setSendingMessage(false);
-          setStatusAnnouncement("");
+          setStatusAnnouncement(markdownToPlainText(answers.join("\n\n")));
         })
         .catch((err) => {
           const errorText = getRequestErrorMessage(err, t);
@@ -389,6 +391,7 @@ export default function ChatWindow({
             streaming: false,
           });
           console.error(err);
+          sendingRef.current = false;
           setSendingMessage(false);
         });
     } else {
@@ -410,6 +413,7 @@ export default function ChatWindow({
 
         streamErrorHandled = true;
         console.error('Streaming error:', error);
+        sendingRef.current = false;
         setSendingMessage(false);
         setIsStreaming(false);
 
@@ -525,9 +529,11 @@ export default function ChatWindow({
 
           // Stream ended
           // console.log('Stream completed');
+          sendingRef.current = false;
           setSendingMessage(false);
           setIsStreaming(false);
-          setStatusAnnouncement("");
+          // Screen readers hear the complete answer once, not each token.
+          setStatusAnnouncement(markdownToPlainText(message_to_add));
 
           // Ensure final message is marked as complete
           if (currentMessageId) {
@@ -576,13 +582,18 @@ export default function ChatWindow({
   }
 
   // Try again: remove the error message and send the visitor's last message again.
-  const lastUserText = [...messages].reverse().find((message) => message.isSend)?.message;
   const lastMessageIsError = messages.length > 0 && !!messages[messages.length - 1].error;
-  const handleRetry = lastMessageIsError && typeof lastUserText === "string" && removeLastMessage
+  const lastUserText = lastMessageIsError
+    ? [...messages].reverse().find((message) => message.isSend)?.message
+    : undefined;
+  const handleRetry = typeof lastUserText === "string" && removeLastMessage
     ? () => {
-        if (sendingMessage) return;
+        if (sendingMessage || sendingRef.current) return;
         removeLastMessage();
         sendUserMessage(lastUserText, { retry: true });
+        // The focused button disappears: keep keyboard and screen-reader users
+        // in the input. preventScroll: a plain focus() pans the host page (#69).
+        inputRef.current?.focus({ preventScroll: true });
       }
     : undefined;
 
@@ -1137,7 +1148,6 @@ export default function ChatWindow({
               theme={theme}
               language={language}
               loading_messages={loading_messages}
-              sending_text={placeholder_sending}
             />
           )}
         </div>
@@ -1152,7 +1162,7 @@ export default function ChatWindow({
             onSend={handleClick}
             // The visitor can write the next message while the assistant answers;
             // it sends after the answer (the send button stays disabled until then).
-            placeholder={placeholder || t.placeholder}
+            placeholder={sendingMessage && placeholder_sending ? placeholder_sending : (placeholder || t.placeholder)}
             ariaLabel={t.inputLabel}
             style={{
               ...DEFAULT_INPUT_TEXT_STYLE,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import ChatMessagePlaceholder from './index';
-import { thinkingMessages } from '../translations';
+import { crystallineThinkingMessages, thinkingMessages } from '../translations';
 
 // Some tests below replace global.Math; give every test the real one back.
 const realMath = global.Math;
@@ -91,10 +91,11 @@ describe('ChatMessagePlaceholder', () => {
       expect(document.querySelector('.cl-typing-dots')).not.toBeInTheDocument();
     });
 
-    it('should show the site sending text with the crystal loader', () => {
-      render(<ChatMessagePlaceholder theme="swarovski" sending_text="Einen Moment…" />);
+    it('should show a crystal phrase in the chat language with the crystal loader', () => {
+      render(<ChatMessagePlaceholder theme="swarovski" language="de" />);
 
-      expect(screen.getByText('Einen Moment…')).toBeInTheDocument();
+      const shown = document.querySelector('.cl-thinking-message span')?.textContent;
+      expect(crystallineThinkingMessages.map((message) => message.de)).toContain(shown);
       expect(document.querySelector('.cl-crystal-loader')).toBeInTheDocument();
     });
   });
@@ -210,20 +211,17 @@ describe('ChatMessagePlaceholder', () => {
   });
 
   describe('Phrase Sources', () => {
-    it('should show the site sending text when loading_messages is empty', () => {
-      render(<ChatMessagePlaceholder sending_text="  Please wait…  " loading_messages={[]} />);
-
-      expect(phrase()).toBe('Please wait…');
-    });
-
-    it('should prefer loading_messages over the sending text', () => {
-      render(<ChatMessagePlaceholder sending_text="Please wait…" loading_messages={['Checking the timetable…']} />);
+    it('should prefer loading_messages over the built-in phrases', () => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={['  Checking the timetable…  ']} />);
 
       expect(phrase()).toBe('Checking the timetable…');
     });
 
-    it('should use the built-in phrases when the sending text is blank', () => {
-      render(<ChatMessagePlaceholder sending_text="   " language="de" />);
+    it.each([
+      ['empty', []],
+      ['blank', ['   ', '']],
+    ])('should use the built-in phrases when loading_messages is %s', (_case, loadingMessages) => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={loadingMessages} />);
 
       expect(thinkingMessages.de).toContain(phrase());
     });

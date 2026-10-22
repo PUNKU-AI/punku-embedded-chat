@@ -19,33 +19,41 @@ test.afterEach(({ page }) => {
 
 const question = 'When does the museum open?';
 const answer = 'The museum opens at 10:00.';
-// Synthetic streaming reply in the backend's line-delimited JSON format.
+const technicalText = 'Error building Component OpenAI Model: Error code: 401';
+const technicalSentence = "Sorry, we're experiencing technical issues. Please try again.";
+// Synthetic streaming replies in the backend's line-delimited JSON format.
 const replyBody = [
   JSON.stringify({ event: 'add_message', data: { sender: 'Machine', text: answer, id: 'synthetic-reply' } }),
   JSON.stringify({ event: 'end', data: { result: { session_id: 'synthetic-session' } } }),
   '',
 ].join('\n');
+const flowErrorBody = JSON.stringify({ event: 'error', data: { text: technicalText } }) + '\n';
 
-type Reply = 'answer' | 'server-error' | 'network-error';
+type Reply = 'answer' | 'server-error' | 'flow-error' | 'network-error';
 
-// Each request gets the next reply; the last reply repeats. With hold, every
-// request waits until the test calls release(), so the test can look at the
-// thinking state.
-async function mockAssistant(page: Page, replies: Reply[], { hold = false } = {}) {
-  let release = () => {};
-  const gate = hold ? new Promise<void>((resolve) => { release = resolve; }) : Promise.resolve();
+// Each request gets the next reply; the last reply repeats. A request whose
+// number (0, 1, ...) is in hold waits until the test calls release(number),
+// so the test can look at the thinking state.
+async function mockAssistant(page: Page, replies: Reply[], { hold = [] as number[] } = {}) {
+  const releases = new Map<number, () => void>();
+  const gates = new Map<number, Promise<void>>();
+  for (const request of hold) {
+    gates.set(request, new Promise<void>((resolve) => { releases.set(request, resolve); }));
+  }
   let requests = 0;
   await page.route('**/api/v1/run/**', async (route) => {
-    const reply = replies[Math.min(requests, replies.length - 1)];
+    const request = requests;
     requests += 1;
-    await gate;
+    const reply = replies[Math.min(request, replies.length - 1)];
+    await gates.get(request);
     if (reply === 'network-error') return route.abort('failed');
     if (reply === 'server-error') {
       return route.fulfill({ status: 500, contentType: 'text/plain', body: 'Internal Server Error: synthetic failure' });
     }
-    return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: replyBody });
+    const body = reply === 'flow-error' ? flowErrorBody : replyBody;
+    return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body });
   });
-  return { release: () => release(), requests: () => requests };
+  return { release: (request = 0) => releases.get(request)?.(), requests: () => requests };
 }
 
 async function openChat(page: Page, props: Record<string, string> = {}) {
@@ -70,11 +78,13 @@ function chatState(page: Page) {
     const send = root.querySelector<HTMLButtonElement>('.cl-send-button')!;
     const typing = root.querySelector<HTMLElement>('.cl-typing');
     const error = root.querySelector<HTMLElement>('.cl-error_message');
+    const retry = root.querySelector<HTMLElement>('.cl-retry-btn');
     const list = root.querySelector<HTMLElement>('.cl-messages_container')!.getBoundingClientRect();
     const errorBox = error?.getBoundingClientRect();
     const errorStyle = error ? getComputedStyle(error) : null;
     return {
       fieldDisabled: field.disabled,
+      fieldFocused: root.activeElement === field,
       fieldValue: field.value,
       placeholder: field.placeholder,
       sendDisabled: send.disabled,
@@ -84,7 +94,8 @@ function chatState(page: Page) {
       errorText: error?.querySelector('.cl-error-text')?.textContent ?? null,
       errorColors: errorStyle ? { color: errorStyle.color, background: errorStyle.backgroundColor } : null,
       errorInsideList: !!errorBox && errorBox.left >= list.left - 1 && errorBox.right <= list.right + 1,
-      retryLabel: root.querySelector('.cl-retry-btn')?.textContent ?? null,
+      retryLabel: retry?.textContent ?? null,
+      retryColor: retry ? getComputedStyle(retry).color : null,
       userMessages: Array.from(root.querySelectorAll('.cl-user_message')).map((el) => el.textContent),
       botMessages: Array.from(root.querySelectorAll('.cl-bot_message:not(.cl-typing)')).map((el) => el.textContent ?? ''),
     };
@@ -92,7 +103,7 @@ function chatState(page: Page) {
 }
 
 test('the thinking bubble shows dots and an English phrase, and the field stays enabled', async ({ page }) => {
-  const assistant = await mockAssistant(page, ['answer'], { hold: true });
+  const assistant = await mockAssistant(page, ['answer'], { hold: [0] });
   await openChat(page);
   await page.keyboard.type(question);
   await page.keyboard.press('Enter');
@@ -112,18 +123,19 @@ test('the thinking bubble shows dots and an English phrase, and the field stays 
   await expect.poll(async () => (await chatState(page)).fieldValue).toBe('And on Sunday?');
   expect((await chatState(page)).userMessages).toEqual([question]);
 
-  assistant.release();
+  assistant.release(0);
   await expect.poll(async () => (await chatState(page)).botMessages.join('\n')).toContain(answer);
   const done = await chatState(page);
   expect(done.typingDots).toBe(0);
   expect(done.sendDisabled).toBe(false);
-  expect(done.status).toBe('');
+  // Screen readers hear the complete answer once.
+  expect(done.status).toBe(answer);
   expect(done.fieldValue).toBe('And on Sunday?');
   expect(assistant.requests()).toBe(1);
 });
 
-test('a failed answer shows a plain German sentence, and Try again sends the question again', async ({ page, hasTouch }) => {
-  const assistant = await mockAssistant(page, ['server-error', 'answer'], { hold: true });
+test('a flow error shows a plain German sentence, and Try again keeps focus and sends again', async ({ page, hasTouch }) => {
+  const assistant = await mockAssistant(page, ['flow-error', 'answer'], { hold: [0, 1] });
   await openChat(page, { default_language: 'de' });
   await page.keyboard.type(question);
   await page.keyboard.press('Enter');
@@ -134,8 +146,8 @@ test('a failed answer shows a plain German sentence, and Try again sends the que
   expect(thinking.status).toBe('Der Assistent schreibt');
   expect(thinking.placeholder).toBe('Nachricht eingeben...');
 
-  assistant.release();
-  const sentence = 'Der Assistent konnte die Antwort nicht abschließen. Bitte versuchen Sie es erneut.';
+  assistant.release(0);
+  const sentence = 'Entschuldigung, wir haben gerade technische Probleme. Bitte versuchen Sie es erneut.';
   await expect.poll(async () => (await chatState(page)).errorText).toBe(sentence);
   const failed = await chatState(page);
   expect(failed.retryLabel).toBe('Erneut versuchen');
@@ -143,16 +155,24 @@ test('a failed answer shows a plain German sentence, and Try again sends the que
   expect(failed.userMessages).toEqual([question]);
   expect(failed.sendDisabled).toBe(false);
   expect(failed.errorInsideList).toBe(true);
-  // A light red notice with dark red text, never the technical response.
+  // A light red notice with dark red text, never the flow's technical text.
   expect(failed.errorColors).toEqual({ color: 'rgb(153, 27, 27)', background: 'rgb(254, 242, 242)' });
-  expect(failed.errorText).not.toMatch(/HTTP|500|synthetic failure/);
+  expect(failed.errorText).not.toMatch(/Error building|401|Component/);
 
+  // Try again removes its own button: the keyboard focus moves to the field.
   await activate(page, '.cl-retry-btn', hasTouch);
+  await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
+  const retrying = await chatState(page);
+  expect(retrying.errorText).toBeNull();
+  expect(retrying.fieldFocused).toBe(true);
+  expect(retrying.status).toBe('Der Assistent schreibt');
+
+  assistant.release(1);
   await expect.poll(async () => (await chatState(page)).botMessages.join('\n')).toContain(answer);
   const retried = await chatState(page);
-  expect(retried.errorText).toBeNull();
   // The question is sent again, but its bubble is not repeated.
   expect(retried.userMessages).toEqual([question]);
+  expect(retried.status).toBe(answer);
   expect(assistant.requests()).toBe(2);
 });
 
@@ -170,3 +190,33 @@ test('a network failure in the dark theme shows a readable English sentence', as
   // Light red text on a dark red tint, readable on the dark window.
   expect(failed.errorColors?.color).toBe('rgb(254, 202, 202)');
 });
+
+// A site's error_message_style can set only some colours. The box then starts
+// from the classic red box with white text, so the text stays readable.
+const partialStyles = [
+  {
+    name: 'a background colour only',
+    style: { backgroundColor: '#b91c1c' },
+    colors: { color: 'rgb(255, 255, 255)', background: 'rgb(185, 28, 28)' },
+  },
+  {
+    name: 'a text colour only',
+    style: { color: '#ffffff' },
+    colors: { color: 'rgb(255, 255, 255)', background: 'rgb(248, 113, 113)' },
+  },
+];
+
+for (const { name, style, colors } of partialStyles) {
+  test(`error_message_style with ${name} starts from the classic red box`, async ({ page }) => {
+    await mockAssistant(page, ['server-error']);
+    await openChat(page, { error_message_style: JSON.stringify(style) });
+    await page.keyboard.type(question);
+    await page.keyboard.press('Enter');
+
+    await expect.poll(async () => (await chatState(page)).errorText).toBe(technicalSentence);
+    const failed = await chatState(page);
+    expect(failed.errorColors).toEqual(colors);
+    // Try again uses the text colour of the box.
+    expect(failed.retryColor).toBe(colors.color);
+  });
+}

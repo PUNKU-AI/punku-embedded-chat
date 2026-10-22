@@ -1701,6 +1701,15 @@ video {
   --cl-error-line: rgba(248, 113, 113, 0.4);
 }
 
+/* With error_message_style, start from the classic red box with white text.
+   The site's values apply on top (inline), so a partial style stays readable.
+   Keep this rule after the theme rules: it must win over them. */
+.cl-error_message.cl-error_message--custom {
+  --cl-error-bg: #f87171;
+  --cl-error-ink: #ffffff;
+  --cl-error-line: transparent;
+}
+
 .cl-error-icon {
   flex: 0 0 auto;
   margin-top: 3px;

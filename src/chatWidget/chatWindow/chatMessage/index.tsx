@@ -194,7 +194,14 @@ export default function ChatMessage({
             ...DEFAULT_MESSAGE_TEXT_STYLE,
             ...(error_message_style || {}),
           }}
-          className={"cl-error_message"}
+          // A site's error_message_style may set only some colours. Start from the
+          // classic red box then, so a partial style never gives unreadable text.
+          className={
+            "cl-error_message" +
+            (error_message_style && Object.keys(error_message_style).length > 0
+              ? " cl-error_message--custom"
+              : "")
+          }
         >
           <CircleAlert className="cl-error-icon" size={18} aria-hidden="true" />
           <span className="cl-error-text">{parsedMessage}</span>

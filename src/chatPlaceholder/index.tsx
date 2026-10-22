@@ -7,25 +7,18 @@ export default function ChatMessagePlaceholder({
   theme = "default",
   language = "en" as Language,
   loading_messages,
-  sending_text,
 }: ChatMessagePlaceholderType) {
   const normalizedCustomMessages = (loading_messages || [])
     .map((m) => (typeof m === "string" ? m.trim() : ""))
     .filter(Boolean);
-  const sendingText = typeof sending_text === "string" ? sending_text.trim() : "";
-
-  // Phrases, in order of preference: the site's loading_messages, the site's
-  // placeholder_sending, then the built-in phrases for the chat's language.
+  // The site's loading_messages, else the built-in phrases for the chat's
+  // language (crystal phrases on the swarovski theme).
   const isCrystalline = theme === "swarovski";
   const fallbackMessages = isCrystalline
     ? crystallineThinkingMessages.map((msg) => (language === "de" ? msg.de : msg.en))
     : thinkingMessages[language] || thinkingMessages.en;
 
-  const messages = (
-    normalizedCustomMessages.length > 0 ? normalizedCustomMessages :
-    sendingText ? [sendingText] :
-    fallbackMessages
-  ) as string[];
+  const messages = (normalizedCustomMessages.length > 0 ? normalizedCustomMessages : fallbackMessages) as string[];
 
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 

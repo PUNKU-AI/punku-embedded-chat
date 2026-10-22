@@ -118,7 +118,7 @@ export const translations = {
     typing: "The assistant is writing",
     retry: "Try again",
     errorNetwork: "The assistant could not be reached. Check your connection and try again.",
-    errorServer: "The assistant could not complete the response. Please try again.",
+    errorServer: "Sorry, we're experiencing technical issues. Please try again.",
     errorInterrupted: "The assistant response ended before it completed. Please try again.",
     errorEmpty: "The assistant did not return a response. Please try again.",
   },
@@ -136,7 +136,7 @@ export const translations = {
     typing: "Der Assistent schreibt",
     retry: "Erneut versuchen",
     errorNetwork: "Der Assistent ist nicht erreichbar. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
-    errorServer: "Der Assistent konnte die Antwort nicht abschließen. Bitte versuchen Sie es erneut.",
+    errorServer: "Entschuldigung, wir haben gerade technische Probleme. Bitte versuchen Sie es erneut.",
     errorInterrupted: "Die Antwort wurde abgebrochen, bevor sie fertig war. Bitte versuchen Sie es erneut.",
     errorEmpty: "Der Assistent hat keine Antwort gesendet. Bitte versuchen Sie es erneut.",
   }

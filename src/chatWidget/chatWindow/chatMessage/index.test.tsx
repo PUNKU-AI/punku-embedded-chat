@@ -58,6 +58,23 @@ describe('ChatMessage', () => {
       expect(container).not.toHaveAttribute('role');
     });
 
+    it('should start from the classic red box when error_message_style is set', () => {
+      render(<ChatMessage {...defaultProps} error={true} error_message_style={{ backgroundColor: '#b91c1c' }} />);
+
+      const container = document.querySelector('.cl-error_message');
+      expect(container).toHaveClass('cl-error_message--custom');
+      expect(container).toHaveStyle({ backgroundColor: 'rgb(185, 28, 28)' });
+    });
+
+    it.each([
+      ['no style', undefined],
+      ['an empty style', {}],
+    ])('should keep the soft look with %s', (_case, style) => {
+      render(<ChatMessage {...defaultProps} error={true} error_message_style={style} />);
+
+      expect(document.querySelector('.cl-error_message')).not.toHaveClass('cl-error_message--custom');
+    });
+
     it('should not show a retry button without a retry handler', () => {
       render(<ChatMessage {...defaultProps} error={true} />);
 
