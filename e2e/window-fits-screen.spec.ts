@@ -33,10 +33,21 @@ async function openOnWidePage(page: Page, props: Record<string, string> = {}) {
   return view;
 }
 
+async function windowMoving(page: Page) {
+  return page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    return window.__widgetRoots.get(host)!.querySelector('.cl-chat-window')!.getAnimations().length > 0;
+  });
+}
+
 async function expectWindowOnScreen(page: Page, isMobile: boolean) {
   // Desktop layouts hide the close X unless show_close_button_on_desktop is set.
   const parts = ['.cl-chat-window', '.cl-send-button', ...(isMobile ? ['.cl-close-btn'] : [])];
-  await expect.poll(() => partsOutsideScreen(page, parts)).toEqual([]);
+  // The window can animate its scale, place and size for 300 ms. Check only
+  // the settled box, so a window that crosses the screen on its way cannot pass.
+  await expect.poll(async () => (await windowMoving(page))
+    ? ['.cl-chat-window is moving']
+    : partsOutsideScreen(page, parts)).toEqual([]);
 }
 
 async function chatWindowBox(page: Page) {
@@ -76,10 +87,18 @@ test('top_offset keeps its distance from the top of the screen on a wide host pa
 test('the open window fits the screen after setTriggerPosition on a wide host page', async ({ page, isMobile }) => {
   const view = await openOnWidePage(page);
   // Anchor the trigger inside the visible area, near its top-left corner.
-  expect(await page.evaluate((widgetId) => {
+  const position = { x: 24, y: 120 };
+  expect(await page.evaluate(({ widgetId, position }) => {
     const api = (window as unknown as Record<string, { setTriggerPosition(position: unknown): boolean }>)[`${widgetId}_api`];
-    return api.setTriggerPosition({ x: 24, y: 120 });
-  }, widgetId)).toBe(true);
+    return api.setTriggerPosition(position);
+  }, { widgetId, position })).toBe(true);
+  // React moves the trigger and the window in a later render. Until then, the
+  // window is still at its old place. Check it only after the trigger moved.
+  await expect.poll(() => page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    const box = window.__widgetRoots.get(host)!.querySelector('.cl-trigger')!.getBoundingClientRect();
+    return { x: Math.round(box.left), y: Math.round(box.top) };
+  })).toEqual(position);
   await expectWindowOnScreen(page, isMobile);
 
   if (view.screen.width <= 640) {
