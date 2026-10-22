@@ -88,6 +88,8 @@ function chatState(page: Page) {
       fieldValue: field.value,
       placeholder: field.placeholder,
       sendDisabled: send.disabled,
+      // The list is busy while an answer is on its way.
+      busy: root.querySelector('.cl-messages_container')!.getAttribute('aria-busy'),
       typingDots: typing ? typing.querySelectorAll('.cl-typing-dots span').length : 0,
       typingText: typing?.querySelector('.cl-typing-text')?.textContent ?? null,
       status: root.querySelector('[role="status"]')?.textContent ?? null,
@@ -115,6 +117,7 @@ test('the thinking bubble shows dots and an English phrase, and the field stays 
   expect(thinking.fieldDisabled).toBe(false);
   expect(thinking.placeholder).toBe('Type your message...');
   expect(thinking.sendDisabled).toBe(true);
+  expect(thinking.busy).toBe('true');
 
   // The visitor can write the next question while the assistant answers.
   // Enter does not send it yet: the text stays in the field.
@@ -127,6 +130,8 @@ test('the thinking bubble shows dots and an English phrase, and the field stays 
   await expect.poll(async () => (await chatState(page)).botMessages.join('\n')).toContain(answer);
   const done = await chatState(page);
   expect(done.typingDots).toBe(0);
+  expect(done.busy).toBe('false');
+  // The next question is in the field, so Send is ready.
   expect(done.sendDisabled).toBe(false);
   // Screen readers hear the complete answer once.
   expect(done.status).toBe(answer);
@@ -153,7 +158,7 @@ test('a flow error shows a plain German sentence, and Try again keeps focus and 
   expect(failed.retryLabel).toBe('Erneut versuchen');
   expect(failed.status).toBe(sentence);
   expect(failed.userMessages).toEqual([question]);
-  expect(failed.sendDisabled).toBe(false);
+  expect(failed.busy).toBe('false');
   expect(failed.errorInsideList).toBe(true);
   // A light red notice with dark red text, never the flow's technical text.
   expect(failed.errorColors).toEqual({ color: 'rgb(153, 27, 27)', background: 'rgb(254, 242, 242)' });

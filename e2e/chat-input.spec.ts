@@ -55,7 +55,10 @@ function composerState(page: Page) {
     const field = root.querySelector<HTMLTextAreaElement>('.cl-input-element')!;
     const style = getComputedStyle(field);
     const rect = field.getBoundingClientRect();
-    const row = root.querySelector('.cl-input_container')!.getBoundingClientRect();
+    // The row is the bordered field around the textarea and the send button.
+    const rowElement = root.querySelector<HTMLElement>('.cl-composer-field')!;
+    const row = rowElement.getBoundingClientRect();
+    const rowStyle = getComputedStyle(rowElement);
     const chatWindow = root.querySelector('.cl-window')!.getBoundingClientRect();
     const send = root.querySelector('.cl-send-button')!.getBoundingClientRect();
     const bubbles = Array.from(root.querySelectorAll<HTMLElement>('.cl-user_message'));
@@ -79,6 +82,7 @@ function composerState(page: Page) {
       rowTop: row.top,
       rowBottom: row.bottom,
       rowHeight: row.height,
+      rowInnerHeight: rowElement.clientHeight - parseFloat(rowStyle.paddingTop) - parseFloat(rowStyle.paddingBottom),
       windowTop: chatWindow.top,
       windowBottom: chatWindow.bottom,
       windowHeight: chatWindow.height,
@@ -224,7 +228,7 @@ test('a long placeholder keeps its height after a send', async ({ page }) => {
   expect(after.scrollHeight).toBeLessThanOrEqual(after.clientHeight + 1);
 });
 
-test('a fixed row height from input_container_style keeps the field inside the bar', async ({ page }) => {
+test('a fixed height from input_container_style keeps the text inside the field', async ({ page }) => {
   const initial = await openComposer(page, { input_container_style: JSON.stringify({ height: '56px' }) });
   expect(Math.abs(initial.rowHeight - 56)).toBeLessThanOrEqual(1);
   await page.keyboard.type('Line 1');
@@ -242,10 +246,11 @@ test('a fixed row height from input_container_style keeps the field inside the b
   expectNewestLineVisible(state);
 });
 
-test('a small input padding still fills the bar', async ({ page }) => {
-  const initial = await openComposer(page, { input_style: JSON.stringify({ padding: '8px' }) });
-  // The send button makes the row taller than one 8px-padded line: the field fills the row.
-  expect(Math.abs(initial.height - initial.rowHeight)).toBeLessThanOrEqual(1);
+test('a small input padding still fills the field', async ({ page }) => {
+  const initial = await openComposer(page, { input_style: JSON.stringify({ padding: '4px' }) });
+  // The send button makes the row taller than one 4px-padded line: the textarea fills the row.
+  expect(initial.rowInnerHeight).toBeGreaterThan(initial.lineHeight + 8 + 1);
+  expect(Math.abs(initial.height - initial.rowInnerHeight)).toBeLessThanOrEqual(1);
   expect(initial.scrollHeight).toBeLessThanOrEqual(initial.clientHeight + 1);
 
   await page.keyboard.type('Line 1');
@@ -253,10 +258,10 @@ test('a small input padding still fills the bar', async ({ page }) => {
     await page.keyboard.press('Shift+Enter');
     await page.keyboard.type(`Line ${line}`);
   }
-  await expect.poll(async () => (await composerState(page)).height).toBeGreaterThanOrEqual(initial.lineHeight * 4 + 16 - 1);
+  await expect.poll(async () => (await composerState(page)).height).toBeGreaterThanOrEqual(initial.lineHeight * 4 + 8 - 1);
   const grown = await composerState(page);
-  // Taller than the button: the field defines the row and still fills it.
-  expect(Math.abs(grown.height - grown.rowHeight)).toBeLessThanOrEqual(1);
+  // Taller than the button: the textarea defines the row and still fills it.
+  expect(Math.abs(grown.height - grown.rowInnerHeight)).toBeLessThanOrEqual(1);
   expect(grown.scrollHeight).toBeLessThanOrEqual(grown.clientHeight + 1);
 });
 

@@ -1,4 +1,4 @@
-import { Send, RefreshCw, X } from "lucide-react";
+import { ArrowUp, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
@@ -129,6 +129,8 @@ export default function ChatWindow({
   enable_client_error_reporting = true,
   onCheckout,
   removeLastMessage,
+  ai_notice_text,
+  show_ai_notice = true,
 }: {
   api_key?: string;
   output_type: string,
@@ -198,6 +200,10 @@ export default function ChatWindow({
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
   /** Removes the newest message (the error that Try again replaces). */
   removeLastMessage?: () => void;
+  /** Replaces the AI notice under the input (EU AI Act, Article 50). */
+  ai_notice_text?: string;
+  /** false hides the AI notice, for sites that show it elsewhere. */
+  show_ai_notice?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
   // Use translations based on language prop
@@ -696,6 +702,27 @@ export default function ChatWindow({
   const headerIconColor = button_color
     ? button_text_color || '#FFFFFF'
     : theme === "default" ? "#0f172a" : "white";
+  // The default and dark themes put the header icon on an accent-coloured
+  // avatar, so it is white there. Elsewhere it follows the header colour.
+  const avatarOnAccent = !button_color && (theme === "default" || theme === "dark");
+  const avatarIconColor = avatarOnAccent ? "#FFFFFF" : headerIconColor;
+
+  // The bar under the messages holds the field and the AI notice. A fixed
+  // height from input_container_style sizes the field, so the text never
+  // leaves it. The other keys (background, border) style the bar.
+  const {
+    height: fieldHeight,
+    minHeight: fieldMinHeight,
+    maxHeight: fieldMaxHeight,
+    ...inputBarStyle
+  } = input_container_style || {};
+  // The textarea is transparent, so input_style's background goes on the field.
+  const composerFieldStyle: React.CSSProperties = {
+    height: fieldHeight,
+    minHeight: fieldMinHeight,
+    maxHeight: fieldMaxHeight,
+    ...(input_style?.backgroundColor ? { backgroundColor: input_style.backgroundColor } : {}),
+  };
 
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
@@ -748,6 +775,8 @@ export default function ChatWindow({
     setShowConfirmModal(false);
     if (onStartNewSession) {
       onStartNewSession();
+      // A new conversation starts with an empty field, not the old draft.
+      setValue("");
     }
   };
 
@@ -1012,106 +1041,76 @@ export default function ChatWindow({
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
       >
-        <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
+        {/* One row: the avatar, the title with the status under it, and the actions. */}
+        <div
+          className={"cl-header" + (button_color ? " cl-header--colored" : "")}
+          style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}
+        >
           <div className="cl-header-content">
             {header_icon ? (
               <img
                 src={header_icon}
                 onError={onHeaderIconError}
-                alt="Chat icon"
-                className="cl-header-logo"
-                width="36"
-                height="36"
+                alt=""
+                className="cl-header-logo cl-header-logo-image"
+                width="38"
+                height="38"
               />
             ) : (
-              <div className="cl-default-header-icon">
+              <div className="cl-default-header-icon cl-header-avatar" aria-hidden="true">
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={headerIconColor}
-                  size={24}
+                  color={avatarIconColor}
+                  size={20}
                 />
               </div>
             )}
-            {displayTitle}
-            {onStartNewSession && (
-              <button
-                onClick={handleNewSession}
-                className="cl-new-session-btn"
-                title="Start new conversation"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: '8px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <RefreshCw
-                  size={16}
-                  color={headerIconColor}
-                />
-              </button>
-            )}
-            {/* Close button for mobile and tablet */}
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="cl-close-btn"
-                title="Close chat"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: show_close_button_on_desktop ? 'flex' : 'none',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: 'auto',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <X
-                  size={20}
-                  color={headerIconColor}
-                />
-              </button>
-            )}
-          </div>
-          <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
-            {online ? (
-              <>
-                <div className="cl-online-message"></div>
-                {online_message || statusBranding}
-              </>
-            ) : (
-              <>
-                <div className="cl-offline-message"></div>
-                {offline_message || t.offlineMessage}
-              </>
-            )}
+            <div className="cl-header-titles">
+              <div className="cl-header-title">{displayTitle}</div>
+              <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
+                <span className={online ? "cl-online-message" : "cl-offline-message"} aria-hidden="true"></span>
+                <span className="cl-header-status">
+                  {online ? (online_message || statusBranding) : (offline_message || t.offlineMessage)}
+                </span>
+              </div>
+            </div>
+            <div className="cl-header-actions">
+              {onStartNewSession && (
+                <button
+                  type="button"
+                  onClick={handleNewSession}
+                  className="cl-new-session-btn cl-header-btn"
+                  title={t.newConversation}
+                  aria-label={t.newConversation}
+                >
+                  <RefreshCw size={17} color={headerIconColor} aria-hidden="true" />
+                </button>
+              )}
+              {/* Close button for phones and tablets; desktop shows it only with show_close_button_on_desktop */}
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="cl-close-btn cl-header-btn"
+                  title={t.closeChat}
+                  aria-label={t.closeChat}
+                  style={{ display: show_close_button_on_desktop ? 'flex' : 'none' }}
+                >
+                  <X size={20} color={headerIconColor} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="cl-messages_container" ref={messagesContainer} style={background_color ? { backgroundColor: background_color } : undefined}>
+        <div
+          className="cl-messages_container"
+          ref={messagesContainer}
+          // Busy while an answer is on its way: the list is still changing.
+          aria-busy={sendingMessage}
+          style={background_color ? { backgroundColor: background_color } : undefined}
+        >
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">
@@ -1201,61 +1200,74 @@ export default function ChatWindow({
         <div className="cl-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {statusAnnouncement}
         </div>
-        <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
-          <ChatInput
-            ref={inputRef}
-            value={value}
-            onChange={setValue}
-            onSend={handleClick}
-            // The visitor can write the next message while the assistant answers;
-            // it sends after the answer (the send button stays disabled until then).
-            placeholder={sendingMessage && placeholder_sending ? placeholder_sending : (placeholder || t.placeholder)}
-            ariaLabel={t.inputLabel}
-            style={{
-              ...DEFAULT_INPUT_TEXT_STYLE,
-              ...(input_style || {}),
-            }}
-            onHeightChange={handleInputHeightChange}
-            className="cl-input-element"
-          />
-          <button
-            className="cl-send-button"
-            style={{
-              // Base styles
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              // Bottom-aligned next to the growing composer; 12px centres it on the last text line.
-              margin: '8px 8px 12px',
-              cursor: 'pointer',
-              // Only set button color if explicitly provided (otherwise CSS theme handles it)
-              ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
-              // Apply remaining styles from send_button_style (if any)
-              ...(send_button_style || {})
-            }}
-            disabled={sendingMessage}
-            onClick={handleClick}
-          >
-            <Send
+        {/* input_container_style applies as set: button_color no longer replaces its background. */}
+        <div style={inputBarStyle} className="cl-input_container">
+          {/* A bordered field with the send button inside. */}
+          <div className="cl-composer-field" style={composerFieldStyle}>
+            <ChatInput
+              ref={inputRef}
+              value={value}
+              onChange={setValue}
+              onSend={handleClick}
+              // The visitor can write the next message while the assistant answers;
+              // it sends after the answer (the send button stays disabled until then).
+              placeholder={sendingMessage && placeholder_sending ? placeholder_sending : (placeholder || t.placeholder)}
+              ariaLabel={t.inputLabel}
               style={{
-                width: '18px',
-                height: '18px',
-                stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
-                ...(send_icon_style || {})
+                ...DEFAULT_INPUT_TEXT_STYLE,
+                ...(input_style || {}),
               }}
-              className={
-                "cl-send-icon " +
-                (!sendingMessage
-                  ? "cl-notsending-message"
-                  : "cl-sending-message")
-              }
+              onHeightChange={handleInputHeightChange}
+              className="cl-input-element"
             />
-          </button>
+            <button
+              type="button"
+              className="cl-send-button"
+              aria-label={t.send}
+              title={t.send}
+              style={{
+                // Base styles
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                margin: 0,
+                cursor: 'pointer',
+                // Only set button color if explicitly provided (otherwise CSS theme handles it)
+                ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
+                // Apply remaining styles from send_button_style (if any)
+                ...(send_button_style || {})
+              }}
+              // Nothing to send: an empty field, or an answer still on its way.
+              disabled={sendingMessage || !value.trim()}
+              onClick={handleClick}
+            >
+              <ArrowUp
+                aria-hidden="true"
+                strokeWidth={2.5}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
+                  ...(send_icon_style || {})
+                }}
+                className={
+                  "cl-send-icon " +
+                  (!sendingMessage
+                    ? "cl-notsending-message"
+                    : "cl-sending-message")
+                }
+              />
+            </button>
+          </div>
+          {/* EU AI Act, Article 50: visitors must know that they chat with an AI system. */}
+          {show_ai_notice !== false && (
+            <div className="cl-ai-notice">{ai_notice_text || t.aiNotice}</div>
+          )}
         </div>
       </div>
 
