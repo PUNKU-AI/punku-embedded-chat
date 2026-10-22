@@ -1758,6 +1758,18 @@ describe('ChatWindow', () => {
       expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
     });
 
+    it.each([
+      ['bot_message_color', { bot_message_color: '#791f0d' }, true],
+      ['a background in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d' } }, true],
+      ['bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, false],
+      ['no own bubble colour', {}, false],
+    ])('should let links take the bubble text colour with %s: %s', (_case, props, inherits) => {
+      render(<ChatWindow {...defaultProps} {...props} />);
+
+      const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
+      expect(styles.includes('.cl-window .cl-bot_message .markdown-body a {\n            color: inherit !important;')).toBe(inherits);
+    });
+
     it('should keep the theme accent for link buttons without button_color', () => {
       render(<ChatWindow {...defaultProps} />);
 

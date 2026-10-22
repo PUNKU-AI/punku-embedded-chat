@@ -87,12 +87,25 @@ function parseMessage(message: any): string {
 
 type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
 
-/** True when an element holds exactly one link and nothing else but whitespace. */
-export function isLinkOnly(node: unknown): boolean {
-  const children = ((node as HastNode | undefined)?.children || []).filter(
+const meaningfulChildren = (node: unknown) =>
+  ((node as HastNode | undefined)?.children || []).filter(
     (child) => !(child.type === "text" && !(child.value || "").trim())
   );
+
+/** True when an element holds exactly one link and nothing else but whitespace. */
+export function isLinkOnly(node: unknown): boolean {
+  const children = meaningfulChildren(node);
   return children.length === 1 && children[0].type === "element" && children[0].tagName === "a";
+}
+
+/**
+ * True when a list item holds only a link. In a loose list (blank lines
+ * between the items) markdown wraps the link in a paragraph: li > p > a.
+ */
+export function isLinkOnlyListItem(node: unknown): boolean {
+  if (isLinkOnly(node)) return true;
+  const children = meaningfulChildren(node);
+  return children.length === 1 && children[0].type === "element" && children[0].tagName === "p" && isLinkOnly(children[0]);
 }
 
 export default function ChatMessage({
@@ -145,7 +158,7 @@ export default function ChatMessage({
     // react-markdown 8 passes ordered, checked and index to list items; they
     // are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={[className, isLinkOnly(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+      <li {...props} className={[className, isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
         {children}
       </li>
     ),

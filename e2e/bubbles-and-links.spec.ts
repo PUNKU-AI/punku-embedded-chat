@@ -26,6 +26,12 @@ const conversation = [
     isSend: false,
     message_id: 'synthetic-answer-2',
   },
+  {
+    // A loose list: blank lines between the items put each link in a paragraph.
+    message: 'More to see:\n\n- [Gift shop](https://example.com/gifts)\n\n- [Museum café](https://example.com/cafe)',
+    isSend: false,
+    message_id: 'synthetic-answer-3',
+  },
 ];
 
 async function openConversation(page: Page, props: Record<string, string> = {}) {
@@ -51,8 +57,9 @@ function layout(page: Page) {
     const style = (element: Element | null) => (element ? getComputedStyle(element) : null);
     const user = style(root.querySelector('.cl-user_message'));
     const bot = style(root.querySelector('.cl-bot_message'));
-    const button = root.querySelector<HTMLElement>('.markdown-body p.cl-link-only > a');
+    const button = root.querySelector<HTMLElement>('.markdown-body > p.cl-link-only > a');
     const listButton = root.querySelector<HTMLElement>('.markdown-body li.cl-link-only > a');
+    const looseButton = root.querySelector<HTMLElement>('.markdown-body li.cl-link-only > p > a');
     const inline = root.querySelector<HTMLElement>('.markdown-body p:not(.cl-link-only) a[href*="shop"]');
     const boxes = bubbles.map((bubble) => bubble.getBoundingClientRect());
     return {
@@ -81,6 +88,12 @@ function layout(page: Page) {
         border: getComputedStyle(listButton).borderTopWidth,
         bullet: getComputedStyle(listButton.parentElement!).listStyleType,
       },
+      looseButton: looseButton && {
+        display: getComputedStyle(looseButton).display,
+        border: getComputedStyle(looseButton).borderTopWidth,
+        background: getComputedStyle(looseButton).backgroundColor,
+        bullet: getComputedStyle(looseButton.closest('li')!).listStyleType,
+      },
       inlineLink: inline && {
         color: getComputedStyle(inline).color,
         underline: getComputedStyle(inline).textDecorationLine,
@@ -106,6 +119,10 @@ test('a link on its own line is a button, a link in a sentence stays a link', as
     display: 'inline-flex', background: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)', underline: 'none',
   });
   expect(result.listButton).toEqual({ border: '1px', bullet: 'none' });
+  // A loose list gets the same outlined buttons, not filled ones.
+  expect(result.looseButton).toEqual({
+    display: 'inline-flex', border: '1px', background: 'rgba(0, 0, 0, 0)', bullet: 'none',
+  });
   expect(result.inlineLink).toEqual({ color: 'rgb(29, 78, 216)', underline: 'underline' });
 });
 
@@ -115,6 +132,18 @@ test('link buttons use the site colours, and link_color still colours links', as
   expect(result.linkButton).toMatchObject({ background: 'rgb(124, 45, 18)', color: 'rgb(255, 247, 237)' });
   expect(result.inlineLink?.color).toBe('rgb(154, 52, 18)');
 });
+
+// Tiroler Abend has dark red answers: the theme's blue link would read at 1.6:1.
+for (const [bubble, text] of [['#791f0d', 'rgb(255, 255, 255)'], ['#fef3c7', 'rgb(31, 41, 55)']]) {
+  test(`links take the bubble text colour on a site's own bubble colour ${bubble}`, async ({ page }) => {
+    const textColor = bubble === '#791f0d' ? '#ffffff' : '#1f2937';
+    await openConversation(page, { bot_message_color: bubble, bot_message_text_color: textColor });
+    const result = await layout(page);
+    expect(result.inlineLink).toEqual({ color: text, underline: 'underline' });
+    // The filled link button keeps the accent colour and its white text.
+    expect(result.linkButton).toMatchObject({ background: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)' });
+  });
+}
 
 test('the dark theme uses a light link colour and its own accent', async ({ page }) => {
   await openConversation(page, { theme: 'dark' });

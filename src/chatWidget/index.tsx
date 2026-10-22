@@ -2336,9 +2336,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* A link on its own line is an action, so it renders as a button: filled
-   when it stands alone in a paragraph, outlined when it is a list item. */
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a {
+   when it stands alone in a top-level paragraph, outlined when it is a list
+   item. In a loose list (blank lines between the items) the link sits in a
+   paragraph inside the item: li > p > a. */
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2352,8 +2355,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* An arrow shows that the button opens a page. */
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a::after,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a::after {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a::after {
   content: "";
   flex: 0 0 auto;
   width: 15px;
@@ -2363,24 +2367,26 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:hover,
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:visited {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:visited {
   background: var(--cl-accent);
   color: var(--cl-on-accent) !important;
 }
 
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:hover {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover {
   background: var(--cl-accent-hover);
   opacity: 1 !important;
 }
 
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a {
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
   border: 1px solid rgba(127, 127, 127, 0.45);
   border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
 }
 
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover {
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:hover {
   background: var(--cl-hover);
 }
 
@@ -2390,12 +2396,17 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   margin-left: -1.25em;
 }
 
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p {
+  margin: 0;
+}
+
 .cl-window .cl-bot_message .markdown-body li.cl-link-only + li.cl-link-only {
   margin-top: 6px;
 }
 
-.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:focus-visible,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:focus-visible {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:focus-visible {
   outline: 2px solid var(--cl-accent);
   outline-offset: 2px;
 }

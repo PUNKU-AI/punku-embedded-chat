@@ -709,6 +709,12 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
+  // The site paints the answer bubbles itself (bot_message_color, or a
+  // background in bot_message_style).
+  const customBotBackground = !!(
+    bot_message_color || bot_message_style?.backgroundColor || bot_message_style?.background
+  );
+
   const effectiveBranding =
     branding === "punku-ai" ? "punku-ai" : "punku-ai-bookingkit";
 
@@ -839,6 +845,16 @@ export default function ChatWindow({
           .cl-window .markdown-body a {
             text-decoration: underline !important;
           }
+
+          /* A site's own bubble colour can clash with the theme's link colour
+             (blue on dark red). Without link_color, links take the bubble's
+             text colour and keep their underline. Filled link buttons keep
+             the accent colour. */
+          ${customBotBackground && !link_color ? `
+          .cl-window .cl-bot_message .markdown-body a {
+            color: inherit !important;
+          }
+          ` : ''}
 
           /* Link color customization - scoped to chat messages only, not footer */
           ${link_color ? `
