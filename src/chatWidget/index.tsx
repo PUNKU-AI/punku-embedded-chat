@@ -2346,7 +2346,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window .cl-header-subtitle {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   margin: 0;
   min-width: 0;
@@ -2355,19 +2355,24 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   line-height: 1.3;
 }
 
+/* "Powered by PUNKU.AI & bookingkit", or the site's online_message, wraps
+   to a second line on a narrow phone instead of losing its end. */
 .cl-window .cl-header-status {
   min-width: 0;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
+/* The status dot stays centred on the first line. */
 .cl-window .cl-online-message,
 .cl-window .cl-offline-message {
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
-  margin: 0;
+  margin: calc((1.3em - 7px) / 2) 0 0;
 }
 
 .cl-window .cl-header-actions {

@@ -38,6 +38,10 @@ function parts(page: Page) {
       header: box('.cl-header'),
       title: box('.cl-header-title'),
       subtitle: box('.cl-header-subtitle'),
+      statusCut: (() => {
+        const status = root?.querySelector<HTMLElement>('.cl-header-status');
+        return status ? status.scrollHeight > status.clientHeight + 1 || status.scrollWidth > status.clientWidth + 1 : null;
+      })(),
       newChat: box('.cl-new-session-btn'),
       field: box('.cl-composer-field'),
       send: box('.cl-send-button'),
@@ -66,7 +70,9 @@ async function focusField(page: Page) {
 test('the header is one row with the title, "Powered by" and the actions', async ({ page }) => {
   await openChat(page);
   const result = (await parts(page))!;
-  expect(result.header!.height).toBeLessThanOrEqual(68);
+  // One status line, or two on a narrow phone: the branding is never cut off.
+  expect(result.statusCut).toBe(false);
+  expect(result.header!.height).toBeLessThanOrEqual(result.subtitle!.height > 20 ? 84 : 68);
   // The title and the status line sit inside the header, the status under the title.
   expect(result.title!.top).toBeGreaterThanOrEqual(result.header!.top);
   expect(result.subtitle!.bottom).toBeLessThanOrEqual(result.header!.bottom);
@@ -74,6 +80,15 @@ test('the header is one row with the title, "Powered by" and the actions', async
   // The new-chat action sits at the right end of the same row.
   expect(result.newChat!.right).toBeGreaterThan(result.title!.right);
   expect(result.newChat!.top).toBeGreaterThanOrEqual(result.header!.top);
+  expect(result.newChat!.bottom).toBeLessThanOrEqual(result.header!.bottom);
+});
+
+test('a long status wraps to a second line instead of losing its end', async ({ page }) => {
+  // Trainingsbergwerk's status line. On a 320px phone it needs two lines.
+  await openChat(page, { online_message: 'Dein KI-Assistent für das Trainingsbergwerk' });
+  const result = (await parts(page))!;
+  expect(result.statusCut).toBe(false);
+  expect(result.subtitle!.bottom).toBeLessThanOrEqual(result.header!.bottom);
   expect(result.newChat!.bottom).toBeLessThanOrEqual(result.header!.bottom);
 });
 
