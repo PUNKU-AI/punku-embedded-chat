@@ -54,12 +54,12 @@ When checkout closes, focus must return to the booking link, and the message lis
 These checks send messages through the widget API, because a Playwright click or tap scrolls the page on its own.
 On the same wide page, the open window, its close button, and its send button must stay inside the visual viewport.
 This applies after load, after a pan of the visible area, with `top_offset`, and after `setTriggerPosition`.
-The landscape phone profile skips these checks, because its layout rises above the screen on every page (#77).
+The landscape phone profile runs these checks too. The `top_offset` check applies only up to 640 px.
 The trigger keeps its offsets from the corner of the visual viewport, before and after a pan.
 The closed hint shows next to it, and the trigger does not overlap the open window.
 The Bookingkit checkout dialog and its close button stay inside the visual viewport. Up to 767 px, the dialog fills it.
 On a page that fits the screen, the trigger stays 20 px from the layout viewport corner, also next to a desktop scrollbar.
-The `android` profile also runs the open window at 839 × 412 px. This landscape size uses the 768–1023 px layout.
+The `android` profile also runs the open window at 839 × 412 px. This short landscape size puts the window beside the trigger.
 
 Playwright cannot open an on-screen keyboard. The keyboard checks install a visual viewport that is 45 % shorter, as the keyboard makes it on iOS Safari and in Chrome on Android 108 and later.
 On a page that fits the screen, the closed trigger stays at the layout viewport corner, behind the keyboard.
