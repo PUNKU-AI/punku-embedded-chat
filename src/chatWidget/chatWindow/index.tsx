@@ -220,6 +220,9 @@ export default function ChatWindow({
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
     ? { left: `${left_offset}px`, right: "auto" }
     : { left: "auto", right: `${right_offset}px` };
+  /* Short landscape phones place the window beside the trigger, on its inner side. */
+  const besideTriggerSide = position?.endsWith("-left") ? "left" : "right";
+  const besideTriggerOffset = besideTriggerSide === "left" ? left_offset : right_offset;
   const defaultWindowPositionStyle: React.CSSProperties = {
     bottom: `calc(var(--cl-bottom-offset) + 80px)`,
     ...fixedWindowHorizontalStyle,
@@ -840,6 +843,25 @@ export default function ChatWindow({
               display: flex !important;
             }
           }
+
+          /*
+           * Short landscape phones (#77). 75vh is less than the space below
+           * the window, so the window rose above the screen. Fill the height
+           * down to the bottom edge of the trigger, and sit beside the trigger.
+           * An anchored window (setTriggerPosition) keeps its own place.
+           */
+          ${positionOverrideStyle ? '' : `
+          @media (min-width: 641px) and (max-width: 767px) and (max-height: 500px) {
+            .cl-chat-window {
+              top: 8px !important;
+              bottom: var(--cl-bottom-offset) !important;
+              ${besideTriggerSide}: calc(${besideTriggerOffset}px + max(48px, 3rem) + 12px) !important;
+              width: min(420px, 85vw, calc(100vw - ${besideTriggerOffset}px - max(48px, 3rem) - 20px)) !important;
+              height: auto !important;
+              max-height: none !important;
+            }
+          }
+          `}
 
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {

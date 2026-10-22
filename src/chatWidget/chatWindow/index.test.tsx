@@ -206,6 +206,47 @@ describe('ChatWindow', () => {
       expect(styles).not.toContain('left: auto !important');
     });
 
+    describe('Short landscape screens', () => {
+      const shortLandscapeQuery = '@media (min-width: 641px) and (max-width: 767px) and (max-height: 500px)';
+      const renderedStyles = () => Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+
+      it('should fill the height to the left of a right-side trigger', () => {
+        render(<ChatWindow {...defaultProps} position="top-right" right_offset={52} bottom_offset={60} />);
+
+        const styles = renderedStyles();
+        expect(styles).toContain(shortLandscapeQuery);
+        expect(styles).toContain('top: 8px !important');
+        expect(styles).toContain('bottom: var(--cl-bottom-offset) !important');
+        expect(styles).toContain('right: calc(52px + max(48px, 3rem) + 12px) !important');
+        expect(styles).toContain('width: min(420px, 85vw, calc(100vw - 52px - max(48px, 3rem) - 20px)) !important');
+        expect(styles).not.toContain('left: calc(');
+        const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+        expect(chatWindow.style.getPropertyValue('--cl-bottom-offset')).toBe('60px');
+      });
+
+      it('should fill the height to the right of a left-side trigger', () => {
+        render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
+
+        const styles = renderedStyles();
+        expect(styles).toContain(shortLandscapeQuery);
+        expect(styles).toContain('left: calc(64px + max(48px, 3rem) + 12px) !important');
+        expect(styles).not.toContain('right: calc(');
+      });
+
+      it('should keep an anchored window in its place', () => {
+        render(
+          <ChatWindow
+            {...defaultProps}
+            positionOverrideStyle={{ top: '96px', left: '24px', right: 'auto', bottom: 'auto' }}
+          />
+        );
+
+        expect(renderedStyles()).not.toContain(shortLandscapeQuery);
+      });
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 
