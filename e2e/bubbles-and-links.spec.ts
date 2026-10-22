@@ -133,13 +133,17 @@ test('link buttons use the site colours, and link_color still colours links', as
   expect(result.inlineLink?.color).toBe('rgb(154, 52, 18)');
 });
 
-// Tiroler Abend has dark red answers: the theme's blue link would read at 1.6:1.
-for (const [bubble, text] of [['#791f0d', 'rgb(255, 255, 255)'], ['#fef3c7', 'rgb(31, 41, 55)']]) {
-  test(`links take the bubble text colour on a site's own bubble colour ${bubble}`, async ({ page }) => {
-    const textColor = bubble === '#791f0d' ? '#ffffff' : '#1f2937';
+// Tiroler Abend has dark red answers: the theme's blue link would read at 1.6:1,
+// so links take the white answer text. On Livigno's light blue answers the blue
+// link reads well and stays.
+for (const [bubble, textColor, link] of [
+  ['#791f0d', '#ffffff', 'rgb(255, 255, 255)'],
+  ['#eaf1ff', '#1f2937', 'rgb(29, 78, 216)'],
+]) {
+  test(`links stay readable on a site's own bubble colour ${bubble}`, async ({ page }) => {
     await openConversation(page, { bot_message_color: bubble, bot_message_text_color: textColor });
     const result = await layout(page);
-    expect(result.inlineLink).toEqual({ color: text, underline: 'underline' });
+    expect(result.inlineLink).toEqual({ color: link, underline: 'underline' });
     // The filled link button keeps the accent colour and its white text.
     expect(result.linkButton).toMatchObject({ background: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)' });
   });

@@ -1759,9 +1759,12 @@ describe('ChatWindow', () => {
     });
 
     it.each([
-      ['bot_message_color', { bot_message_color: '#791f0d' }, true],
-      ['a background in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d' } }, true],
-      ['bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, false],
+      ['a dark red bot_message_color', { bot_message_color: '#791f0d' }, true],
+      ['a dark red background in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d' } }, true],
+      ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, true],
+      ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, false],
+      ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, false],
+      ['a dark red bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, false],
       ['no own bubble colour', {}, false],
     ])('should let links take the bubble text colour with %s: %s', (_case, props, inherits) => {
       render(<ChatWindow {...defaultProps} {...props} />);

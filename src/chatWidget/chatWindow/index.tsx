@@ -7,6 +7,7 @@ import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
+import { isReadableOn } from "../colorContrast";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -31,6 +32,10 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,
 };
+
+// The link colour of each theme in answers: --cl-link in the widget stylesheet.
+const themeLinkColor = (theme: string) =>
+  ({ dark: "#a5b4fc", ocean: "#7dd3fc", aurora: "#f0abfc" } as Record<string, string>)[theme] || "#1d4ed8";
 
 /*
  * The visitor sees a plain sentence in the chat's language, never technical
@@ -709,11 +714,14 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
-  // The site paints the answer bubbles itself (bot_message_color, or a
-  // background in bot_message_style).
-  const customBotBackground = !!(
-    bot_message_color || bot_message_style?.backgroundColor || bot_message_style?.background
-  );
+  // A site's own answer colour (bot_message_color, or a background in
+  // bot_message_style) can clash with the theme's link colour: blue on dark
+  // red reads at 1.6:1. Then links take the answer's text colour. Also when
+  // the colour cannot be read, for example a gradient.
+  const customBotBackground =
+    bot_message_color || bot_message_style?.backgroundColor || bot_message_style?.background;
+  const linksTakeTextColor =
+    !!customBotBackground && !link_color && !isReadableOn(themeLinkColor(theme), customBotBackground);
 
   const effectiveBranding =
     branding === "punku-ai" ? "punku-ai" : "punku-ai-bookingkit";
@@ -846,11 +854,10 @@ export default function ChatWindow({
             text-decoration: underline !important;
           }
 
-          /* A site's own bubble colour can clash with the theme's link colour
-             (blue on dark red). Without link_color, links take the bubble's
-             text colour and keep their underline. Filled link buttons keep
-             the accent colour. */
-          ${customBotBackground && !link_color ? `
+          /* The theme's link colour is hard to read on the site's own bubble
+             colour. Links take the bubble's text colour and keep their
+             underline. Filled link buttons keep the accent colour. */
+          ${linksTakeTextColor ? `
           .cl-window .cl-bot_message .markdown-body a {
             color: inherit !important;
           }

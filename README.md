@@ -132,7 +132,7 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - A link alone in a paragraph is a filled button in the accent colour. With `button_color`, the button uses `button_color` and `button_text_color`.
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
-- With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, links and outlined link buttons take the answer's text colour. A theme link colour could be unreadable on your colour. Filled link buttons keep the accent colour.
+- With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency. Filled link buttons keep the accent colour.
 
 **Color recommendations:**
 - Ensure sufficient contrast with the background for accessibility

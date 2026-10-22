@@ -2263,7 +2263,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 /* ---------- Answers: colours for links and link buttons, per theme ----------
    --cl-accent fills a link button (a site's button_color replaces it inline),
-   --cl-link colours links in answers, --cl-bot-line is the bubble border. */
+   --cl-link colours links in answers, --cl-bot-line is the bubble border.
+   chatWindow's themeLinkColor repeats the --cl-link values for its contrast
+   check: change both together. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-accent-hover: #1d4ed8;
