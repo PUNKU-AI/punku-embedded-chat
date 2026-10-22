@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { revealInScrollContainer } from "../utils";
+import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES } from "../utils";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
@@ -10,6 +10,23 @@ interface BookingkitCheckoutModalProps {
 }
 
 const CHECKOUT_ORIGIN = "https://eu5.bookingkit.de";
+const VISIBLE_LEFT = `var(${VISUAL_VIEWPORT_PROPERTIES.offsetLeft}, 0px)`;
+const VISIBLE_TOP = `var(${VISUAL_VIEWPORT_PROPERTIES.offsetTop}, 0px)`;
+
+/*
+ * Insets for a screen-sized box at the visible part of the page (#77). The
+ * box is 100vw x `screenHeight`, the size the dialog had before. Viewport
+ * units keep that size when the on-screen keyboard opens, so the checkout
+ * does not shrink. The offset follows a pan of the visible area, but stays
+ * inside the layout viewport. On a page that fits the screen, the box is the
+ * layout viewport, as before, also when the browser pans the visible area to
+ * show a focused checkout field above the keyboard.
+ */
+const screenBoxInsets = (screenHeight: string) => `
+          top: max(0px, min(${VISIBLE_TOP}, calc(100% - ${screenHeight})));
+          right: max(0px, calc(100% - ${VISIBLE_LEFT} - 100vw));
+          bottom: max(0px, calc(100% - ${VISIBLE_TOP} - ${screenHeight}));
+          left: max(0px, min(${VISIBLE_LEFT}, calc(100% - 100vw)));`;
 
 export default function BookingkitCheckoutModal({
   url,
@@ -23,6 +40,17 @@ export default function BookingkitCheckoutModal({
   const externalLinkRef = useRef<HTMLAnchorElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  /*
+   * Place the dialog on the visible part of the page. On a phone, a host page
+   * wider than the screen makes the layout viewport larger than the screen,
+   * and the dialog was cut off at the right and the bottom (#77).
+   */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!url || !dialog) return;
+    return trackVisualViewport(dialog);
+  }, [url]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -124,7 +152,7 @@ export default function BookingkitCheckoutModal({
       <style>{`
         .cl-bk-checkout-dialog {
           position: fixed;
-          inset: 0;
+          /* margin: auto centers the dialog in the screen box. */${screenBoxInsets("100vh")}
           margin: auto;
           padding: 0;
           border: 0;
@@ -139,6 +167,11 @@ export default function BookingkitCheckoutModal({
           color: #1f2937;
           font: 16px/1.5 system-ui, sans-serif;
           box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+        }
+        /* A declaration with var() never falls back to an earlier one, so test dvh here. */
+        @supports (height: 100dvh) {
+          .cl-bk-checkout-dialog {${screenBoxInsets("100dvh")}
+          }
         }
         .cl-bk-checkout-dialog[open] {
           display: flex;
