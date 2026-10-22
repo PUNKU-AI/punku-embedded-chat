@@ -967,6 +967,120 @@ describe('ChatWidget', () => {
       expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe('500');
     });
 
+    it('should give the anchored window the tablet size that its placement used', () => {
+      setViewportSize(750, 342);
+      render(<ChatWidget {...defaultProps} start_open={true} width={300} height={230} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 120 });
+      });
+
+      // The CSS ignores the width and height props from 641 to 1023 px. The
+      // window opens beside the trigger, because the screen is too short.
+      const chatWindow = screen.getByTestId('chat-window');
+      expect(chatWindow.style.top).toBe('70px');
+      expect(chatWindow.style.left).toBe('84px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-width')).toBe('420px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-height')).toBe('256px');
+    });
+
+    it('should leave the desktop window size to the width and height props', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} width={300} height={230} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 120 });
+      });
+
+      const chatWindow = screen.getByTestId('chat-window');
+      expect(chatWindow.style.top).toBe('200px');
+      expect(chatWindow.style.left).toBe('24px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-width')).toBe('');
+    });
+
+    describe('anchored window after a screen change', () => {
+      const nextFrame = () => new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const anchorTrigger = (position: { x: number; y: number }) => {
+        act(() => {
+          (window as any)['punku-chat-widget_api'].setTriggerPosition(position);
+        });
+      };
+      const windowPlace = () => {
+        const chatWindow = screen.getByTestId('chat-window');
+        return {
+          top: chatWindow.style.top,
+          left: chatWindow.style.left,
+          height: chatWindow.style.getPropertyValue('--cl-anchored-window-height'),
+        };
+      };
+
+      afterEach(() => {
+        delete (window as any).visualViewport;
+      });
+
+      it('should place and size the window again after a resize', async () => {
+        setViewportSize(750, 342);
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        anchorTrigger({ x: 24, y: 120 });
+        expect(windowPlace()).toEqual({ top: '70px', left: '84px', height: '256px' });
+
+        // The browser toolbar hides, so the landscape screen grows.
+        setViewportSize(750, 1000);
+        await act(async () => {
+          window.dispatchEvent(new Event('resize'));
+          await nextFrame();
+        });
+
+        expect(windowPlace()).toEqual({ top: '200px', left: '24px', height: '600px' });
+      });
+
+      it('should place the window again after a rotation', async () => {
+        setViewportSize(810, 1080);
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        anchorTrigger({ x: 24, y: 700 });
+        expect(windowPlace()).toEqual({ top: '68px', left: '24px', height: '600px' });
+
+        setViewportSize(1080, 810);
+        await act(async () => {
+          window.dispatchEvent(new Event('orientationchange'));
+          await nextFrame();
+        });
+
+        // The desktop layout sizes the window from the props, not from the variables.
+        expect(windowPlace()).toEqual({ top: '101px', left: '24px', height: '' });
+      });
+
+      it('should place the window again after a visual viewport resize', async () => {
+        const visualViewport = new EventTarget();
+        Object.defineProperty(window, 'visualViewport', { configurable: true, value: visualViewport });
+        setViewportSize(750, 342);
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        anchorTrigger({ x: 24, y: 120 });
+
+        setViewportSize(750, 1000);
+        await act(async () => {
+          visualViewport.dispatchEvent(new Event('resize'));
+          await nextFrame();
+        });
+
+        expect(windowPlace()).toEqual({ top: '200px', left: '24px', height: '600px' });
+      });
+
+      it('should keep the gap to the rendered trigger size', () => {
+        setViewportSize(750, 342);
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        // chat_trigger_style or a large host root font size makes the trigger 72 px.
+        const trigger = screen.getByTestId('chat-trigger');
+        Object.defineProperty(trigger, 'offsetWidth', { configurable: true, value: 72 });
+        Object.defineProperty(trigger, 'offsetHeight', { configurable: true, value: 72 });
+        anchorTrigger({ x: 24, y: 120 });
+
+        // 12 px right of the trigger: 24 + 72 + 12.
+        expect(windowPlace()).toEqual({ top: '70px', left: '108px', height: '256px' });
+      });
+    });
+
     it('should position the closed hint from the relocated trigger side by default', () => {
       render(
         <ChatWidget

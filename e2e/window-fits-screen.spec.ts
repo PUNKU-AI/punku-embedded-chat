@@ -11,13 +11,10 @@ import {
 const widgetId = 'browser-fixture';
 const pageErrors = new WeakMap<Page, string[]>();
 
-test.beforeEach(({ page }, testInfo) => {
+test.beforeEach(({ page }) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
   page.on('pageerror', (error) => errors.push(error.message));
-  // Short landscape phones use the 641-767 px layout. Its window rises above
-  // the top of the screen on every page, wide or not (#77, Related).
-  test.skip(testInfo.project.name === 'phone-landscape', 'The landscape layout overflows on every page (#77, Related).');
 });
 
 test.afterEach(({ page }) => {
