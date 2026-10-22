@@ -9,7 +9,8 @@ import {
 // landscape, where the page is then 320 x 156 CSS px. The phone window took
 // the top offset and the trigger gap from those 156 px and became a 16 px
 // strip. The widget now lays out at the screen size on such pages: one
-// widget px is one screen px.
+// widget px is one screen px. The offsets stay in page px, because host
+// elements that they clear, such as a booking button, scale with the page.
 
 const openParts = ['.cl-chat-window', '.cl-header', '.cl-close-btn', '.cl-input-element', '.cl-send-button', '.cl-trigger'];
 const screens = [
@@ -105,23 +106,32 @@ async function expectUsableWindow(page: Page, bottomOffset = 20) {
   // The page is scaled, and the widget is not: the trigger keeps its 48 px.
   expect(view.scale).toBeGreaterThan(1.1);
   expect(Math.round(view.trigger.width)).toBe(48);
+  // The offsets are page px: right_offset 20 and bottom_offset from the screen corner.
+  const pagePx = (value: number) => Math.round(value * view.scale);
+  expect(Math.round(view.screen.width - view.trigger.right)).toBe(pagePx(20));
+  expect(Math.round(view.screen.height - view.trigger.bottom)).toBe(pagePx(bottomOffset));
   // The latest message is fully visible in the message list.
   expect(view.lastMessage.top).toBeGreaterThanOrEqual(view.messages.top - 0.5);
   expect(view.lastMessage.bottom).toBeLessThanOrEqual(view.messages.bottom + 0.5);
 
   if (view.screen.width > view.screen.height) {
     // The short landscape layout of a 740 or 844 px screen (#77): the full
-    // height beside the trigger, 8 px from the top, level with the trigger bottom.
+    // height beside the trigger, 8 px from the top. The bottom is level with
+    // the trigger bottom while the window keeps 240 px. Else the window
+    // keeps 240 px and ends lower.
     expect(overlaps(view.window, view.trigger)).toBe(false);
     expect(Math.round(view.trigger.left - view.window.right)).toBe(12);
     expect(Math.round(view.window.top)).toBe(8);
-    expect(Math.round(view.screen.height - view.window.bottom)).toBe(bottomOffset);
-    expect(view.window.height).toBeGreaterThanOrEqual(minimumWindowHeight);
+    if (view.screen.height - 8 - pagePx(bottomOffset) >= minimumWindowHeight) {
+      expect(Math.round(view.trigger.bottom)).toBe(Math.round(view.window.bottom));
+    } else {
+      expect(Math.round(view.window.height)).toBe(minimumWindowHeight);
+    }
   } else {
-    // The phone layout: the full width, below the 60 px top offset and above the trigger gap.
+    // The phone layout: the full width, below the top offset (60 page px) and above the trigger gap.
     expect(Math.round(view.window.left)).toBe(0);
     expect(Math.round(view.window.width)).toBe(Math.round(view.screen.width));
-    expect(Math.round(view.window.top)).toBe(60);
+    expect(Math.round(view.window.top)).toBe(pagePx(60));
     expect(Math.round(view.screen.height - view.window.bottom)).toBe(80);
   }
   return view;
@@ -171,10 +181,11 @@ for (const viewport of screens) {
 test.describe('width=320 page on a 740 x 360 screen', () => {
   test.use({ viewport: { width: 740, height: 360 } });
 
-  test('a bottom_offset keeps the window bottom level with the trigger', async ({ page }) => {
+  test('bottom_offset 80 keeps the trigger 80 page px above the bottom, and the window keeps 240 px', async ({ page }) => {
+    // A live Wix embed uses 80 to clear the site's own booking button, which scales with the page.
     await openWindow(page, { bottom_offset: '80' });
     const view = await expectUsableWindow(page, 80);
-    expect(Math.round(view.trigger.bottom)).toBe(Math.round(view.window.bottom));
+    expect(Math.round(view.screen.height - view.trigger.bottom)).toBe(185);
   });
 
   test('the trigger opens the window, the input takes text and the close X closes it', async ({ page, hasTouch, browserName }) => {

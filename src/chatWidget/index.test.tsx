@@ -1338,7 +1338,8 @@ describe('ChatWidget', () => {
       });
       expect(root().style.getPropertyValue('--cl-frame-width')).toBe('740px');
       // The trigger takes the frame corner and gets the taps.
-      expect(anchor().style).toMatchObject({ position: 'absolute', right: '20px', bottom: '20px', pointerEvents: 'auto', transform: '' });
+      // The offsets stay in page px: 20 page px are 46.25 frame px.
+      expect(anchor().style).toMatchObject({ position: 'absolute', right: '46.25px', bottom: '46.25px', pointerEvents: 'auto', transform: '' });
     });
 
     it('keeps the closed frame on the layout viewport and follows the keyboard while open', () => {
