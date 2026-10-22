@@ -100,6 +100,7 @@ export default function ChatMessage({
   onFeedbackUpdate,
   onClientError,
   onCheckout,
+  isLatest = false,
   onRetry,
   retryLabel = "Try again",
 }: ChatMessageType & {
@@ -108,6 +109,8 @@ export default function ChatMessage({
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
+  /** The newest answer keeps its feedback buttons visible. */
+  isLatest?: boolean;
   onClientError?: (
     error: unknown,
     phase: PunkuChatErrorPhase,
@@ -175,7 +178,7 @@ export default function ChatMessage({
   return (
     <div
       className={
-        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start")
+        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start") + (isLatest ? " cl-latest" : "")
       }
     >
       {isSend ? (
@@ -212,21 +215,24 @@ export default function ChatMessage({
           )}
         </div>
       ) : (
-        <div 
-          style={{
-            ...DEFAULT_MESSAGE_TEXT_STYLE,
-            ...(bot_message_style || {}),
-          }} 
-          className={"cl-bot_message"}
-        >
-          <Markdown
-            className={"markdown-body prose flex flex-col word-break-break-word"}
-            remarkPlugins={[remarkGfm]}
-            components={markdownComponents}
+        // The answer bubble, with the feedback buttons under it (not inside it).
+        <div className="cl-message-stack">
+          <div
+            style={{
+              ...DEFAULT_MESSAGE_TEXT_STYLE,
+              ...(bot_message_style || {}),
+            }}
+            className={"cl-bot_message"}
           >
-            {parsedMessage}
-          </Markdown>
-          
+            <Markdown
+              className={"markdown-body prose flex flex-col word-break-break-word"}
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+              {parsedMessage}
+            </Markdown>
+          </div>
+
           {/* Simple thumbs up/down feedback - hide for welcome message */}
           {!isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">

@@ -37,6 +37,7 @@ function createChatElement() {
             additional_headers:"json",
             theme: "string",
             welcome_message: "string",
+            suggestions: "json",
             show_feedback: "boolean",
             default_language: "string",
             header_icon: "string",

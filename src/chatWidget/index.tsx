@@ -182,6 +182,7 @@ export default function ChatWidget({
   start_open = false,
   theme = "default",
   welcome_message,
+  suggestions,
   show_feedback = false,
   header_icon,
   header_icon_name,
@@ -249,6 +250,8 @@ export default function ChatWidget({
   start_open?: boolean;
   theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
   welcome_message?: string;
+  /** Up to four questions under the welcome message; a tap sends one. */
+  suggestions?: string[];
   show_feedback?: boolean;
   header_icon?: string;
   header_icon_name?: string;
@@ -2171,6 +2174,199 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- Suggested questions, feedback and scrolling ----------
+   Chip colours per theme (a site's button_color replaces ink and line on
+   the chips), and the colours of the button back to the newest message. */
+.cl-window {
+  --cl-chip-ink: #1d4ed8;
+  --cl-chip-line: #bfd3fb;
+  --cl-chip-bg: #ffffff;
+  --cl-chip-hover: #eff4ff;
+  --cl-jump-bg: #ffffff;
+  --cl-jump-ink: #334155;
+  --cl-jump-line: rgba(15, 23, 42, 0.12);
+}
+
+.cl-window.theme-dark {
+  --cl-chip-ink: #c7d2fe;
+  --cl-chip-line: rgba(129, 140, 248, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(129, 140, 248, 0.12);
+  --cl-jump-bg: #1e293b;
+  --cl-jump-ink: #e2e8f0;
+  --cl-jump-line: rgba(255, 255, 255, 0.14);
+}
+
+.cl-window.theme-ocean {
+  --cl-chip-ink: #bae6fd;
+  --cl-chip-line: rgba(56, 189, 248, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(56, 189, 248, 0.12);
+  --cl-jump-bg: #1e293b;
+  --cl-jump-ink: #f1f5f9;
+  --cl-jump-line: rgba(255, 255, 255, 0.14);
+}
+
+.cl-window.theme-aurora {
+  --cl-chip-ink: #f5d0fe;
+  --cl-chip-line: rgba(232, 121, 249, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(232, 121, 249, 0.12);
+  --cl-jump-bg: #3b0764;
+  --cl-jump-ink: #ede9fe;
+  --cl-jump-line: rgba(255, 255, 255, 0.16);
+}
+
+.cl-window .cl-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.cl-window .cl-suggestion {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-chip-line);
+  background: var(--cl-chip-bg);
+  color: var(--cl-chip-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cl-window .cl-suggestion:hover {
+  background: var(--cl-chip-hover);
+  border-color: var(--cl-chip-ink);
+}
+
+.cl-window .cl-suggestion:focus-visible {
+  outline: 2px solid var(--cl-chip-ink);
+  outline-offset: 2px;
+}
+
+.cl-window .cl-suggestion:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The answer and, under it, its feedback buttons. */
+.cl-window .cl-message-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 85%;
+  min-width: 0;
+}
+
+.cl-window .cl-message-stack > .cl-bot_message {
+  max-width: 100%;
+}
+
+.cl-window .cl-message-stack .feedback-container {
+  justify-content: flex-start;
+  margin: 2px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.cl-window .cl-message-stack .feedback-buttons {
+  gap: 2px;
+}
+
+.cl-window .cl-message-stack .feedback-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  opacity: 1;
+}
+
+.cl-window .cl-message-stack .feedback-button:hover,
+.cl-window .cl-message-stack .feedback-button.selected {
+  background: rgba(127, 127, 127, 0.12);
+  outline: none;
+}
+
+/* The newest answer, a voted answer, and a hovered or focused answer show
+   their feedback buttons. Touch screens have no hover: they always do. */
+.cl-window .cl-message-stack .feedback-container {
+  opacity: 0;
+}
+
+.cl-window .cl-latest .feedback-container,
+.cl-window .feedback-container:has(.selected),
+.cl-window .cl-chat-message:hover .feedback-container,
+.cl-window .cl-chat-message:focus-within .feedback-container {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cl-window .cl-chat-message .feedback-container {
+    opacity: 1;
+  }
+}
+
+/* The feedback row already separates an answer from the next question. */
+.cl-window .cl-chat-message.cl-justify-start:has(.feedback-container) + .cl-chat-message.cl-justify-end {
+  margin-top: 2px;
+}
+
+/* A thin scrollbar on computers, so the visitor sees that the list scrolls. */
+.cl-window .cl-messages_container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 3px;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* The button back to the newest message floats over the end of the list. */
+.cl-window .cl-jump-latest-anchor {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  z-index: 1;
+}
+
+.cl-window .cl-jump-latest {
+  position: absolute;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--cl-jump-line);
+  background: var(--cl-jump-bg);
+  color: var(--cl-jump-ink);
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+
+.cl-window .cl-jump-latest:focus-visible {
+  outline: 2px solid var(--cl-chip-ink);
+  outline-offset: 2px;
+}
+
 /* Add these styles at an appropriate location in the CSS */
 
 .cl-header {
@@ -3827,6 +4023,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           additional_headers={additional_headers}
           theme={effectiveTheme}
           welcome_message={welcome_message}
+          suggestions={suggestions}
           show_feedback={show_feedback}
           header_icon={headerIcon}
           onHeaderIconError={onHeaderIconError}

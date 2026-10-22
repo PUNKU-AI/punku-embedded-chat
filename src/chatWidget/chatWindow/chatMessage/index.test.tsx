@@ -241,6 +241,25 @@ describe('ChatMessage', () => {
   });
 
   describe('Feedback System', () => {
+    it('should put the feedback buttons under the answer, not inside its bubble', () => {
+      render(<ChatMessage {...defaultProps} message_id="test-message-id" />);
+
+      const stack = document.querySelector('.cl-message-stack') as HTMLElement;
+      const bubble = stack.querySelector('.cl-bot_message') as HTMLElement;
+      const feedback = stack.querySelector('.feedback-container') as HTMLElement;
+      expect(bubble).toBeInTheDocument();
+      expect(feedback).toBeInTheDocument();
+      expect(bubble).not.toContainElement(feedback);
+    });
+
+    it('should mark the newest answer, which keeps its feedback buttons visible', () => {
+      const { rerender } = render(<ChatMessage {...defaultProps} message_id="test-message-id" />);
+      expect(document.querySelector('.cl-chat-message')).not.toHaveClass('cl-latest');
+
+      rerender(<ChatMessage {...defaultProps} message_id="test-message-id" isLatest={true} />);
+      expect(document.querySelector('.cl-chat-message')).toHaveClass('cl-latest');
+    });
+
     it('should show feedback buttons for bot messages', () => {
       render(
         <ChatMessage

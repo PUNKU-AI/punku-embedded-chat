@@ -245,6 +245,7 @@ Use the widget API to customize your widget:
 | user_message_style    | json      | No       |
 | user_message_text_color| string   | No       |
 | welcome_message       | string    | No       |
+| suggestions           | json      | No       |
 | width                 | number    | No       |
 | window_title          | string    | No       |
 | session_id            | string    | No       |
@@ -461,6 +462,11 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
 
+- **suggestions:**
+  - Type: JSON
+  - Required: No
+  - Description: Up to four questions that show as buttons under the welcome message, for example `'["Opening hours","Tickets for families","Wheelchair access"]'`. A tap sends the question. The buttons show only before the conversation starts. Empty strings are ignored, and more than four are cut to four. With `button_color`, the buttons use that colour for their text and border.
+
 - **closed_widget_hint_text:**
   - Type: String
   - Required: No
@@ -589,7 +595,7 @@ Use the widget API to customize your widget:
   - Type: Boolean
   - Required: No
   - Default: None (the prop has no effect)
-  - Description: The widget accepts this attribute, but it ignores the value. The feedback buttons (thumbs up and down) always show on bot replies. They do not show on the welcome message or on error messages. You cannot turn them off with this prop.
+  - Description: The widget accepts this attribute, but it ignores the value. The feedback buttons (thumbs up and down) sit under each bot reply. On a computer they show under the newest reply, under a reply with a vote, and under a reply that the pointer or the keyboard focus is on. On a touch screen they always show. They do not show on the welcome message or on error messages. You cannot turn them off with this prop.
 
 - **link_color:**
   - Type: String
