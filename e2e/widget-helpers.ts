@@ -96,6 +96,36 @@ export async function partsOutsideScreen(page: Page, selectors: string[]) {
   }, selectors);
 }
 
+export async function edgeGaps(page: Page, selector: string) {
+  // Distances in CSS px from the box to the edges of the visible area
+  // (`screen`) and of the layout viewport (`layout`).
+  return page.evaluate((selector) => {
+    const host = document.querySelector('punku-chat')!;
+    const box = window.__widgetRoots.get(host)!.querySelector(selector)!.getBoundingClientRect();
+    const viewport = window.visualViewport!;
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none';
+    document.body.append(probe);
+    const layout = probe.getBoundingClientRect();
+    probe.remove();
+    const round = (value: number) => Math.round(value);
+    return {
+      screen: {
+        left: round(box.left - viewport.offsetLeft),
+        top: round(box.top - viewport.offsetTop),
+        right: round(viewport.offsetLeft + viewport.width - box.right),
+        bottom: round(viewport.offsetTop + viewport.height - box.bottom),
+      },
+      layout: {
+        left: round(box.left - layout.left),
+        top: round(box.top - layout.top),
+        right: round(layout.right - box.right),
+        bottom: round(layout.bottom - box.bottom),
+      },
+    };
+  }, selector);
+}
+
 export async function panToLayoutCorner(page: Page) {
   await page.evaluate(() => document.getElementById('host-corner')!.scrollIntoView({ block: 'end', inline: 'end' }));
   const view = await screenView(page);
@@ -105,6 +135,44 @@ export async function panToLayoutCorner(page: Page) {
     await expect.poll(async () => (await screenView(page)).screen.left).toBeGreaterThan(0);
   }
   return screenView(page);
+}
+
+export async function fakeKeyboard(page: Page, height: number) {
+  // Playwright cannot open an on-screen keyboard. On iOS Safari and in Chrome
+  // on Android 108+, the keyboard makes only the visual viewport shorter.
+  // Install a visual viewport that is `height` px shorter than the real one.
+  await page.addInitScript((height) => {
+    const real = window.visualViewport!;
+    const fake = new EventTarget();
+    for (const key of ['offsetLeft', 'offsetTop', 'width', 'scale', 'pageLeft', 'pageTop'] as const) {
+      Object.defineProperty(fake, key, { get: () => real[key] });
+    }
+    Object.defineProperty(fake, 'height', { get: () => real.height - height });
+    for (const type of ['resize', 'scroll']) real.addEventListener(type, () => fake.dispatchEvent(new Event(type)));
+    Object.defineProperty(window, 'visualViewport', { configurable: true, get: () => fake });
+  }, height);
+}
+
+export async function waitForSettledBoxes(page: Page, selectors: string[]) {
+  // The window scales in when it opens. Wait until each box is shown at full
+  // scale and stays the same in two reads, so a check cannot pass mid-move.
+  let previous = '';
+  await expect.poll(async () => {
+    const current = await page.evaluate((selectors) => {
+      const host = document.querySelector('punku-chat')!;
+      const root = window.__widgetRoots.get(host)!;
+      return selectors.map((selector) => {
+        const element = root.querySelector<HTMLElement>(selector);
+        if (!element) return 'missing';
+        const box = element.getBoundingClientRect();
+        if (Math.abs(box.width - element.offsetWidth) > 1 || Math.abs(box.height - element.offsetHeight) > 1) return 'scaled';
+        return [box.left, box.top, box.right, box.bottom].map(Math.round).join(',');
+      }).join('|');
+    }, selectors);
+    const settled = current === previous && !/missing|scaled/.test(current);
+    previous = current;
+    return settled;
+  }, { intervals: [100] }).toBe(true);
 }
 
 export async function waitForInputFocus(page: Page) {

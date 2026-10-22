@@ -1,7 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 import {
-  activate, extendHostPage, hostCorner, loadWidget, panToLayoutCorner, partsOutsideScreen, screenView,
-  waitForInputFocus, widenHostPage,
+  activate, edgeGaps, extendHostPage, hostCorner, loadWidget, panToLayoutCorner, partsOutsideScreen, screenView,
+  waitForInputFocus, waitForSettledBoxes, widenHostPage,
 } from './widget-helpers';
 
 // Issue #77, Related. A host element wider than a phone screen makes the
@@ -33,26 +33,16 @@ async function loadOnWidePage(page: Page, props: Record<string, string> = {}) {
 }
 
 async function gapsToScreenEdges(page: Page, selector: string) {
-  // Distances from the box to the edges of the visible area, in CSS px.
-  return page.evaluate((selector) => {
-    const host = document.querySelector('punku-chat')!;
-    const box = window.__widgetRoots.get(host)!.querySelector(selector)!.getBoundingClientRect();
-    const viewport = window.visualViewport!;
-    return {
-      left: Math.round(box.left - viewport.offsetLeft),
-      top: Math.round(box.top - viewport.offsetTop),
-      right: Math.round(viewport.offsetLeft + viewport.width - box.right),
-      bottom: Math.round(viewport.offsetTop + viewport.height - box.bottom),
-    };
-  }, selector);
+  return (await edgeGaps(page, selector)).screen;
 }
 
-async function box(page: Page, selector: string) {
-  return page.evaluate((selector) => {
-    const host = document.querySelector('punku-chat')!;
-    const { top, bottom } = window.__widgetRoots.get(host)!.querySelector(selector)!.getBoundingClientRect();
-    return { top, bottom };
-  }, selector);
+async function overlap(page: Page, first: string, second: string) {
+  return page.evaluate(([first, second]) => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const a = root.querySelector(first)!.getBoundingClientRect();
+    const b = root.querySelector(second)!.getBoundingClientRect();
+    return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  }, [first, second]);
 }
 
 const triggerPlacements: { name: string; props: Record<string, string>; gaps: Record<string, number> }[] = [
@@ -82,12 +72,7 @@ test('the trigger stays at the layout viewport corner on a page that fits the sc
   const view = await screenView(page);
   expect(Math.round(view.layout.width)).toBe(Math.round(view.screen.width));
 
-  const trigger = await page.evaluate(() => {
-    const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)!.querySelector('.cl-trigger')!.getBoundingClientRect().toJSON();
-  });
-  expect(Math.round(view.layout.width - trigger.right)).toBe(20);
-  expect(Math.round(view.layout.height - trigger.bottom)).toBe(20);
+  expect((await edgeGaps(page, '.cl-trigger')).layout).toMatchObject({ right: 20, bottom: 20 });
 });
 
 test('the closed hint shows next to the trigger on a wide host page', async ({ page }) => {
@@ -104,15 +89,17 @@ test('the closed hint shows next to the trigger on a wide host page', async ({ p
   await expect.poll(() => partsOutsideScreen(page, ['.cl-trigger', '.cl-closed-widget-hint'])).toEqual([]);
 });
 
-test('the trigger stays on the screen below the open window on a wide host page', async ({ page }) => {
+test('the trigger stays on the screen next to the open window on a wide host page', async ({ page }) => {
   await loadOnWidePage(page, { start_open: 'true' });
   await waitForInputFocus(page);
-  await expect.poll(() => partsOutsideScreen(page, ['.cl-trigger'])).toEqual([]);
-  const chatWindow = await box(page, '.cl-chat-window');
-  expect(chatWindow.bottom).toBeLessThanOrEqual((await box(page, '.cl-trigger')).top);
-
-  await panToLayoutCorner(page);
-  await expect.poll(() => partsOutsideScreen(page, ['.cl-trigger'])).toEqual([]);
+  for (const pan of [false, true]) {
+    if (pan) await panToLayoutCorner(page);
+    await waitForSettledBoxes(page, ['.cl-chat-window', '.cl-trigger']);
+    expect(await partsOutsideScreen(page, ['.cl-trigger'])).toEqual([]);
+    // Below the window in most layouts. Short landscape screens can put the
+    // window beside the trigger (#80), so check only that they do not overlap.
+    expect(await overlap(page, '.cl-chat-window', '.cl-trigger')).toBe(false);
+  }
 });
 
 test('the checkout dialog fits the screen on a wide host page', async ({ page, hasTouch }) => {
@@ -130,7 +117,8 @@ test('the checkout dialog fits the screen on a wide host page', async ({ page, h
   }, dialog)).toBe(true);
 
   const parts = [dialog, `${dialog} button`];
-  await expect.poll(() => partsOutsideScreen(page, parts)).toEqual([]);
+  await waitForSettledBoxes(page, parts);
+  expect(await partsOutsideScreen(page, parts)).toEqual([]);
   if (view.screen.width <= 767) {
     // The phone layout fills the screen.
     await expect.poll(() => gapsToScreenEdges(page, dialog)).toEqual({ left: 0, top: 0, right: 0, bottom: 0 });
@@ -143,7 +131,8 @@ test('the checkout dialog fits the screen on a wide host page', async ({ page, h
   }
 
   await panToLayoutCorner(page);
-  await expect.poll(() => partsOutsideScreen(page, parts)).toEqual([]);
+  await waitForSettledBoxes(page, parts);
+  expect(await partsOutsideScreen(page, parts)).toEqual([]);
 });
 
 test.describe('Chromium phone in landscape', () => {
@@ -159,9 +148,11 @@ test.describe('Chromium phone in landscape', () => {
     await loadOnWidePage(page, { start_open: 'true' });
     await waitForInputFocus(page);
     const parts = ['.cl-chat-window', '.cl-close-btn', '.cl-send-button', '.cl-trigger'];
-    await expect.poll(() => partsOutsideScreen(page, parts)).toEqual([]);
+    await waitForSettledBoxes(page, parts);
+    expect(await partsOutsideScreen(page, parts)).toEqual([]);
 
     await panToLayoutCorner(page);
-    await expect.poll(() => partsOutsideScreen(page, parts)).toEqual([]);
+    await waitForSettledBoxes(page, parts);
+    expect(await partsOutsideScreen(page, parts)).toEqual([]);
   });
 });
