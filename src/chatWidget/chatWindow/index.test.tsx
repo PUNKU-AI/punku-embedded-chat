@@ -333,6 +333,50 @@ describe('ChatWindow', () => {
       });
     });
 
+    describe('Scaled page (#82)', () => {
+      // width=320 on a 740 x 360 phone in landscape. Media queries see the
+      // 320 px page, so the rules for the frame size come without @media.
+      const landscape = { scale: 2.3125, width: 740, height: 361 };
+      const renderedStyles = () => Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+
+      it('should use the short landscape rules of the screen size', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={landscape} />);
+
+        const styles = renderedStyles();
+        expect(styles).not.toMatch(/@media \((min|max)-(width|height)/);
+        expect(styles).not.toMatch(/[0-9]v[wh]\b/);
+        expect(styles).toContain('--cl-trigger-gap: var(--cl-bottom-offset);');
+        expect(styles).toContain(`top: ${visualViewportInset('top', '8px')} !important`);
+        expect(styles).toContain(
+          'width: min(420px, 629px, calc(var(--cl-visual-viewport-width, 740px) - calc(20px + 48px + 12px) - 8px)) !important'
+        );
+        // The phone rules of the 320 px page are gone.
+        expect(styles).not.toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+      });
+
+      it('should use the phone rules on a scaled portrait page', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.21875, width: 390, height: 843 }} />);
+
+        const styles = renderedStyles();
+        expect(styles).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+        expect(styles).not.toContain('--cl-window-room');
+      });
+
+      it('should take the visible part of the page from the frame', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={landscape} />);
+
+        const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-left')).toBe('0px');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-top')).toBe('0px');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-width')).toBe('var(--cl-frame-width, 740px)');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-height')).toBe('var(--cl-frame-height, 361px)');
+        expect(chatWindow.style.maxHeight).toBe('252.7px');
+        expect(chatWindow.style.maxWidth).toBe('666px');
+      });
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 

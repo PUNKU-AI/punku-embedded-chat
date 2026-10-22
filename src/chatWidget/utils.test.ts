@@ -4,6 +4,7 @@ import {
   extractMessageFromOutput,
   detectBrowserLanguage,
   revealInScrollContainer,
+  getPageScale,
   subscribeVisualViewport,
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
@@ -281,6 +282,16 @@ describe('revealInScrollContainer', () => {
     expect(list.scrollTop).toBe(500);
   });
 
+  it('scrolls in list px inside a scaled page frame', () => {
+    // The frame shows the list at half size: client rects are half the list px.
+    const { list, link, place } = setup();
+    Object.defineProperty(list, 'offsetHeight', { configurable: true, value: 200 });
+    list.getBoundingClientRect = () => ({ top: 50, bottom: 150, height: 100 } as DOMRect);
+    place(20, 30);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(440);
+  });
+
   it('never scrolls the page when no ancestor scrolls', () => {
     const { list, link, place } = setup('overflow: visible');
     place(2000, 2020);
@@ -370,6 +381,35 @@ describe('visual viewport tracking', () => {
     Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
     viewport.dispatchEvent(new Event('resize'));
     expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
+  });
+
+  describe('on a page that the browser scales up (#82)', () => {
+    // width=320 on a 740 x 360 phone in landscape: a page scale of 2.3125.
+    const root = document.documentElement as unknown as { clientWidth?: number };
+    beforeEach(() => {
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 320 });
+      Object.assign(viewport, { width: 320, height: 156, scale: 2.3125 });
+    });
+    afterEach(() => {
+      delete root.clientWidth;
+    });
+
+    it('treats the page scale as no pinch zoom', () => {
+      expect(getPageScale()).toBe(2.3125);
+      const element = document.createElement('div');
+      track(element);
+      expect(variables(element)).toEqual(['0px', '0px', '320px', '156px']);
+    });
+
+    it('removes the box while the visitor zooms in beyond the page scale', () => {
+      const element = document.createElement('div');
+      track(element);
+
+      Object.assign(viewport, { scale: 4.625, offsetLeft: 80, offsetTop: 40, width: 160, height: 78 });
+      viewport.dispatchEvent(new Event('resize'));
+      expect(getPageScale()).toBe(2.3125);
+      expect(variables(element)).toEqual(['', '', '', '']);
+    });
   });
 
   it('writes a variable only when its value changes', () => {

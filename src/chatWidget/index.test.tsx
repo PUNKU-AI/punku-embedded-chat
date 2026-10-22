@@ -1288,6 +1288,83 @@ describe('ChatWidget', () => {
     });
   });
 
+  describe('Scaled page (#82)', () => {
+    // A Wix page with width=320 on a 740 x 360 phone in landscape: the layout
+    // viewport is 320 x 156 CSS px at a page scale of 2.3125.
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 0;
+      offsetTop = 0;
+      width = 320;
+      height = 156;
+      scale = 2.3125;
+    }
+
+    const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    const documentRoot = document.documentElement as unknown as { clientWidth?: number; clientHeight?: number; scrollWidth?: number };
+    let viewport: FakeVisualViewport;
+    // The fixed root and its trigger anchor have no accessible role. Their inline style is the result.
+    // eslint-disable-next-line testing-library/no-node-access
+    const root = () => document.querySelector('.cl-widget-root') as HTMLElement;
+    const anchor = () => root().children[1] as HTMLElement;
+
+    beforeEach(() => {
+      viewport = new FakeVisualViewport();
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+      Object.defineProperty(documentRoot, 'clientWidth', { configurable: true, value: 320 });
+      Object.defineProperty(documentRoot, 'clientHeight', { configurable: true, value: 156 });
+      Object.defineProperty(documentRoot, 'scrollWidth', { configurable: true, value: 320 });
+    });
+
+    afterEach(() => {
+      delete documentRoot.clientWidth;
+      delete documentRoot.clientHeight;
+      delete documentRoot.scrollWidth;
+      if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
+      else delete (window as { visualViewport?: unknown }).visualViewport;
+    });
+
+    it('makes the root a frame that undoes the page scale', () => {
+      render(<ChatWidget {...defaultProps} start_open={false} />);
+
+      expect(root().style).toMatchObject({
+        position: 'fixed',
+        left: 'var(--cl-frame-left, 0px)',
+        top: 'var(--cl-frame-top, 0px)',
+        width: 'var(--cl-frame-width, 740px)',
+        height: 'var(--cl-frame-height, 361px)',
+        transform: `scale(${1 / 2.3125})`,
+        pointerEvents: 'none',
+        zIndex: '2147483000',
+      });
+      expect(root().style.getPropertyValue('--cl-frame-width')).toBe('740px');
+      // The trigger takes the frame corner and gets the taps.
+      expect(anchor().style).toMatchObject({ position: 'absolute', right: '20px', bottom: '20px', pointerEvents: 'auto', transform: '' });
+    });
+
+    it('keeps the closed frame on the layout viewport and follows the keyboard while open', () => {
+      render(<ChatWidget {...defaultProps} start_open={false} />);
+      viewport.height = 80;
+      act(() => {
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(root().style.getPropertyValue('--cl-frame-height')).toBe('360.75px');
+
+      fireEvent.click(screen.getByTestId('chat-trigger'));
+      expect(root().style.getPropertyValue('--cl-frame-height')).toBe('185px');
+    });
+
+    it('keeps a relocated trigger at its page x and y, unscaled', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      act(() => {
+        expect((window as any)['punku-chat-widget_api'].setTriggerPosition({ x: 24, y: 120 })).toBe(true);
+      });
+
+      expect(root().style).toMatchObject({ left: '24px', top: '120px', transform: 'none' });
+      expect(root().style.pointerEvents).toBe('');
+    });
+  });
+
   describe('getVisibleCornerShift', () => {
     const screen = { offsetLeft: 43, offsetTop: 88, width: 412, height: 839 };
     const offsets = { top: 20, right: 30, bottom: 40, left: 50 };
