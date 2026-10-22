@@ -161,6 +161,7 @@ export async function waitForSettledBoxes(page: Page, selectors: string[]) {
     const current = await page.evaluate((selectors) => {
       const host = document.querySelector('punku-chat')!;
       const root = window.__widgetRoots.get(host)!;
+      if (root.querySelector('.cl-chat-window')?.getAnimations().length) return 'moving';
       return selectors.map((selector) => {
         const element = root.querySelector<HTMLElement>(selector);
         if (!element) return 'missing';
@@ -169,7 +170,7 @@ export async function waitForSettledBoxes(page: Page, selectors: string[]) {
         return [box.left, box.top, box.right, box.bottom].map(Math.round).join(',');
       }).join('|');
     }, selectors);
-    const settled = current === previous && !/missing|scaled/.test(current);
+    const settled = current === previous && !/missing|scaled|moving/.test(current);
     previous = current;
     return settled;
   }, { intervals: [100] }).toBe(true);
