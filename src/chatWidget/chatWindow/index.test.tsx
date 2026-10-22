@@ -237,10 +237,14 @@ describe('ChatWindow', () => {
         .map((style) => style.textContent || '')
         .join('\n');
       // Corner windows keep the CSS size, because they do not set the variables.
+      // The keyboard room of the 641 px rule must not cut an anchored window.
       expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, 85vw)) !important');
-      expect(styles).toContain('height: var(--cl-anchored-window-height, min(600px, 75vh)) !important');
+      expect(styles).toContain('--cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));');
+      expect(styles).toContain('max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important');
       expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important');
-      expect(styles).toContain('height: var(--cl-anchored-window-height, min(600px, 70vh)) !important');
+      expect(styles).toContain('--cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));');
+      expect(styles).toContain('max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important');
+      expect(styles).toContain('height: var(--cl-window-height) !important');
     });
 
     it('should not force tablet windows to the right side', () => {
@@ -254,32 +258,53 @@ describe('ChatWindow', () => {
     });
 
     describe('Short landscape screens', () => {
-      const shortLandscapeQuery = '@media (min-width: 641px) and (max-width: 767px) and (max-height: 500px)';
+      const shortLandscapeQuery = '@media (min-width: 641px) and (max-width: 1023px) and (max-height: 500px)';
       const renderedStyles = () => Array.from(document.querySelectorAll('style'))
         .map((style) => style.textContent || '')
         .join('\n');
 
-      it('should fill the height to the left of a right-side trigger', () => {
+      it('should fill the visible height to the left of a right-side trigger', () => {
         render(<ChatWindow {...defaultProps} position="top-right" right_offset={52} bottom_offset={60} />);
 
         const styles = renderedStyles();
         expect(styles).toContain(shortLandscapeQuery);
-        expect(styles).toContain('top: 8px !important');
-        expect(styles).toContain('bottom: var(--cl-bottom-offset) !important');
-        expect(styles).toContain('right: calc(52px + max(48px, 3rem) + 12px) !important');
-        expect(styles).toContain('width: min(420px, 85vw, calc(100vw - 52px - max(48px, 3rem) - 20px)) !important');
-        expect(styles).not.toContain('left: calc(');
+        expect(styles).toContain(`top: ${visualViewportInset('top', '8px')} !important`);
+        expect(styles).toContain(`bottom: ${visualViewportInset('bottom', 'var(--cl-window-gap)')} !important`);
+        // jsdom has no layout, so the trigger size is the 48 px default.
+        expect(styles).toContain(`right: ${visualViewportInset('right', 'calc(52px + 48px + 12px)')} !important`);
+        expect(styles).toContain(
+          'width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - calc(52px + 48px + 12px) - 8px)) !important'
+        );
+        expect(styles).not.toContain(`left: ${visualViewportInset('left', 'calc(')}`);
         const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
         expect(chatWindow.style.getPropertyValue('--cl-bottom-offset')).toBe('60px');
       });
 
-      it('should fill the height to the right of a left-side trigger', () => {
+      it('should keep the bottom level with the trigger while 240 px fit', () => {
+        render(<ChatWindow {...defaultProps} bottom_offset={285} />);
+
+        const styles = renderedStyles();
+        expect(styles).toContain('--cl-trigger-gap: var(--cl-bottom-offset);');
+        expect(styles).toContain('calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px)');
+        expect(styles).toContain('min(240px, calc(var(--cl-visible-height) - 16px))');
+      });
+
+      it('should fill the visible height to the right of a left-side trigger', () => {
         render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 
         const styles = renderedStyles();
         expect(styles).toContain(shortLandscapeQuery);
-        expect(styles).toContain('left: calc(64px + max(48px, 3rem) + 12px) !important');
-        expect(styles).not.toContain('right: calc(');
+        expect(styles).toContain(`left: ${visualViewportInset('left', 'calc(64px + 48px + 12px)')} !important`);
+        expect(styles).not.toContain(`right: ${visualViewportInset('right', 'calc(')}`);
+      });
+
+      it('should keep the gap from the rendered trigger size', () => {
+        const largeTriggerRef = {
+          current: { ...mockTriggerRef.current, offsetWidth: 64, offsetHeight: 64 },
+        } as unknown as React.RefObject<HTMLButtonElement>;
+        render(<ChatWindow {...defaultProps} triggerRef={largeTriggerRef} />);
+
+        expect(renderedStyles()).toContain(`right: ${visualViewportInset('right', 'calc(20px + 64px + 12px)')} !important`);
       });
 
       it('should keep an anchored window in its place', () => {

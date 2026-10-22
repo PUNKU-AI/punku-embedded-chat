@@ -26,10 +26,13 @@ Unit tests verify that closed chats preserve focus and cancel pending input focu
 Link checks cover nested Markdown text, branding links, exact URLs, query strings, fragments, opener protection, and referrer protection.
 Desktop checks also cover Enter, modified Enter, and middle-click.
 Composer checks cover the one-line start height, growth with a long two-sentence message, Shift+Enter line breaks, Enter sending, and the six-line cap with internal scrolling.
-Landscape window checks run on short screens 641-767 px wide.
-For all four chat positions and with `bottom_offset`, the open window, its close button, and its send button must stay inside the screen.
-The window fills the height beside the trigger and must not cover it.
+Landscape window checks run on short screens: 641-1023 px wide and at most 500 px tall.
+For all four chat positions, the open window, its close button, its send button, and the trigger must stay inside the screen.
+The window fills the height beside the trigger, 12 px from it, and must not cover it.
+With `bottom_offset` 285, as on live pages, the window keeps 240 px: the header, one message line, and the input.
+A custom trigger size from `chat_trigger_style` keeps the 12 px gap.
 A window that `setTriggerPosition` anchors keeps its place.
+The Android profile repeats the checks at 740 x 360 and 844 x 390 on a wide host page, before and after a pan.
 Phone and tablet checks use touch.
 Every test checks for uncaught page errors.
 

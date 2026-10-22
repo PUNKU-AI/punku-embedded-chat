@@ -136,15 +136,16 @@ test('the checkout dialog fits the screen on a wide host page', async ({ page, h
 });
 
 test.describe('Chromium phone in landscape', () => {
-  // 839 x 412 uses the 768-1023 px layout. Chromium grows the layout
-  // viewport to 883 x 434 on the wide page.
+  // 839 x 412 is a short landscape screen. The window fills the visible
+  // height beside the trigger (#80). Chromium grows the layout viewport to
+  // 883 x 434 on the wide page.
   test.use({ viewport: { width: 839, height: 412 } });
 
   test.beforeEach(({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'android', 'The android profile runs the Chromium landscape case.');
   });
 
-  test('the open window fits the screen in the tablet layout on a wide host page', async ({ page }) => {
+  test('the open window fits the screen in the short landscape layout on a wide host page', async ({ page }) => {
     await loadOnWidePage(page, { start_open: 'true' });
     await waitForInputFocus(page);
     const parts = ['.cl-chat-window', '.cl-close-btn', '.cl-send-button', '.cl-trigger'];
