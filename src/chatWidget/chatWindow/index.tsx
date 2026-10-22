@@ -920,6 +920,13 @@ export default function ChatWindow({
               height: 44px !important;
             }
 
+            /* One line of text is as tall as the 44px send button, so the
+               text is centred next to it. input_style can still set the padding. */
+            .cl-window .cl-composer-field .cl-input-element {
+              padding-top: max(10px, 0.625rem);
+              padding-bottom: max(10px, 0.625rem);
+            }
+
             .cl-input-element {
               font-size: 16px !important; /* Prevents zoom on iOS */
             }

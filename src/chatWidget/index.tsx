@@ -2410,7 +2410,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  padding: max(10px, 0.625rem) max(12px, 0.75rem) max(8px, 0.5rem);
+  /* Fixed side padding: a larger host root font must not narrow the field. */
+  padding: max(10px, 0.625rem) 12px max(8px, 0.5rem);
   border-top: 1px solid var(--cl-line);
 }
 

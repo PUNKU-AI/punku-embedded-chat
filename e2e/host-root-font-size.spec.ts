@@ -134,7 +134,10 @@ for (const hostPage of hosts) {
     expectNeverSmaller(shifted, baseline);
     const scale = hostPage.root / 16;
     expect(shifted.boxes['.cl-messages_container']?.padding).toBe(`${8 * scale}px ${16 * scale}px`);
-    expect(shifted.boxes['.cl-input-element']?.padding).toBe(`${8 * scale}px ${6 * scale}px ${8 * scale}px ${12 * scale}px`);
+    // Phones give one line the height of the 44px send button.
+    const vertical = page.viewportSize()!.width <= 640 ? 10 : 8;
+    expect(shifted.boxes['.cl-input-element']?.padding)
+      .toBe(`${vertical * scale}px ${6 * scale}px ${vertical * scale}px ${12 * scale}px`);
     expect(shifted.boxes['.cl-window']?.radius).toBe(`${16 * scale}px`);
   });
 }
