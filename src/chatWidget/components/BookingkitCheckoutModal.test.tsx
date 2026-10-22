@@ -208,6 +208,73 @@ describe("BookingkitCheckoutModal", () => {
     }
   });
 
+  describe("visible screen (#77)", () => {
+    // jsdom has no visual viewport. Install a fake 412 x 839 phone screen,
+    // panned inside a larger layout viewport.
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 43;
+      offsetTop = 88;
+      width = 412;
+      height = 839;
+      scale = 1;
+    }
+
+    const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, "visualViewport");
+    let viewport: FakeVisualViewport;
+    const dialogBox = () => {
+      const dialog = screen.getByRole("dialog", { hidden: true });
+      return ["left", "top", "width", "height"].map((side) => dialog.style.getPropertyValue(`--cl-visual-viewport-${side}`));
+    };
+
+    beforeEach(() => {
+      viewport = new FakeVisualViewport();
+      Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
+    });
+
+    afterEach(() => {
+      if (jsdomVisualViewport) Object.defineProperty(window, "visualViewport", jsdomVisualViewport);
+      else delete (window as { visualViewport?: unknown }).visualViewport;
+    });
+
+    it("gives the dialog the visible box before it opens", () => {
+      const boxAtOpen: string[][] = [];
+      showModal.mockImplementation(function (this: HTMLDialogElement) {
+        boxAtOpen.push(["left", "top", "width", "height"].map((side) => this.style.getPropertyValue(`--cl-visual-viewport-${side}`)));
+        this.setAttribute("open", "");
+      });
+
+      render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
+
+      expect(boxAtOpen).toEqual([["43px", "88px", "412px", "839px"]]);
+      expect(dialogBox()).toEqual(["43px", "88px", "412px", "839px"]);
+    });
+
+    it("places the dialog at the visible area, but keeps its screen size", () => {
+      render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
+      // jsdom has no layout. The dialog stylesheet is the result.
+      // eslint-disable-next-line testing-library/no-node-access
+      const css = Array.from(document.querySelectorAll("style"), (style) => style.textContent).join("\n");
+
+      // The offsets follow the visible area, inside the layout viewport.
+      expect(css).toContain("top: max(0px, min(var(--cl-visual-viewport-top, 0px), calc(100% - 100dvh)));");
+      expect(css).toContain("left: max(0px, min(var(--cl-visual-viewport-left, 0px), calc(100% - 100vw)));");
+      expect(css).toContain("bottom: max(0px, calc(100% - var(--cl-visual-viewport-top, 0px) - 100vh));");
+      // Viewport units, not the visible height: the on-screen keyboard does not shrink the checkout.
+      expect(css).toContain("height: min(860px, calc(100dvh - 40px));");
+      expect(css).not.toContain("--cl-visual-viewport-height");
+    });
+
+    it("stops following the visible box when the checkout closes", () => {
+      const { rerender } = render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="en" />);
+      const removeListener = jest.spyOn(viewport, "removeEventListener");
+
+      rerender(<BookingkitCheckoutModal url={null} onClose={jest.fn()} language="en" />);
+
+      expect(removeListener).toHaveBeenCalledWith("resize", expect.any(Function));
+      expect(removeListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+    });
+  });
+
   it("removes the checkout message listener on unmount", () => {
     const onClose = jest.fn();
     const { unmount } = render(<BookingkitCheckoutModal url={checkoutUrl} onClose={onClose} language="en" />);

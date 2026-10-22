@@ -1,6 +1,6 @@
 import { Send, RefreshCw, X } from "lucide-react";
-import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
@@ -211,6 +211,7 @@ export default function ChatWindow({
     right?: string;
   }>({ left: "0", top: "0" });
   const inputRef = useRef<HTMLTextAreaElement>(null); /* User input Ref */
+  const chatWindowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (triggerRef)
       setWindowPosition(
@@ -223,11 +224,25 @@ export default function ChatWindow({
       );
   }, [triggerRef, width, height, position]);
 
+  /*
+   * The phone styles size and place the window from the visible part of the
+   * page, not from the layout viewport (#77). Set the box before the first
+   * open frame, and follow it while the window is open.
+   */
+  useLayoutEffect(() => {
+    const chatWindow = chatWindowRef.current;
+    if (!open || !chatWindow) return;
+    return trackVisualViewport(chatWindow);
+  }, [open]);
+
+  // Place the window from the visible corner. In Chrome on Android, the
+  // layout viewport corner can be outside the screen (#77). The 641 px and
+  // wider styles set --cl-window-gap, the gap above the visible bottom edge.
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
-    ? { left: `${left_offset}px`, right: "auto" }
-    : { left: "auto", right: `${right_offset}px` };
+    ? { left: visualViewportInset("left", `${left_offset}px`), right: "auto" }
+    : { left: "auto", right: visualViewportInset("right", `${right_offset}px`) };
   const defaultWindowPositionStyle: React.CSSProperties = {
-    bottom: `calc(var(--cl-bottom-offset) + 80px)`,
+    bottom: visualViewportInset("bottom", "var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))"),
     ...fixedWindowHorizontalStyle,
   };
   const effectiveWindowPositionStyle = positionOverrideStyle || defaultWindowPositionStyle;
@@ -743,6 +758,7 @@ export default function ChatWindow({
 
   return (
     <div
+      ref={chatWindowRef}
       className={
         "cl-chat-window" +
         (open ? " cl-scale-100" : " cl-scale-0")
@@ -835,16 +851,22 @@ export default function ChatWindow({
           /* Responsive sizing for all screen sizes */
           /* Mobile - Small phones */
           @media (max-width: 640px) {
+            /*
+             * Fit the visible part of the page (#77). trackVisualViewport sets
+             * the variables. Without them, fill the layout viewport, as before.
+             */
             .cl-chat-window {
-              top: var(--cl-top-offset, 0px) !important;
-              left: 0 !important;
-              right: 0 !important;
-              bottom: 80px !important;
-              width: 100% !important;
-              height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
-              max-height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
-              max-width: 100% !important;
+              top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;
+              left: var(--cl-visual-viewport-left, 0px) !important;
+              right: auto !important;
+              bottom: auto !important;
+              width: var(--cl-visual-viewport-width, 100%) !important;
+              height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
+              max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
+              max-width: var(--cl-visual-viewport-width, 100%) !important;
               padding-top: env(safe-area-inset-top, 0px);
+              /* Follow the visible area at once. Animate only the open and close. */
+              transition-property: transform;
             }
 
             .cl-window {
@@ -870,12 +892,34 @@ export default function ChatWindow({
             }
           }
 
+          /*
+           * 641 px and wider: keep the window inside the visible part of the
+           * page, also above the on-screen keyboard (#77). Each layout sets
+           * --cl-window-height. The window keeps the gap for the trigger while
+           * 200 px, or its full height if less, fit above it. If not, it moves
+           * down over the trigger, so that the header, the close X and the
+           * send button stay on the screen. The X, Escape or a tap outside
+           * then closes it.
+           */
+          @media (min-width: 641px) {
+            .cl-chat-window {
+              --cl-visible-height: var(--cl-visual-viewport-height, 100vh);
+              --cl-trigger-gap: calc(var(--cl-bottom-offset) + 80px);
+              --cl-window-room: max(
+                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
+                min(200px, var(--cl-window-height), calc(var(--cl-visible-height) - 16px))
+              );
+              --cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));
+            }
+          }
+
           /* Mobile landscape and small tablets */
           @media (min-width: 641px) and (max-width: 767px) {
             .cl-chat-window {
+              --cl-window-height: min(600px, 75vh);
               width: min(420px, 85vw) !important;
-              height: min(600px, 75vh) !important;
-              max-height: 75vh !important;
+              height: var(--cl-window-height) !important;
+              max-height: min(75vh, var(--cl-window-room)) !important;
             }
 
             .cl-window {
@@ -893,9 +937,10 @@ export default function ChatWindow({
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {
             .cl-chat-window {
+              --cl-window-height: min(600px, 70vh);
               width: min(420px, calc(60vw - 10px)) !important;
-              height: min(600px, 70vh) !important;
-              max-height: 70vh !important;
+              height: var(--cl-window-height) !important;
+              max-height: min(70vh, var(--cl-window-room)) !important;
             }
 
             .cl-window {
@@ -912,28 +957,30 @@ export default function ChatWindow({
           /* Desktop - standard sizes (1024px - 1440px) */
           @media (min-width: 1024px) and (max-width: 1440px) {
             .cl-chat-window {
-              max-height: 70vh !important;
+              --cl-window-height: min(${height || 650}px, 70vh);
+              max-height: min(70vh, var(--cl-window-room)) !important;
               max-width: 90vw !important;
             }
 
             .cl-window {
               width: ${width || 450}px !important;
               height: ${height || 650}px !important;
-              max-height: 70vh !important;
+              max-height: min(70vh, var(--cl-window-room)) !important;
             }
           }
 
           /* Large desktop displays */
           @media (min-width: 1441px) {
             .cl-chat-window {
-              max-height: 75vh !important;
+              --cl-window-height: min(${height || 700}px, 75vh);
+              max-height: min(75vh, var(--cl-window-room)) !important;
               max-width: 90vw !important;
             }
 
             .cl-window {
               width: min(${width || 500}px, 90vw) !important;
               height: min(${height || 700}px, 75vh) !important;
-              max-height: 75vh !important;
+              max-height: min(75vh, var(--cl-window-room)) !important;
             }
           }
 
