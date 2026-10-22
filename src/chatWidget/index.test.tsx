@@ -186,6 +186,16 @@ describe('ChatWidget', () => {
       expect(styleElement?.textContent).toContain('.cl-widget-root');
     });
 
+    it('should always show feedback buttons on a device with a touch screen, also next to a trackpad', () => {
+      // Browsers cannot emulate a touch screen next to a mouse, so check the rule.
+      const { container } = render(<ChatWidget {...defaultProps} />);
+
+      const css = container.querySelector('style')?.textContent ?? '';
+      expect(css).toMatch(
+        /@media \(hover: none\), \(any-pointer: coarse\) \{\s*\.cl-window \.cl-chat-message \.feedback-container \{\s*opacity: 1;/
+      );
+    });
+
     it('should floor every rem length at its designed px size, so a small host root cannot shrink it', () => {
       const { container } = render(<ChatWidget {...defaultProps} />);
 

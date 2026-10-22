@@ -705,7 +705,13 @@ export default function ChatWindow({
     if (!el) return;
     // The visitor's own new message always shows, and the answer follows it.
     if (messages[messages.length - 1]?.isSend) followNewest.current = true;
-    if (followNewest.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (followNewest.current) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      // The answer grows below a visitor who scrolled up. That fires no scroll
+      // event, so check here whether the newest text is now far enough away.
+      setShowJumpToLatest(el.scrollHeight - el.clientHeight - el.scrollTop > 120);
+    }
   }, [messages]);
 
   const jumpToLatest = () => {
@@ -749,6 +755,9 @@ export default function ChatWindow({
     const distanceToBottom = list.scrollHeight - list.clientHeight - list.scrollTop;
     if (distanceToBottom <= delta + 2) {
       list.scrollTop = list.scrollHeight;
+    } else if (!followNewest.current) {
+      // A taller field makes the list shorter: the newest text moves away.
+      setShowJumpToLatest(distanceToBottom > 120);
     }
   }, []);
 

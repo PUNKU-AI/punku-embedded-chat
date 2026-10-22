@@ -2271,8 +2271,15 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline: none;
 }
 
+/* A keyboard user keeps the focus ring, also on the button just voted. */
+.cl-window .cl-message-stack .feedback-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 /* The newest answer, a voted answer, and a hovered or focused answer show
-   their feedback buttons. Touch screens have no hover: they always do. */
+   their feedback buttons. A device with a touch screen always shows them,
+   also a laptop with a touch screen and a trackpad: a finger cannot hover. */
 .cl-window .cl-message-stack .feedback-container {
   opacity: 0;
 }
@@ -2284,7 +2291,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   opacity: 1;
 }
 
-@media (hover: none) {
+@media (hover: none), (any-pointer: coarse) {
   .cl-window .cl-chat-message .feedback-container {
     opacity: 1;
   }

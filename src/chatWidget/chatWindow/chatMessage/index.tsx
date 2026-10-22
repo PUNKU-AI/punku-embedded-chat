@@ -139,6 +139,25 @@ export default function ChatMessage({
     null
   );
 
+  // The width keys of bot_message_style size the stack around the bubble, so
+  // the stack's default width limit never caps a site's wider answers. The
+  // bubble then fills the stack; percentages still refer to the message row.
+  const {
+    width: answerWidth,
+    minWidth: answerMinWidth,
+    maxWidth: answerMaxWidth,
+    ...answerStyleRest
+  } = bot_message_style || {};
+  const answerStackStyle: React.CSSProperties | undefined =
+    answerWidth === undefined && answerMinWidth === undefined && answerMaxWidth === undefined
+      ? undefined
+      : { width: answerWidth, minWidth: answerMinWidth, maxWidth: answerMaxWidth };
+  const answerBubbleStyle: React.CSSProperties = {
+    ...answerStyleRest,
+    ...(answerWidth !== undefined ? { width: "100%" } : {}),
+    ...(answerMinWidth !== undefined ? { minWidth: "100%" } : {}),
+  };
+
   const handleFeedback = async (type: 'thumbsUp' | 'thumbsDown') => {
     setSelectedFeedback(type);
     const feedbackValue = type === 'thumbsUp' ? 'positive' : 'negative';
@@ -216,11 +235,11 @@ export default function ChatMessage({
         </div>
       ) : (
         // The answer bubble, with the feedback buttons under it (not inside it).
-        <div className="cl-message-stack">
+        <div className="cl-message-stack" style={answerStackStyle}>
           <div
             style={{
               ...DEFAULT_MESSAGE_TEXT_STYLE,
-              ...(bot_message_style || {}),
+              ...answerBubbleStyle,
             }}
             className={"cl-bot_message"}
           >

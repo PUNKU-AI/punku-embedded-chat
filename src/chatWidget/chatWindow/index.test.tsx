@@ -500,6 +500,26 @@ describe('ChatWindow', () => {
       expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
     });
 
+    it('should offer the way back once the stream grows far below a visitor who scrolled up a little', () => {
+      const height = jest.spyOn(Element.prototype, 'scrollHeight', 'get');
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      // 100px above the end (440): the list stops following, no button yet.
+      scrollListTo(list, 440);
+      scrollListTo(list, 340);
+      expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+
+      // The answer grows by 200px. No scroll event fires, the visitor stays.
+      height.mockReturnValue(840);
+      scrollTo.mockClear();
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now much longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+    });
+
     it('should follow again when the visitor scrolls back to the end', () => {
       jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
       const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);

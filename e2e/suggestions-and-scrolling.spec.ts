@@ -108,6 +108,43 @@ test('the newest answer shows its feedback; older ones on hover, always on touch
   await expect.poll(async () => (await listState(page)).feedbackOpacity).toEqual([hasTouch ? 1 : 0, 1]);
 });
 
+function feedbackButtonState(page: Page) {
+  return page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.cl-message-stack .feedback-button.thumbs-up');
+    const button = buttons[buttons.length - 1];
+    return {
+      focused: root.activeElement === button,
+      selected: button.classList.contains('selected'),
+      outline: getComputedStyle(button).outlineStyle,
+    };
+  });
+}
+
+test('a keyboard vote keeps the focus ring on the feedback button', async ({ page, hasTouch }) => {
+  test.skip(hasTouch, 'Keyboard input runs on the three desktop engines.');
+  await storeConversation(page, longConversation.slice(0, 4));
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false', width: '380', height: '640' });
+  // After loadWidget: a later route wins, and the vote must be saved, or it reverts.
+  await page.context().route('**/api/v1/monitor/messages/**', (route) => (
+    route.fulfill({ status: 200, contentType: 'text/plain', body: 'saved' })
+  ));
+  await expect.poll(async () => (await listState(page)).feedbackOpacity.length).toBe(2);
+  // The chat focuses its input on opening (a keyboard focus). Move on to the
+  // newest answer's "Helpful" button, then vote with the keyboard.
+  await page.waitForTimeout(300);
+  await page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.cl-message-stack .feedback-button.thumbs-up');
+    buttons[buttons.length - 1].focus();
+  });
+  await expect.poll(async () => (await feedbackButtonState(page)).focused).toBe(true);
+  const saved = page.waitForResponse((response) => response.url().includes('/api/v1/monitor/messages/'));
+  await page.keyboard.press('Enter');
+  expect((await saved).status()).toBe(200);
+  await expect.poll(() => feedbackButtonState(page)).toEqual({ focused: true, selected: true, outline: 'solid' });
+});
+
 test('scrolling up during a streamed answer stops the list from following', async ({ page, hasTouch }) => {
   await storeConversation(page, longConversation);
   const words = Array.from({ length: 50 }, (_, index) => `word${index + 1}`);
