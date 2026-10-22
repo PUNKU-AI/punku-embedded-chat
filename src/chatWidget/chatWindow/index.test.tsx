@@ -196,6 +196,34 @@ describe('ChatWindow', () => {
       });
     });
 
+    it('should size an anchored tablet window from its placement', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          positionOverrideStyle={{
+            top: '70px',
+            left: '84px',
+            right: '',
+            bottom: '',
+            '--cl-anchored-window-width': '420px',
+            '--cl-anchored-window-height': '256px',
+          } as React.CSSProperties}
+        />
+      );
+
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-width')).toBe('420px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-height')).toBe('256px');
+      const styles = Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+      // Corner windows keep the CSS size, because they do not set the variables.
+      expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, 85vw)) !important');
+      expect(styles).toContain('height: var(--cl-anchored-window-height, min(600px, 75vh)) !important');
+      expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important');
+      expect(styles).toContain('height: var(--cl-anchored-window-height, min(600px, 70vh)) !important');
+    });
+
     it('should not force tablet windows to the right side', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 

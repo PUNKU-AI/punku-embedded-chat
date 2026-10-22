@@ -13,6 +13,7 @@ import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
+import { DEFAULT_TRIGGER_SIZE, VIEWPORT_MARGIN, getAnchoredChatWindowPlacement, isTabletLayout } from "./anchoredChatWindow";
 
 type ProgrammaticMessage = {
   id: number;
@@ -25,11 +26,6 @@ type TriggerPosition = {
   zIndex?: number;
 };
 
-const DEFAULT_TRIGGER_SIZE = 48;
-const DEFAULT_CHAT_WINDOW_WIDTH = 450;
-const DEFAULT_CHAT_WINDOW_HEIGHT = 650;
-const ANCHORED_CHAT_WINDOW_GAP = 32;
-const VIEWPORT_MARGIN = 16;
 const CLOSED_HINT_TOP_EDGE_THRESHOLD = DEFAULT_TRIGGER_SIZE + VIEWPORT_MARGIN;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // Above floating WhatsApp buttons (99999999 and lower). Below the banners of
@@ -53,12 +49,6 @@ const getViewportSize = () => ({
   width: typeof window === "undefined" ? 1024 : window.innerWidth,
   height: typeof window === "undefined" ? 768 : window.innerHeight,
 });
-
-const getPositiveNumber = (value: number | undefined, fallback: number) =>
-  isFiniteNumber(value) && value > 0 ? value : fallback;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), Math.max(min, max));
 
 const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => {
   if (!position || typeof position !== "object") {
@@ -89,36 +79,24 @@ const getAnchoredChatWindowStyle = (
   chatWindowHeight?: number
 ): React.CSSProperties => {
   const viewport = getViewportSize();
-  const configuredWidth = getPositiveNumber(chatWindowWidth, DEFAULT_CHAT_WINDOW_WIDTH);
-  const configuredHeight = getPositiveNumber(chatWindowHeight, DEFAULT_CHAT_WINDOW_HEIGHT);
-  const availableWidth = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2);
-  const availableHeight = Math.max(0, viewport.height - VIEWPORT_MARGIN * 2);
-  const renderedWidth = Math.min(configuredWidth, availableWidth, viewport.width * 0.9);
-  const renderedHeight = Math.min(configuredHeight, availableHeight, viewport.height * 0.7);
-  const triggerCenterX = triggerPosition.x + DEFAULT_TRIGGER_SIZE / 2;
-  const triggerCenterY = triggerPosition.y + DEFAULT_TRIGGER_SIZE / 2;
-  const shouldOpenAbove = triggerCenterY >= viewport.height / 2;
-  const shouldAlignLeft = triggerCenterX < viewport.width / 2;
-  const preferredTop = shouldOpenAbove
-    ? triggerPosition.y - ANCHORED_CHAT_WINDOW_GAP - renderedHeight
-    : triggerPosition.y + DEFAULT_TRIGGER_SIZE + ANCHORED_CHAT_WINDOW_GAP;
-  const preferredLeft = shouldAlignLeft
-    ? triggerPosition.x
-    : triggerPosition.x + DEFAULT_TRIGGER_SIZE - renderedWidth;
+  const placement = getAnchoredChatWindowPlacement(triggerPosition, viewport, chatWindowWidth, chatWindowHeight);
 
   return {
-    top: `${Math.round(
-      clamp(preferredTop, VIEWPORT_MARGIN, viewport.height - renderedHeight - VIEWPORT_MARGIN)
-    )}px`,
-    left: `${Math.round(
-      clamp(preferredLeft, VIEWPORT_MARGIN, viewport.width - renderedWidth - VIEWPORT_MARGIN)
-    )}px`,
+    top: `${placement.top}px`,
+    left: `${placement.left}px`,
     bottom: "",
     right: "",
+    // The tablet rules in chatWindow/index.tsx read the size from here.
+    ...(isTabletLayout(viewport.width)
+      ? {
+          "--cl-anchored-window-width": `${placement.width}px`,
+          "--cl-anchored-window-height": `${placement.height}px`,
+        }
+      : {}),
     zIndex: typeof triggerPosition.zIndex === "number"
       ? Math.min(triggerPosition.zIndex + 1, MAX_Z_INDEX)
       : 9999,
-  };
+  } as React.CSSProperties;
 };
 
 const isTriggerOverrideOnLeftSide = (triggerPosition: TriggerPosition) => {

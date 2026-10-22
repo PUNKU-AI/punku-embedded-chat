@@ -967,6 +967,38 @@ describe('ChatWidget', () => {
       expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe('500');
     });
 
+    it('should give the anchored window the tablet size that its placement used', () => {
+      setViewportSize(750, 342);
+      render(<ChatWidget {...defaultProps} start_open={true} width={300} height={230} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 120 });
+      });
+
+      // The CSS ignores the width and height props from 641 to 1023 px. The
+      // window opens beside the trigger, because the screen is too short.
+      const chatWindow = screen.getByTestId('chat-window');
+      expect(chatWindow.style.top).toBe('70px');
+      expect(chatWindow.style.left).toBe('84px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-width')).toBe('420px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-height')).toBe('256px');
+    });
+
+    it('should leave the desktop window size to the width and height props', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} width={300} height={230} />);
+
+      const api = (window as any)['punku-chat-widget_api'];
+      act(() => {
+        api.setTriggerPosition({ x: 24, y: 120 });
+      });
+
+      const chatWindow = screen.getByTestId('chat-window');
+      expect(chatWindow.style.top).toBe('200px');
+      expect(chatWindow.style.left).toBe('24px');
+      expect(chatWindow.style.getPropertyValue('--cl-anchored-window-width')).toBe('');
+    });
+
     it('should position the closed hint from the relocated trigger side by default', () => {
       render(
         <ChatWidget

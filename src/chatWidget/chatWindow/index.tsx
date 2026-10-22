@@ -824,8 +824,9 @@ export default function ChatWindow({
           /* Mobile landscape and small tablets */
           @media (min-width: 641px) and (max-width: 767px) {
             .cl-chat-window {
-              width: min(420px, 85vw) !important;
-              height: min(600px, 75vh) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              width: var(--cl-anchored-window-width, min(420px, 85vw)) !important;
+              height: var(--cl-anchored-window-height, min(600px, 75vh)) !important;
               max-height: 75vh !important;
             }
 
@@ -844,8 +845,9 @@ export default function ChatWindow({
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {
             .cl-chat-window {
-              width: min(420px, calc(60vw - 10px)) !important;
-              height: min(600px, 70vh) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important;
+              height: var(--cl-anchored-window-height, min(600px, 70vh)) !important;
               max-height: 70vh !important;
             }
 
