@@ -2156,8 +2156,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* ---------- Suggested questions, feedback and scrolling ----------
-   Chip colours per theme (a site's button_color replaces ink and line on
-   the chips), and the colours of the button back to the newest message. */
+   Chip colours per theme (a site's button_color replaces the chip line),
+   and the colours of the button back to the newest message. */
 .cl-window {
   --cl-chip-ink: #1d4ed8;
   --cl-chip-line: #bfd3fb;

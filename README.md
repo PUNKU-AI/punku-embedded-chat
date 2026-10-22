@@ -465,7 +465,7 @@ Use the widget API to customize your widget:
 - **suggestions:**
   - Type: JSON
   - Required: No
-  - Description: Up to four questions that show as buttons under the welcome message, for example `'["Opening hours","Tickets for families","Wheelchair access"]'`. A tap sends the question. The buttons show only before the conversation starts. Empty strings are ignored, and more than four are cut to four. With `button_color`, the buttons use that colour for their text and border.
+  - Description: Up to four questions that show as buttons under the welcome message, for example `'["Opening hours","Tickets for families","Wheelchair access"]'`. A tap sends the question. The buttons show only before the conversation starts. Empty strings are ignored, and more than four are cut to four. With `button_color`, the buttons take that colour as their border. Their text keeps the theme colour, so it stays readable.
 
 - **closed_widget_hint_text:**
   - Type: String

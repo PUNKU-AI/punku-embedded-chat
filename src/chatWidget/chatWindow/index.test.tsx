@@ -553,6 +553,14 @@ describe('ChatWindow', () => {
       expect(screen.getByRole('group', { name: 'Vorgeschlagene Fragen' })).toBeInTheDocument();
     });
 
+    it('should use button_color for the chip border only, so the text stays readable', () => {
+      render(<ChatWindow {...defaultProps} button_color="#fde68a" suggestions={['Opening hours']} />);
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#fde68a');
+      expect(group.style.getPropertyValue('--cl-chip-ink')).toBe('');
+    });
+
     it('should send a suggested question when the visitor taps it', async () => {
       const addMessage = jest.fn();
       mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));

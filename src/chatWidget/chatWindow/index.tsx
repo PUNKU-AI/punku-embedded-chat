@@ -1252,7 +1252,9 @@ export default function ChatWindow({
               className="cl-suggestions"
               role="group"
               aria-label={t.suggestions}
-              style={button_color ? {"--cl-chip-ink": button_color, "--cl-chip-line": button_color} as React.CSSProperties : undefined}
+              // A site colour for the border only: as text, a light or dark
+              // button_color could be unreadable on the chip background.
+              style={button_color ? {"--cl-chip-line": button_color} as React.CSSProperties : undefined}
             >
               {suggestionList.map((suggestion) => (
                 <button
