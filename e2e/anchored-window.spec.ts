@@ -77,6 +77,19 @@ async function settledBoxes(page: Page, position: { x: number; y: number }) {
   return boxes(page);
 }
 
+async function resizeScreen(page: Page, size: { width: number; height: number }) {
+  await page.setViewportSize(size);
+  // setViewportSize can return before the page sees the new size (Linux
+  // WebKit in CI). Until then, the old box looks settled. Wait for the new
+  // size, then for two frames: the widget places the window again in the
+  // frame after the resize event, and the move starts in the next frame.
+  await expect.poll(() => page.evaluate(() => `${window.innerWidth} x ${window.innerHeight}`))
+    .toBe(`${size.width} x ${size.height}`);
+  await page.evaluate(() => new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  }));
+}
+
 function rounded(box: Box) {
   return { left: Math.round(box.left), top: Math.round(box.top), right: Math.round(box.right), bottom: Math.round(box.bottom) };
 }
@@ -139,7 +152,7 @@ test('the anchored window follows a resize and a rotation', async ({ page, viewp
 
   for (const [name, size] of Object.entries(screens)) {
     await test.step(`${name}, ${size.width} x ${size.height}`, async () => {
-      await page.setViewportSize(size);
+      await resizeScreen(page, size);
       // The phone layout fills the screen and ignores the trigger position.
       if (size.width <= 640) return;
 
