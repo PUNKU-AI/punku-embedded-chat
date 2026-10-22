@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { revealInScrollContainer } from "../utils";
+import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES, visualViewportInset } from "../utils";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
@@ -10,6 +10,9 @@ interface BookingkitCheckoutModalProps {
 }
 
 const CHECKOUT_ORIGIN = "https://eu5.bookingkit.de";
+// The visible part of the page. Without the variables, the screen size.
+const VISIBLE_WIDTH = `var(${VISUAL_VIEWPORT_PROPERTIES.width}, 100vw)`;
+const VISIBLE_HEIGHT = `var(${VISUAL_VIEWPORT_PROPERTIES.height}, var(--cl-bk-screen-height))`;
 
 export default function BookingkitCheckoutModal({
   url,
@@ -23,6 +26,17 @@ export default function BookingkitCheckoutModal({
   const externalLinkRef = useRef<HTMLAnchorElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  /*
+   * Center the dialog on the visible part of the page. On a phone, a host page
+   * wider than the screen makes the layout viewport larger than the screen,
+   * and the dialog was cut off at the right and the bottom (#77).
+   */
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!url || !dialog) return;
+    return trackVisualViewport(dialog);
+  }, [url]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -123,22 +137,30 @@ export default function BookingkitCheckoutModal({
       />
       <style>{`
         .cl-bk-checkout-dialog {
+          --cl-bk-screen-height: 100vh;
           position: fixed;
-          inset: 0;
+          /* The insets give the visible part of the page. margin: auto centers the dialog in it. */
+          top: ${visualViewportInset("top", "0px")};
+          right: ${visualViewportInset("right", "0px")};
+          bottom: ${visualViewportInset("bottom", "0px")};
+          left: ${visualViewportInset("left", "0px")};
           margin: auto;
           padding: 0;
           border: 0;
           border-radius: 12px;
-          width: min(810px, calc(100vw - 32px));
+          width: min(810px, calc(${VISIBLE_WIDTH} - 32px));
           max-width: none;
-          height: min(860px, calc(100vh - 40px));
-          height: min(860px, calc(100dvh - 40px));
+          height: min(860px, calc(${VISIBLE_HEIGHT} - 40px));
           max-height: none;
           overflow: hidden;
           background: #ffffff;
           color: #1f2937;
           font: 16px/1.5 system-ui, sans-serif;
           box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+        }
+        /* A declaration with var() never falls back to an earlier declaration. Pick the unit here. */
+        @supports (height: 100dvh) {
+          .cl-bk-checkout-dialog { --cl-bk-screen-height: 100dvh; }
         }
         .cl-bk-checkout-dialog[open] {
           display: flex;
@@ -193,9 +215,8 @@ export default function BookingkitCheckoutModal({
         }
         @media (max-width: 767px) {
           .cl-bk-checkout-dialog {
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
+            width: ${VISIBLE_WIDTH};
+            height: ${VISIBLE_HEIGHT};
             border-radius: 0;
           }
         }

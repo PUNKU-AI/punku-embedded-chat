@@ -164,8 +164,11 @@ export function trackVisualViewport(element: HTMLElement) {
 		frame = undefined;
 		const zoomedIn = viewport.scale > PINCH_ZOOM_SCALE;
 		for (const [key, property] of Object.entries(VISUAL_VIEWPORT_PROPERTIES)) {
-			if (zoomedIn) element.style.removeProperty(property);
-			else element.style.setProperty(property, `${viewport[key as keyof typeof VISUAL_VIEWPORT_PROPERTIES]}px`);
+			const value = zoomedIn ? '' : `${viewport[key as keyof typeof VISUAL_VIEWPORT_PROPERTIES]}px`;
+			// The widget root tracks on every page. Write only a changed box.
+			if (element.style.getPropertyValue(property) === value) continue;
+			if (value) element.style.setProperty(property, value);
+			else element.style.removeProperty(property);
 		}
 	};
 	const scheduleUpdate = () => {
@@ -180,4 +183,28 @@ export function trackVisualViewport(element: HTMLElement) {
 		viewport.removeEventListener('scroll', scheduleUpdate);
 		if (frame !== undefined) window.cancelAnimationFrame(frame);
 	};
+}
+
+export type ViewportEdge = 'top' | 'right' | 'bottom' | 'left';
+
+/*
+ * A CSS inset that places a position: fixed box `offset` from one edge of the
+ * visible part of the page. It reads the trackVisualViewport variables from
+ * the box or an ancestor. In `right` and `bottom`, 100% is the layout
+ * viewport, so the inset adds the strip of the layout viewport that is
+ * outside the screen. Without the variables, the inset is `offset`, as for a
+ * plain fixed box.
+ */
+export function visualViewportInset(edge: ViewportEdge, offset: string) {
+	const { offsetLeft: left, offsetTop: top, width, height } = VISUAL_VIEWPORT_PROPERTIES;
+	switch (edge) {
+		case 'top':
+			return `calc(var(${top}, 0px) + ${offset})`;
+		case 'left':
+			return `calc(var(${left}, 0px) + ${offset})`;
+		case 'bottom':
+			return `calc(100% - var(${top}, 0px) - var(${height}, 100%) + ${offset})`;
+		case 'right':
+			return `calc(100% - var(${left}, 0px) - var(${width}, 100%) + ${offset})`;
+	}
 }

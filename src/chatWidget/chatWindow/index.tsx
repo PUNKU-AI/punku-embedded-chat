@@ -1,5 +1,5 @@
 import { Send, RefreshCw, X } from "lucide-react";
-import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport } from "../utils";
+import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
@@ -229,11 +229,13 @@ export default function ChatWindow({
     return trackVisualViewport(chatWindow);
   }, [open]);
 
+  // Place the window from the visible corner, as the trigger. In Chrome on
+  // Android, the layout viewport corner can be outside the screen (#77).
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
-    ? { left: `${left_offset}px`, right: "auto" }
-    : { left: "auto", right: `${right_offset}px` };
+    ? { left: visualViewportInset("left", `${left_offset}px`), right: "auto" }
+    : { left: "auto", right: visualViewportInset("right", `${right_offset}px`) };
   const defaultWindowPositionStyle: React.CSSProperties = {
-    bottom: `calc(var(--cl-bottom-offset) + 80px)`,
+    bottom: visualViewportInset("bottom", "calc(var(--cl-bottom-offset) + 80px)"),
     ...fixedWindowHorizontalStyle,
   };
   const effectiveWindowPositionStyle = positionOverrideStyle || defaultWindowPositionStyle;

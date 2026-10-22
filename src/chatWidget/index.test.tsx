@@ -116,6 +116,7 @@ jest.mock('./utils', () => ({
 
 // Import after mocks
 import ChatWidget, { DEFAULT_Z_INDEX, MAX_Z_INDEX } from './index';
+import { visualViewportInset } from './utils';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -241,7 +242,7 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        left: '48px',
+        left: visualViewportInset('left', '48px'),
         right: '',
       });
     });
@@ -251,8 +252,30 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '36px',
+        right: visualViewportInset('right', '36px'),
         left: '',
+      });
+    });
+
+    it('should place the top corners from the visible screen corner', () => {
+      // The fixed root has no accessible role. Its inline insets are the result.
+      // eslint-disable-next-line testing-library/no-node-access
+      const rootStyle = () => (document.querySelector('.cl-widget-root') as HTMLElement).style;
+      const { unmount } = render(<ChatWidget {...defaultProps} chat_position="top-left" left_offset={30} />);
+      expect(rootStyle()).toMatchObject({
+        top: visualViewportInset('top', '20px'),
+        left: visualViewportInset('left', '30px'),
+        right: '',
+        bottom: '',
+      });
+      unmount();
+
+      render(<ChatWidget {...defaultProps} chat_position="top-right" right_offset={30} />);
+      expect(rootStyle()).toMatchObject({
+        top: visualViewportInset('top', '20px'),
+        right: visualViewportInset('right', '30px'),
+        left: '',
+        bottom: '',
       });
     });
 
@@ -828,8 +851,8 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '20px',
-        bottom: '20px',
+        right: visualViewportInset('right', '20px'),
+        bottom: visualViewportInset('bottom', '20px'),
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -883,8 +906,8 @@ describe('ChatWidget', () => {
 
       expect(api.trigger.position).toBeNull();
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '20px',
-        bottom: '20px',
+        right: visualViewportInset('right', '20px'),
+        bottom: visualViewportInset('bottom', '20px'),
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -1039,6 +1062,80 @@ describe('ChatWidget', () => {
 
       expect((window as any)['punku-chat-widget_api']).toBeUndefined();
       expect((window as any).punku).toBeUndefined();
+    });
+  });
+
+  describe('Visible screen (#77)', () => {
+    // jsdom has no visual viewport. Install a fake 412 x 839 phone screen,
+    // panned inside a larger layout viewport.
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 43;
+      offsetTop = 88;
+      width = 412;
+      height = 839;
+      scale = 1;
+    }
+
+    const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    let viewport: FakeVisualViewport;
+    let frames: FrameRequestCallback[];
+    const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
+    // The fixed root has no accessible role. Its inline style is the result.
+    // eslint-disable-next-line testing-library/no-node-access
+    const rootStyle = () => (document.querySelector('.cl-widget-root') as HTMLElement).style;
+    const rootBox = () =>
+      ['left', 'top', 'width', 'height'].map((side) => rootStyle().getPropertyValue(`--cl-visual-viewport-${side}`));
+
+    beforeEach(() => {
+      viewport = new FakeVisualViewport();
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+      frames = [];
+      jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
+      jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
+      else delete (window as { visualViewport?: unknown }).visualViewport;
+    });
+
+    it('gives the widget root the visible box while the widget is closed, and follows it', () => {
+      render(<ChatWidget {...defaultProps} start_open={false} />);
+      expect(rootBox()).toEqual(['43px', '88px', '412px', '839px']);
+
+      viewport.offsetLeft = 0;
+      viewport.height = 500;
+      act(() => {
+        viewport.dispatchEvent(new Event('scroll'));
+        runFrames();
+      });
+
+      expect(rootBox()).toEqual(['0px', '88px', '412px', '500px']);
+    });
+
+    it('keeps a relocated trigger at its x and y in px', () => {
+      render(<ChatWidget {...defaultProps} />);
+
+      act(() => {
+        expect((window as any)['punku-chat-widget_api'].setTriggerPosition({ x: 24, y: 120 })).toBe(true);
+      });
+
+      expect(rootStyle()).toMatchObject({
+        left: '24px',
+        top: '120px',
+        right: '',
+        bottom: '',
+      });
+    });
+
+    it('stops following the visible box after unmount', () => {
+      const { unmount } = render(<ChatWidget {...defaultProps} />);
+      const removeListener = jest.spyOn(viewport, 'removeEventListener');
+
+      unmount();
+
+      expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
     });
   });
 

@@ -5,7 +5,7 @@ import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language } from "../translations";
-import { detectBrowserLanguage } from "./utils";
+import { detectBrowserLanguage, trackVisualViewport, visualViewportInset } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -328,6 +328,15 @@ export default function ChatWidget({
   const [closedHintLayout, setClosedHintLayout] = useState<ClosedWidgetHintLayout | null>(null);
 
   useEffect(() => installNitroLinkRecovery(widgetRootRef.current), []);
+  /*
+   * The trigger corners use the visible part of the page, not the layout
+   * viewport (#77). Track it on the root. Start before the closed hint layout
+   * effect, so the hint measures the moved trigger.
+   */
+  useLayoutEffect(() => {
+    const root = widgetRootRef.current;
+    return root ? trackVisualViewport(root) : undefined;
+  }, []);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef(open);
   const triggerPositionRef = useRef(triggerPositionOverride);
@@ -3411,17 +3420,19 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveLeftOffset = left_offset ?? 20;
   const effectiveRightOffset = right_offset ?? 20;
 
+  // Corners of the visible part of the page. On a phone, a host page wider
+  // than the screen puts the layout viewport corner outside the screen (#77).
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
+        return { top: visualViewportInset("top", "20px"), left: visualViewportInset("left", `${effectiveLeftOffset}px`), bottom: "", right: "" };
       case "top-right":
-        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "", left: "" };
+        return { top: visualViewportInset("top", "20px"), right: visualViewportInset("right", `${effectiveRightOffset}px`), bottom: "", left: "" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "", right: "" };
+        return { bottom: visualViewportInset("bottom", `${effectiveBottomOffset}px`), left: visualViewportInset("left", `${effectiveLeftOffset}px`), top: "", right: "" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "", left: "" };
+        return { bottom: visualViewportInset("bottom", `${effectiveBottomOffset}px`), right: visualViewportInset("right", `${effectiveRightOffset}px`), top: "", left: "" };
     }
   };
 

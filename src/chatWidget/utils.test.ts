@@ -6,6 +6,7 @@ import {
   revealInScrollContainer,
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
+  visualViewportInset,
 } from './utils';
 
 describe('getChatPosition', () => {
@@ -389,6 +390,21 @@ describe('trackVisualViewport', () => {
     expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
   });
 
+  it('writes a variable only when its value changes', () => {
+    const element = document.createElement('div');
+    trackVisualViewport(element);
+    const setProperty = jest.spyOn(element.style, 'setProperty');
+
+    viewport.dispatchEvent(new Event('scroll'));
+    runFrames();
+    expect(setProperty).not.toHaveBeenCalled();
+
+    viewport.offsetTop = 88;
+    viewport.dispatchEvent(new Event('scroll'));
+    runFrames();
+    expect(setProperty.mock.calls).toEqual([['--cl-visual-viewport-top', '88px']]);
+  });
+
   it('does nothing without a visual viewport', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: null });
     const element = document.createElement('div');
@@ -397,5 +413,22 @@ describe('trackVisualViewport', () => {
 
     expect(variables(element)).toEqual(['', '', '', '']);
     expect(() => stop()).not.toThrow();
+  });
+});
+
+describe('visualViewportInset', () => {
+  it('measures the top and left insets from the visible corner', () => {
+    expect(visualViewportInset('top', '20px')).toBe('calc(var(--cl-visual-viewport-top, 0px) + 20px)');
+    expect(visualViewportInset('left', '32px')).toBe('calc(var(--cl-visual-viewport-left, 0px) + 32px)');
+  });
+
+  it('adds the hidden strip of the layout viewport to the bottom and right insets', () => {
+    // 100% is the layout viewport. Without the variables, both terms cancel out.
+    expect(visualViewportInset('bottom', '20px')).toBe(
+      'calc(100% - var(--cl-visual-viewport-top, 0px) - var(--cl-visual-viewport-height, 100%) + 20px)'
+    );
+    expect(visualViewportInset('right', 'calc(var(--cl-bottom-offset) + 80px)')).toBe(
+      'calc(100% - var(--cl-visual-viewport-left, 0px) - var(--cl-visual-viewport-width, 100%) + calc(var(--cl-bottom-offset) + 80px))'
+    );
   });
 });

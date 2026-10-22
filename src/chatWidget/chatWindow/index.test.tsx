@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ChatWindow from './index';
+import { visualViewportInset } from '../utils';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
 
@@ -147,29 +148,34 @@ describe('ChatWindow', () => {
     it('should anchor to the bottom right by default', () => {
       render(<ChatWindow {...defaultProps} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: 'auto', right: '20px' });
+      // From the visible corner, not the layout viewport corner (#77).
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({
+        left: 'auto',
+        right: visualViewportInset('right', '20px'),
+        bottom: visualViewportInset('bottom', 'calc(var(--cl-bottom-offset) + 80px)'),
+      });
     });
 
     it('should anchor to the bottom left for bottom-left position', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: '20px', right: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '20px'), right: 'auto' });
     });
 
     it('should apply custom left offset for left-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ left: '64px', right: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '64px'), right: 'auto' });
     });
 
     it('should apply custom right offset for right-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-right" right_offset={52} />);
 
-      const chatWindow = document.querySelector('.cl-chat-window');
-      expect(chatWindow).toHaveStyle({ right: '52px', left: 'auto' });
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      expect(chatWindow.style).toMatchObject({ right: visualViewportInset('right', '52px'), left: 'auto' });
     });
 
     it('should use position override style when provided', () => {
