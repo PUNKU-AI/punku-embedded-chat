@@ -870,10 +870,11 @@ export default function ChatWindow({
           /* Mobile landscape and small tablets */
           @media (min-width: 641px) and (max-width: 767px) {
             .cl-chat-window {
-              --cl-window-height: min(600px, 75vh);
-              width: min(420px, 85vw) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));
+              width: var(--cl-anchored-window-width, min(420px, 85vw)) !important;
               height: var(--cl-window-height) !important;
-              max-height: min(75vh, var(--cl-window-room)) !important;
+              max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -910,10 +911,11 @@ export default function ChatWindow({
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {
             .cl-chat-window {
-              --cl-window-height: min(600px, 70vh);
-              width: min(420px, calc(60vw - 10px)) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));
+              width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important;
               height: var(--cl-window-height) !important;
-              max-height: min(70vh, var(--cl-window-room)) !important;
+              max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important;
             }
 
             .cl-window {
