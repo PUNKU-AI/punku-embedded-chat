@@ -1,5 +1,6 @@
 import { ArrowUp, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
+import { useAnchorMetrics } from "../anchoredChatWindow";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
@@ -247,6 +248,14 @@ export default function ChatWindow({
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
     ? { left: visualViewportInset("left", `${left_offset}px`), right: "auto" }
     : { left: "auto", right: visualViewportInset("right", `${right_offset}px`) };
+  /*
+   * Short landscape screens place the window beside the trigger, on its inner
+   * side (#77). The gap uses the rendered trigger size.
+   */
+  const besideTriggerSide = position?.endsWith("-left") ? "left" : "right";
+  const besideTriggerOffset = besideTriggerSide === "left" ? left_offset : right_offset;
+  const { triggerSize } = useAnchorMetrics(open && !positionOverrideStyle, triggerRef);
+  const besideTriggerInset = `calc(${besideTriggerOffset}px + ${triggerSize.width}px + 12px)`;
   const defaultWindowPositionStyle: React.CSSProperties = {
     bottom: visualViewportInset("bottom", "var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))"),
     ...fixedWindowHorizontalStyle,
@@ -945,10 +954,11 @@ export default function ChatWindow({
           /* Mobile landscape and small tablets */
           @media (min-width: 641px) and (max-width: 767px) {
             .cl-chat-window {
-              --cl-window-height: min(600px, 75vh);
-              width: min(420px, 85vw) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));
+              width: var(--cl-anchored-window-width, min(420px, 85vw)) !important;
               height: var(--cl-window-height) !important;
-              max-height: min(75vh, var(--cl-window-room)) !important;
+              max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -966,10 +976,11 @@ export default function ChatWindow({
           /* Tablets */
           @media (min-width: 768px) and (max-width: 1023px) {
             .cl-chat-window {
-              --cl-window-height: min(600px, 70vh);
-              width: min(420px, calc(60vw - 10px)) !important;
+              /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));
+              width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important;
               height: var(--cl-window-height) !important;
-              max-height: min(70vh, var(--cl-window-room)) !important;
+              max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -982,6 +993,36 @@ export default function ChatWindow({
               display: flex !important;
             }
           }
+
+          /*
+           * Short landscape screens (#77): 641-1023 px wide, at most 500 px
+           * tall. In the two layouts above, the window rose above the screen,
+           * and a large bottom_offset left no room for it. Fill the visible
+           * height beside the trigger instead. The window bottom stays level
+           * with the trigger bottom while the window keeps 240 px (header,
+           * one message line and input), or the visible height if less.
+           * Else it moves down (--cl-window-gap of the 641 px rule). An
+           * anchored window (setTriggerPosition) keeps its own place.
+           */
+          ${positionOverrideStyle ? '' : `
+          @media (min-width: 641px) and (max-width: 1023px) and (max-height: 500px) {
+            .cl-chat-window {
+              --cl-trigger-gap: var(--cl-bottom-offset);
+              --cl-window-room: max(
+                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
+                min(240px, calc(var(--cl-visible-height) - 16px))
+              );
+              top: ${visualViewportInset("top", "8px")} !important;
+              bottom: ${visualViewportInset("bottom", "var(--cl-window-gap)")} !important;
+              ${besideTriggerSide}: ${visualViewportInset(besideTriggerSide, besideTriggerInset)} !important;
+              width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - ${besideTriggerInset} - 8px)) !important;
+              height: auto !important;
+              max-height: none !important;
+              /* Follow the visible area at once. Animate only the open and close. */
+              transition-property: transform;
+            }
+          }
+          `}
 
           /* Desktop - standard sizes (1024px - 1440px) */
           @media (min-width: 1024px) and (max-width: 1440px) {
