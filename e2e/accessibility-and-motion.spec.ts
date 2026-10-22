@@ -29,6 +29,7 @@ function state(page: Page) {
       windowVisibility: windowStyle.visibility,
       windowOpacity: Number(windowStyle.opacity),
       windowTransition: windowStyle.transitionDuration,
+      windowTransitionProperty: windowStyle.transitionProperty,
       messageAnimation: (() => {
         const message = root.querySelector<HTMLElement>('.cl-chat-message');
         return message ? getComputedStyle(message).animationName : null;
@@ -74,6 +75,16 @@ test('Escape closes the chat and returns the focus to the launcher', async ({ pa
   await page.keyboard.press('Escape');
   await expect.poll(async () => (await state(page)).focus).toContain('cl-trigger');
   await expect.poll(async () => (await state(page)).windowVisibility).toBe('hidden');
+});
+
+test('the open window fades and rises on every screen, and only that animates', async ({ page }) => {
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+  await expect.poll(async () => (await state(page)).windowOpacity).toBe(1);
+  // Phones and short landscape screens follow the visible area at once: the
+  // window position and size never animate, the fade and the rise do.
+  const properties = (await state(page)).windowTransitionProperty.split(',').map((name) => name.trim());
+  expect(properties).toEqual(expect.arrayContaining(['opacity', 'transform']));
+  expect(properties.filter((name) => !['opacity', 'transform', 'visibility'].includes(name))).toEqual([]);
 });
 
 test('the message list is a named log', async ({ page }) => {

@@ -928,8 +928,9 @@ export default function ChatWindow({
               max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
               max-width: var(--cl-visual-viewport-width, 100%) !important;
               padding-top: env(safe-area-inset-top, 0px);
-              /* Follow the visible area at once. Animate only the open and close. */
-              transition-property: transform;
+              /* Follow the visible area at once. Animate only the open and close
+                 (the fade and the rise). */
+              transition-property: opacity, transform, visibility;
             }
 
             .cl-window {
@@ -1043,8 +1044,9 @@ export default function ChatWindow({
               width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - ${besideTriggerInset} - 8px)) !important;
               height: auto !important;
               max-height: none !important;
-              /* Follow the visible area at once. Animate only the open and close. */
-              transition-property: transform;
+              /* Follow the visible area at once. Animate only the open and close
+                 (the fade and the rise). */
+              transition-property: opacity, transform, visibility;
             }
           }
           `}
