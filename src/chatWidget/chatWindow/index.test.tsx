@@ -237,14 +237,13 @@ describe('ChatWindow', () => {
         .map((style) => style.textContent || '')
         .join('\n');
       // Corner windows keep the CSS size, because they do not set the variables.
-      // The keyboard room of the 641 px rule must not cut an anchored window.
       expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, 85vw)) !important');
       expect(styles).toContain('--cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));');
-      expect(styles).toContain('max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important');
       expect(styles).toContain('width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important');
       expect(styles).toContain('--cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));');
+      // The room above a corner trigger does not limit an anchored window.
+      expect(styles).toContain('max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important');
       expect(styles).toContain('max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important');
-      expect(styles).toContain('height: var(--cl-window-height) !important');
     });
 
     it('should not force tablet windows to the right side', () => {

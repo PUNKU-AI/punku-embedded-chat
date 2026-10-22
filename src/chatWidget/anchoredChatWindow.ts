@@ -5,7 +5,12 @@
  */
 import { RefObject, useLayoutEffect, useState } from "react";
 
-export type ViewportSize = { width: number; height: number };
+// The window CSS rule from 641 to 1023 px: "small" up to 767 px, "large" from 768 px.
+export type TabletLayout = "small" | "large" | null;
+
+// The layout viewport. tabletLayout is the result of the window CSS media
+// queries, if the browser gave one.
+export type ViewportSize = { width: number; height: number; tabletLayout?: TabletLayout };
 
 // The trigger position (x, y) and its rendered size.
 export type AnchoredTrigger = { x: number; y: number; width?: number; height?: number };
@@ -41,17 +46,41 @@ const getPositiveNumber = (value: number | undefined, fallback: number) =>
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max));
 
-export const getViewportSize = (): ViewportSize => ({
-  width: typeof window === "undefined" ? 1024 : window.innerWidth,
-  height: typeof window === "undefined" ? 768 : window.innerHeight,
-});
+const SMALL_TABLET_QUERY = "(min-width: 641px) and (max-width: 767px)";
+const LARGE_TABLET_QUERY = "(min-width: 768px) and (max-width: 1023px)";
+
+/*
+ * The layout viewport, the box of position: fixed. In WebKit, innerWidth
+ * and innerHeight follow the visual viewport, which shrinks with pinch zoom
+ * and the on-screen keyboard, so they can disagree with the CSS. The client
+ * size of the scrolling element (the root, or the body in quirks mode) is
+ * the viewport without scrollbars. The tablet layout comes from the same
+ * media queries as the window CSS, which count a classic scrollbar.
+ */
+export const getViewportSize = (): ViewportSize => {
+  if (typeof window === "undefined") return { width: 1024, height: 768 };
+  const viewportElement = document.scrollingElement ?? document.documentElement;
+  const matches = (query: string) => window.matchMedia(query).matches;
+  return {
+    width: viewportElement?.clientWidth || window.innerWidth,
+    height: viewportElement?.clientHeight || window.innerHeight,
+    ...(typeof window.matchMedia === "function"
+      ? { tabletLayout: matches(SMALL_TABLET_QUERY) ? "small" : matches(LARGE_TABLET_QUERY) ? "large" : null }
+      : {}),
+  };
+};
 
 /*
  * From 641 to 1023 px wide, the CSS sets the window size and ignores the
- * width and height props.
+ * width and height props. Without a media query result, use the width.
  */
-export const isTabletLayout = (viewportWidth: number) =>
-  viewportWidth > PHONE_LAYOUT_MAX_WIDTH && viewportWidth < DESKTOP_LAYOUT_MIN_WIDTH;
+export const getTabletLayout = ({ width, tabletLayout }: ViewportSize): TabletLayout => {
+  if (tabletLayout !== undefined) return tabletLayout;
+  if (width <= PHONE_LAYOUT_MAX_WIDTH || width >= DESKTOP_LAYOUT_MIN_WIDTH) return null;
+  return width <= SMALL_TABLET_LAYOUT_MAX_WIDTH ? "small" : "large";
+};
+
+export const isTabletLayout = (viewport: ViewportSize) => getTabletLayout(viewport) !== null;
 
 /*
  * The size of the window. The tablet values are the CSS defaults of the
@@ -68,8 +97,9 @@ export const getChatWindowSize = (
   const availableWidth = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2);
   const availableHeight = Math.max(0, viewport.height - VIEWPORT_MARGIN * 2);
 
-  if (isTabletLayout(viewport.width)) {
-    const isSmallTablet = viewport.width <= SMALL_TABLET_LAYOUT_MAX_WIDTH;
+  const tabletLayout = getTabletLayout(viewport);
+  if (tabletLayout) {
+    const isSmallTablet = tabletLayout === "small";
     const width = isSmallTablet ? Math.min(420, viewport.width * 0.85) : Math.min(420, viewport.width * 0.6 - 10);
     const height = Math.min(600, viewport.height * (isSmallTablet ? 0.75 : 0.7));
     return {
@@ -122,7 +152,7 @@ export const getAnchoredChatWindowPlacement = (
    * window, so the clamp below would put the window over the trigger.
    * Open the window beside the trigger instead, toward the screen center.
    */
-  if (isTabletLayout(viewport.width) && (top < VIEWPORT_MARGIN || top > maxTop)) {
+  if (isTabletLayout(viewport) && (top < VIEWPORT_MARGIN || top > maxTop)) {
     const besideLeft = shouldAlignLeft
       ? trigger.x + triggerWidth + ANCHORED_CHAT_WINDOW_SIDE_GAP
       : trigger.x - ANCHORED_CHAT_WINDOW_SIDE_GAP - size.width;
@@ -152,14 +182,16 @@ const readAnchorMetrics = (trigger: HTMLElement | null): AnchorMetrics => ({
 const isSameMetrics = (first: AnchorMetrics, second: AnchorMetrics) =>
   first.viewport.width === second.viewport.width &&
   first.viewport.height === second.viewport.height &&
+  first.viewport.tabletLayout === second.viewport.tabletLayout &&
   first.triggerSize.width === second.triggerSize.width &&
   first.triggerSize.height === second.triggerSize.height;
 
 /*
  * The viewport and the trigger size for the placement. While a trigger is
- * anchored, read them again after a resize, a rotation, a change of the
- * visible area (mobile browser toolbars) or a trigger size change. Without
- * this, the window keeps the place and the size of the old screen.
+ * anchored, read them again after a resize, a rotation or a trigger size
+ * change. Without this, the window keeps the place and the size of the old
+ * screen. A visual viewport resize alone (pinch zoom, on-screen keyboard)
+ * leaves the layout viewport as it is, so it changes nothing.
  */
 export const useAnchorMetrics = (enabled: boolean, triggerRef: RefObject<HTMLElement>): AnchorMetrics => {
   const [metrics, setMetrics] = useState(() => readAnchorMetrics(null));
