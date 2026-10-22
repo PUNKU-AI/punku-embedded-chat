@@ -85,6 +85,16 @@ function parseMessage(message: any): string {
   }
 }
 
+type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+
+/** True when an element holds exactly one link and nothing else but whitespace. */
+export function isLinkOnly(node: unknown): boolean {
+  const children = ((node as HastNode | undefined)?.children || []).filter(
+    (child) => !(child.type === "text" && !(child.value || "").trim())
+  );
+  return children.length === 1 && children[0].type === "element" && children[0].tagName === "a";
+}
+
 export default function ChatMessage({
   message,
   message_id,
@@ -121,11 +131,23 @@ export default function ChatMessage({
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
 
   // Keep the opener mounted so checkout can capture and restore its focus.
+  // A link that stands alone in a paragraph or list item is an action: it
+  // renders as a button (see .cl-link-only in the widget stylesheet).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
         {children}
       </BookingkitCheckoutLink>
+    ),
+    p: ({ node, children, ...props }) => (
+      <p {...props} className={isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
+    ),
+    // react-markdown 8 passes ordered, checked and index to list items; they
+    // are not DOM attributes.
+    li: ({ node, children, ordered, checked, index, className, ...props }) => (
+      <li {...props} className={[className, isLinkOnly(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+        {children}
+      </li>
     ),
   }), [onCheckout]);
 

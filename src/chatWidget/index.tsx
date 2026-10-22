@@ -1497,10 +1497,9 @@ video {
   overflow-x: clip;
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
+  /* The list cannot shrink below its padding: keep 8px at the top and bottom,
+     so the input still fits in a short landscape window. */
+  padding: max(8px, 0.5rem) max(14px, 0.875rem);
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -1524,10 +1523,13 @@ video {
 .cl-chat-message {
   display: flex;
   width: 100%;
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
-  padding-left: max(8px, 0.5rem);
-  padding-right: max(8px, 0.5rem);
+  padding: 3px 0;
+}
+
+/* Messages from one sender sit close; a change of sender gets more room. */
+.cl-chat-message.cl-justify-start + .cl-chat-message.cl-justify-end,
+.cl-chat-message.cl-justify-end + .cl-chat-message.cl-justify-start {
+  margin-top: 12px;
 }
 
 /* Typing indicator: three dots and a thinking phrase in the assistant's bubble. */
@@ -1666,22 +1668,21 @@ video {
   outline-offset: 2px;
 }
 
+/* Visitor text reads left to right inside a right-aligned bubble with its
+   tail at the bottom right. */
 .cl-user_message {
   width: -webkit-fit-content;
   width: -moz-fit-content;
   width: fit-content;
-  max-width: 90%;
+  max-width: 85%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: max(12px, 0.75rem);
-  border-top-right-radius: max(2px, 0.125rem);
+  border-radius: 18px;
+  border-bottom-right-radius: 6px;
   --tw-bg-opacity: 1;
   background-color: rgb(59 130 246 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
-  text-align: right;
+  padding: 9px 14px;
+  text-align: left;
   font-size: 16px;
   line-height: 1.5;
   /* Visitor text is plain text: keep the line breaks typed with Shift+Enter. */
@@ -1775,21 +1776,21 @@ video {
   outline-offset: 2px;
 }
 
+/* The assistant's quiet bubble: a thin border, no shadow, the tail at the
+   bottom left. Each theme sets the border colour in --cl-bot-line. */
 .cl-bot_message {
   width: -webkit-fit-content;
   width: -moz-fit-content;
   width: fit-content;
-  max-width: 90%;
+  max-width: 85%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: max(12px, 0.75rem);
-  border-top-left-radius: max(2px, 0.125rem);
+  border: 1px solid var(--cl-bot-line, transparent);
+  border-radius: 18px;
+  border-bottom-left-radius: 6px;
   --tw-bg-opacity: 1;
   background-color: rgb(229 231 235 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
+  padding: 9px 14px;
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -1896,18 +1897,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-default .cl-user_message {
   background: #3b82f6;
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .theme-default .cl-bot_message {
   background: #ffffff;
   color: #1e293b;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .theme-default.cl-trigger,
@@ -1967,18 +1961,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-ocean .cl-user_message {
   background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
 }
 
 .theme-ocean .cl-bot_message {
   background: #1e293b;
   color: #f1f5f9;
-  border: 1px solid #2a3a52;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .theme-ocean.cl-trigger,
@@ -2038,18 +2025,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-dark .cl-user_message {
   background: #6366f1;
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
 }
 
 .theme-dark .cl-bot_message {
   background: #1e293b;
   color: #e2e8f0;
-  border: 1px solid #2d3a4d;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .theme-dark.cl-trigger,
@@ -2089,19 +2069,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-aurora .cl-user_message {
   background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .theme-aurora .cl-bot_message {
   background: rgba(76, 29, 149, 0.5);
   color: #ede9fe;
-  border: 1px solid rgba(109, 40, 217, 0.6);
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
   backdrop-filter: blur(4px);
-  box-shadow: 0 2px 6px rgba(88, 28, 135, 0.2);
 }
 
 .theme-aurora .cl-input_container {
@@ -2305,6 +2278,145 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background-color: #e2e8f0 !important;
   color: rgb(31 41 55) !important;
   border-radius: 14px !important;
+}
+
+/* ---------- Answers: colours for links and link buttons, per theme ----------
+   --cl-accent fills a link button (a site's button_color replaces it inline),
+   --cl-link colours links in answers, --cl-bot-line is the bubble border. */
+.cl-window {
+  --cl-accent: #2563eb;
+  --cl-accent-hover: #1d4ed8;
+  --cl-on-accent: #ffffff;
+  --cl-link: #1d4ed8;
+  --cl-hover: rgba(15, 23, 42, 0.06);
+  --cl-bot-line: transparent;
+}
+
+.cl-window.theme-default {
+  --cl-bot-line: #e2e8f0;
+}
+
+.cl-window.theme-dark {
+  --cl-accent: #5558e8;
+  --cl-accent-hover: #4547d6;
+  --cl-link: #a5b4fc;
+  --cl-hover: rgba(255, 255, 255, 0.08);
+  --cl-bot-line: #2d3a4d;
+}
+
+.cl-window.theme-ocean {
+  --cl-accent: #0369a1;
+  --cl-accent-hover: #075985;
+  --cl-link: #7dd3fc;
+  --cl-hover: rgba(255, 255, 255, 0.08);
+  --cl-bot-line: #2a3a52;
+}
+
+.cl-window.theme-aurora {
+  --cl-accent: #7c3aed;
+  --cl-accent-hover: #6d28d9;
+  --cl-link: #f0abfc;
+  --cl-hover: rgba(255, 255, 255, 0.1);
+  --cl-bot-line: rgba(109, 40, 217, 0.6);
+}
+
+/* Compact spacing between paragraphs and list items in an answer. */
+.cl-window .cl-bot_message .markdown-body > * {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.cl-window .cl-bot_message .markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.cl-window .cl-bot_message .markdown-body ul,
+.cl-window .cl-bot_message .markdown-body ol {
+  padding-left: 1.25em;
+}
+
+.cl-window .cl-bot_message .markdown-body li + li {
+  margin-top: 2px;
+}
+
+/* Links in answers: the link colour and a light underline that firms up on
+   hover. A site's link_color still wins (inline !important rule). */
+.cl-window .cl-bot_message .markdown-body a {
+  color: var(--cl-link);
+  font-weight: 500;
+  text-decoration-thickness: 1px !important;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(127, 127, 127, 0.5) !important;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent) !important;
+}
+
+.cl-window .cl-bot_message .markdown-body a:hover {
+  text-decoration-color: currentColor !important;
+}
+
+/* A link on its own line is an action, so it renders as a button: filled
+   when it stands alone in a paragraph, outlined when it is a list item. */
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* An arrow shows that the button opens a page. */
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:hover,
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:visited {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent) !important;
+}
+
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:hover {
+  background: var(--cl-accent-hover);
+  opacity: 1 !important;
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a {
+  border: 1px solid rgba(127, 127, 127, 0.45);
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover {
+  background: var(--cl-hover);
+}
+
+/* A list of link buttons drops its bullets and stacks the buttons. */
+.cl-window .cl-bot_message .markdown-body li.cl-link-only {
+  list-style: none;
+  margin-left: -1.25em;
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only + li.cl-link-only {
+  margin-top: 6px;
+}
+
+.cl-window .cl-bot_message .markdown-body p.cl-link-only > a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
 }
     `;
 

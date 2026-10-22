@@ -1007,8 +1007,11 @@ export default function ChatWindow({
           width,
           height,
           minWidth: width,
-          ...(background_color ? {backgroundColor: background_color} : {})
-        }}
+          ...(background_color ? {backgroundColor: background_color} : {}),
+          // A site's button colour is the accent for link buttons in answers,
+          // and its button text colour is the text on them.
+          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {})
+        } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
       >

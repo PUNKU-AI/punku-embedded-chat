@@ -1657,6 +1657,21 @@ describe('ChatWindow', () => {
       expect(window).toHaveClass('custom-theme');
     });
 
+    it('should give link buttons the button colours of the site', () => {
+      render(<ChatWindow {...defaultProps} button_color="#7c2d12" button_text_color="#fff7ed" />);
+
+      const window = document.querySelector('.cl-window') as HTMLElement;
+      expect(window.style.getPropertyValue('--cl-accent')).toBe('#7c2d12');
+      expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
+    });
+
+    it('should keep the theme accent for link buttons without button_color', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const window = document.querySelector('.cl-window') as HTMLElement;
+      expect(window.style.getPropertyValue('--cl-accent')).toBe('');
+    });
+
     it('should render header with custom icon', () => {
       render(<ChatWindow {...defaultProps} header_icon="https://example.com/icon.png" />);
 

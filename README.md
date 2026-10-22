@@ -128,6 +128,11 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - Automatically adjusts opacity on hover for better user interaction
 - Works seamlessly with all themes and custom color schemes
 
+**Link buttons:** a link that stands alone on its own line in an answer is an action, so the widget shows it as a button with an arrow:
+- A link alone in a paragraph is a filled button in the accent colour. With `button_color`, the button uses `button_color` and `button_text_color`.
+- Links alone in list items are outlined buttons in the link colour, stacked without bullets.
+- A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
+
 **Color recommendations:**
 - Ensure sufficient contrast with the background for accessibility
 - Use colors that complement your brand or theme
