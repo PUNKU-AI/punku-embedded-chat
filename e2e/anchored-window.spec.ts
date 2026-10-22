@@ -9,11 +9,12 @@ import { loadWidget, waitForInputFocus } from './widget-helpers';
 const widgetId = 'browser-fixture';
 const pageErrors = new WeakMap<Page, string[]>();
 
-test.beforeEach(({ page, viewport }) => {
+const phoneLayoutSkip = 'The phone layout fills the screen and ignores the trigger position.';
+
+test.beforeEach(({ page }) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
   page.on('pageerror', (error) => errors.push(error.message));
-  test.skip(!viewport || viewport.width <= 640, 'The phone layout fills the screen and ignores the trigger position.');
 });
 
 test.afterEach(({ page }) => {
@@ -55,11 +56,15 @@ function gap(first: Box, second: Box) {
   return Math.max(second.left - first.right, first.left - second.right, second.top - first.bottom, first.top - second.bottom, 0);
 }
 
-async function moveTrigger(page: Page, position: { x: number; y: number }) {
+async function anchorTrigger(page: Page, position: { x: number; y: number }) {
   expect(await page.evaluate(({ widgetId, position }) => {
     const api = (window as unknown as Record<string, { setTriggerPosition(position: unknown): boolean }>)[`${widgetId}_api`];
     return api.setTriggerPosition(position);
   }, { widgetId, position })).toBe(true);
+}
+
+async function moveTrigger(page: Page, position: { x: number; y: number }) {
+  await anchorTrigger(page, position);
   return settledBoxes(page, position);
 }
 
@@ -77,17 +82,23 @@ async function settledBoxes(page: Page, position: { x: number; y: number }) {
   return boxes(page);
 }
 
+// Returns false if the page does not lay out at the new size.
 async function resizeScreen(page: Page, size: { width: number; height: number }) {
   await page.setViewportSize(size);
-  // setViewportSize can return before the page sees the new size (Linux
-  // WebKit in CI). Until then, the old box looks settled. Wait for the new
-  // size, then for two frames: the widget places the window again in the
-  // frame after the resize event, and the move starts in the next frame.
-  await expect.poll(() => page.evaluate(() => `${window.innerWidth} x ${window.innerHeight}`))
-    .toBe(`${size.width} x ${size.height}`);
+  // Wait until the layout viewport (the box of position: fixed and of the
+  // media queries) has the new size. WebKit mobile emulation on Linux keeps
+  // the old layout until a reload: only innerWidth and innerHeight change,
+  // so no page can follow the new size there.
+  const laidOut = await page.waitForFunction(({ width, height }) => {
+    const viewport = document.scrollingElement ?? document.documentElement;
+    return viewport.clientWidth === width && viewport.clientHeight === height;
+  }, size, { timeout: 3000 }).then(() => true, () => false);
+  // The widget places the window again in the frame after the resize event,
+  // and the move starts in the next frame.
   await page.evaluate(() => new Promise((resolve) => {
     window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
   }));
+  return laidOut;
 }
 
 function rounded(box: Box) {
@@ -112,6 +123,7 @@ const openWindowProps = { start_open: 'true', show_closed_widget_hint: 'false', 
 
 for (const triggerSize of [48, 72]) {
   test(`the anchored window stays on the screen next to a ${triggerSize} px trigger in every quadrant`, async ({ page, viewport }) => {
+    test.skip(viewport!.width <= 640, phoneLayoutSkip);
     // Customers can change the trigger size with chat_trigger_style.
     const triggerStyle: Record<string, string> = triggerSize === 48
       ? {}
@@ -141,18 +153,21 @@ for (const triggerSize of [48, 72]) {
 test('the anchored window follows a resize and a rotation', async ({ page, viewport }) => {
   await loadWidget(page, openWindowProps);
   await waitForInputFocus(page);
-  const position = { x: 24, y: 24 };
-  await moveTrigger(page, position);
   const { width, height } = viewport!;
   const screens = {
     // For example a browser toolbar or a split screen.
     'a shorter screen': { width, height: Math.round(height * 0.6) },
     'a rotated screen': { width: height, height: width },
   };
+  // Low on every screen, 24 px above the lowest bottom edge. A window that
+  // keeps its old place then covers the trigger or leaves the screen.
+  const position = { x: 24, y: Math.min(...Object.values(screens).map((size) => size.height)) - 24 - 48 };
+  if (width <= 640) await anchorTrigger(page, position);
+  else await moveTrigger(page, position);
 
   for (const [name, size] of Object.entries(screens)) {
     await test.step(`${name}, ${size.width} x ${size.height}`, async () => {
-      await resizeScreen(page, size);
+      test.skip(!await resizeScreen(page, size), 'The page does not lay out at the new size (WebKit mobile emulation on Linux).');
       // The phone layout fills the screen and ignores the trigger position.
       if (size.width <= 640) return;
 

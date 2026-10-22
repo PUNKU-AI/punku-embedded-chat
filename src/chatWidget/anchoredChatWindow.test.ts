@@ -1,6 +1,7 @@
 import {
   getAnchoredChatWindowPlacement,
   getChatWindowSize,
+  getViewportSize,
   isTabletLayout,
   isTriggerOnLeftSide,
   ViewportSize,
@@ -47,7 +48,41 @@ describe('isTabletLayout', () => {
     [1023, true],
     [1024, false],
   ])('should treat a %p px wide screen as tablet: %p', (width, expected) => {
-    expect(isTabletLayout(width)).toBe(expected);
+    expect(isTabletLayout({ width, height: 800 })).toBe(expected);
+  });
+
+  it('should follow the media query result over the width', () => {
+    // A classic scrollbar: the media queries see 1030 px, the layout viewport 1015 px.
+    expect(isTabletLayout({ width: 1015, height: 800, tabletLayout: null })).toBe(false);
+    expect(isTabletLayout({ width: 1030, height: 800, tabletLayout: 'large' })).toBe(true);
+  });
+});
+
+describe('getViewportSize', () => {
+  const root = document.documentElement;
+
+  afterEach(() => {
+    delete (root as any).clientWidth;
+    delete (root as any).clientHeight;
+    delete (window as any).matchMedia;
+  });
+
+  it('should read the layout viewport and the media queries of the window CSS', () => {
+    // WebKit: pinch zoom makes innerWidth and innerHeight the visual viewport.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 405 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 540 });
+    Object.defineProperty(root, 'clientWidth', { configurable: true, value: 810 });
+    Object.defineProperty(root, 'clientHeight', { configurable: true, value: 1080 });
+    window.matchMedia = ((query: string) => ({ matches: query.includes('768px') })) as typeof window.matchMedia;
+
+    expect(getViewportSize()).toEqual({ width: 810, height: 1080, tabletLayout: 'large' });
+  });
+
+  it('should use innerWidth and innerHeight without a layout (jsdom)', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 750 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 342 });
+
+    expect(getViewportSize()).toEqual({ width: 750, height: 342 });
   });
 });
 
@@ -55,6 +90,11 @@ describe('getChatWindowSize', () => {
   it('should use the small tablet CSS size from 641 to 767 px and ignore the props', () => {
     expect(getChatWindowSize({ width: 750, height: 342 }, 300, 230)).toEqual({ width: 420, height: 256 });
     expect(getChatWindowSize({ width: 700, height: 1000 }, 300, 230)).toEqual({ width: 420, height: 600 });
+  });
+
+  it('should size the window from the media query result', () => {
+    expect(getChatWindowSize({ width: 1030, height: 800, tabletLayout: 'large' }, 300, 230)).toEqual({ width: 420, height: 560 });
+    expect(getChatWindowSize({ width: 1000, height: 800, tabletLayout: null }, 300, 230)).toEqual({ width: 300, height: 230 });
   });
 
   it('should use the tablet CSS size from 768 to 1023 px and ignore the props', () => {

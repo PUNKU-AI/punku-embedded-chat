@@ -97,7 +97,7 @@ const getAnchoredChatWindowStyle = (
     bottom: "",
     right: "",
     // The tablet rules in chatWindow/index.tsx read the size from here.
-    ...(isTabletLayout(viewport.width)
+    ...(isTabletLayout(viewport)
       ? {
           "--cl-anchored-window-width": `${placement.width}px`,
           "--cl-anchored-window-height": `${placement.height}px`,
