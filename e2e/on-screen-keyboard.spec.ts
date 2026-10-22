@@ -60,8 +60,9 @@ test('the open window, its controls and the trigger stay above the keyboard', as
 });
 
 test.describe('Chromium phone in landscape', () => {
-  // 839 x 412 uses the 768-1023 px layout. With a 200 px keyboard, the
-  // window kept its 70 % height and rose above the top of the screen.
+  // 839 x 412 is a short landscape screen (#80). Before #79, the window
+  // kept its 70 % height and rose above the top of the screen with a 200 px
+  // keyboard.
   test.use({ viewport: { width: 839, height: 412 } });
 
   test.beforeEach(({ page }, testInfo) => {
