@@ -34,15 +34,77 @@ export async function loadWidget(page: Page, props: Record<string, string> = {},
   expect(await page.evaluate(() => document.querySelector('punku-chat, punku-control')?.shadowRoot)).toBeNull();
 }
 
+export async function extendHostPage(page: Page, html: string) {
+  // Add host elements before the fixture content.
+  await page.route(/\/fixture\.html(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('<main>', `${html}<main>`);
+    await route.fulfill({ response, body });
+  });
+}
+
 export async function widenHostPage(page: Page, html = '') {
   // A host element 43 px wider than the viewport, as on the live page in #69:
   // 433 px on a 390 px phone. `html` adds more host elements after it.
   const banner = '<div style="width:calc(100vw + 43px);height:40px;background:#c8d3df"></div>';
-  await page.route(/\/fixture\.html(\?|$)/, async (route) => {
-    const response = await route.fetch();
-    const body = (await response.text()).replace('<main>', `${banner}${html}<main>`);
-    await route.fulfill({ response, body });
+  await extendHostPage(page, `${banner}${html}`);
+}
+
+// Host marker in the bottom-right corner of the layout viewport. Pass it to
+// widenHostPage. panToLayoutCorner scrolls it into view to pan the visible
+// area, as a visitor can.
+export const hostCorner = '<div id="host-corner" style="position:fixed;right:0;bottom:0;width:1px;height:1px"></div>';
+
+export async function screenView(page: Page) {
+  return page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    // A fixed box with inset 0 shows the layout viewport. A plain fixed box
+    // follows it, not the screen.
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;inset:0;visibility:hidden;pointer-events:none';
+    document.body.append(probe);
+    const layout = probe.getBoundingClientRect();
+    probe.remove();
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      layout: { width: layout.width, height: layout.height },
+      screen: { left: viewport.offsetLeft, top: viewport.offsetTop, width: viewport.width, height: viewport.height },
+    };
   });
+}
+
+export async function partsOutsideScreen(page: Page, selectors: string[]) {
+  // Client coordinates and the visual viewport offsets both start at the
+  // layout viewport. Allow half a pixel for rounding.
+  return page.evaluate((selectors) => {
+    const host = document.querySelector('punku-chat')!;
+    const root = window.__widgetRoots.get(host)!;
+    const viewport = window.visualViewport!;
+    const left = viewport.offsetLeft;
+    const top = viewport.offsetTop;
+    const right = left + viewport.width;
+    const bottom = top + viewport.height;
+    const round = (value: number) => Math.round(value);
+    return selectors.flatMap((selector) => {
+      const element = root.querySelector<HTMLElement>(selector);
+      const box = element?.getBoundingClientRect();
+      if (!element || !box || box.width === 0 || box.height === 0) return [`${selector} is not shown`];
+      if (box.left >= left - 0.5 && box.top >= top - 0.5 && box.right <= right + 0.5 && box.bottom <= bottom + 0.5) return [];
+      return [`${selector} x ${round(box.left)}-${round(box.right)}, y ${round(box.top)}-${round(box.bottom)}; ` +
+        `screen x ${round(left)}-${round(right)}, y ${round(top)}-${round(bottom)}`];
+    });
+  }, selectors);
+}
+
+export async function panToLayoutCorner(page: Page) {
+  await page.evaluate(() => document.getElementById('host-corner')!.scrollIntoView({ block: 'end', inline: 'end' }));
+  const view = await screenView(page);
+  // Chromium phones make the layout viewport larger than the screen, so the
+  // visible area moves inside it. Elsewhere the two are the same size.
+  if (view.layout.width > view.screen.width + 1) {
+    await expect.poll(async () => (await screenView(page)).screen.left).toBeGreaterThan(0);
+  }
+  return screenView(page);
 }
 
 export async function waitForInputFocus(page: Page) {
