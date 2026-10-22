@@ -13,6 +13,7 @@ import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
+import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
 import {
   DEFAULT_TRIGGER_SIZE,
@@ -3570,6 +3571,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       }
     : defaultTriggerStyle;
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
+  /*
+   * A page with a small fixed layout width (Wix: width=320) is scaled up to
+   * the screen. The root then becomes a frame over the visible screen that
+   * undoes the scale (scaledPage.ts). A relocated trigger keeps its page
+   * coordinates, so it keeps the unscaled layout.
+   */
+  const scaledPage = useScaledPage(!activeTriggerPosition);
   const anchorMetrics = useAnchorMetrics(Boolean(activeTriggerPosition), triggerRef);
   const anchoredChatWindowStyle = activeTriggerPosition
     ? getAnchoredChatWindowStyle(activeTriggerPosition, anchorMetrics, width, height)
@@ -3599,7 +3607,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   useLayoutEffect(() => {
     const root = widgetRootRef.current;
     const anchor = triggerAnchorRef.current;
-    if (!root || !anchor || isRelocated) return;
+    // The scaled page frame is already on the visible screen.
+    if (!root || !anchor || isRelocated || scaledPage) return;
 
     const offsets = {
       top: CORNER_TOP_OFFSET,
@@ -3630,7 +3639,15 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       observer?.disconnect();
       anchor.style.transform = "";
     };
-  }, [open, isRelocated, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);
+  }, [open, isRelocated, scaledPage, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);
+
+  // Keep the scaled page frame on the visible screen, also above the on-screen keyboard.
+  const pageScale = scaledPage?.scale;
+  useLayoutEffect(() => {
+    const root = widgetRootRef.current;
+    if (!root || !pageScale) return;
+    return trackScaledFrame(root, pageScale, open);
+  }, [pageScale, open]);
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
@@ -3693,6 +3710,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     triggerStyle.left,
     triggerStyle.bottom,
     triggerStyle.right,
+    scaledPage,
   ]);
 
   // Create style objects from simple color props if provided
@@ -3727,16 +3745,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       ref={widgetRootRef}
       className="cl-widget-root"
       style={{
-        position: "fixed",
-        ...triggerStyle,
-        transform: "none",
+        ...(scaledPage
+          ? getScaledFrameStyle(scaledPage)
+          : { position: "fixed", ...triggerStyle, transform: "none" }),
         // The root is a stacking context. This one value places the whole
         // widget against the host page. Inner layers stack only inside it.
         zIndex: activeTriggerPosition?.zIndex ?? getZIndex(z_index)
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
-      <div ref={triggerAnchorRef} style={{ position: "relative" }}>
+      <div
+        ref={triggerAnchorRef}
+        // In the scaled page frame, the trigger takes the corner of the frame.
+        style={scaledPage ? { position: "absolute", ...triggerStyle, pointerEvents: "auto" } : { position: "relative" }}
+      >
         {shouldRenderClosedWidgetHint && (
           <div
             ref={closedWidgetHintRef}
@@ -3768,6 +3790,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           position: "fixed",
           ...(anchoredChatWindowStyle || chatWindowStyle),
           zIndex: anchoredChatWindowStyle?.zIndex ?? 9999,
+          ...(scaledPage ? { pointerEvents: "auto" } : {}),
         }}
       >
         <ChatWindow
@@ -3832,6 +3855,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           left_offset={effectiveLeftOffset}
           right_offset={effectiveRightOffset}
           positionOverrideStyle={anchoredChatWindowStyle}
+          scaledPage={scaledPage}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
           widget_id={widget_id}
@@ -3840,7 +3864,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           enable_client_error_reporting={enable_client_error_reporting}
         />
       </div>
-      <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} />
+      <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} scaledPage={scaledPage} />
     </div>
   );
 }

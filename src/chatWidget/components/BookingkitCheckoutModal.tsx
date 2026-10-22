@@ -1,12 +1,15 @@
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES } from "../utils";
+import type { ScaledPage } from "../scaledPage";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
   onClose: () => void;
   language: "en" | "de";
   returnFocusTo?: HTMLElement;
+  /** A page that the browser scales up, such as Wix with width=320 (scaledPage.ts). */
+  scaledPage?: ScaledPage | null;
 }
 
 const CHECKOUT_ORIGIN = "https://eu5.bookingkit.de";
@@ -33,6 +36,7 @@ export default function BookingkitCheckoutModal({
   onClose,
   language,
   returnFocusTo,
+  scaledPage = null,
 }: BookingkitCheckoutModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -122,6 +126,31 @@ export default function BookingkitCheckoutModal({
 
   if (!url) return null;
 
+  /*
+   * On a scaled page, undo the page scale as the widget root does, so the
+   * checkout lays out at the screen size. The modal dialog is in the top
+   * layer, outside the root frame, so it covers the layout viewport itself.
+   * It keeps that size when the on-screen keyboard opens, as on other pages.
+   * Without showModal(), the dialog stays in the frame, which undoes the
+   * scale already.
+   */
+  const inTopLayer = typeof HTMLDialogElement !== "undefined" &&
+    typeof HTMLDialogElement.prototype.showModal === "function";
+  const scaledStyle: React.CSSProperties | undefined = scaledPage && inTopLayer
+    ? {
+        top: 0,
+        left: 0,
+        right: "auto",
+        bottom: "auto",
+        margin: 0,
+        width: `${scaledPage.width}px`,
+        height: `${scaledPage.height}px`,
+        borderRadius: 0,
+        transform: `scale(${1 / scaledPage.scale})`,
+        transformOrigin: "0 0",
+      }
+    : undefined;
+
   const title = language === "de" ? "Buchung" : "Checkout";
   const closeLabel = language === "de" ? "Buchung schließen" : "Close checkout";
   const externalLabel = language === "de" ? "In neuem Tab öffnen" : "Open in new tab";
@@ -130,6 +159,7 @@ export default function BookingkitCheckoutModal({
     <dialog
       ref={dialogRef}
       className="cl-bk-checkout-dialog"
+      style={scaledStyle}
       aria-label={title}
       aria-modal="true"
     >
@@ -167,6 +197,8 @@ export default function BookingkitCheckoutModal({
           color: #1f2937;
           font: 16px/1.5 system-ui, sans-serif;
           box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+          /* The scaled page frame (scaledPage.ts) sets none on the widget root. */
+          pointer-events: auto;
         }
         /* A declaration with var() never falls back to an earlier one, so test dvh here. */
         @supports (height: 100dvh) {
