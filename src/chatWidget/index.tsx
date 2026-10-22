@@ -5,7 +5,7 @@ import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language } from "../translations";
-import { detectBrowserLanguage } from "./utils";
+import { detectBrowserLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -35,6 +35,8 @@ type TriggerPosition = {
 };
 
 const CLOSED_HINT_TOP_EDGE_THRESHOLD = DEFAULT_TRIGGER_SIZE + VIEWPORT_MARGIN;
+// Distance of a top-left or top-right trigger from the top edge.
+const CORNER_TOP_OFFSET = 20;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // Above floating WhatsApp buttons (99999999 and lower). Below the banners of
 // large cookie consent tools (Cookiebot 2147483631, Usercentrics 2147483640,
@@ -106,6 +108,27 @@ const getAnchoredChatWindowStyle = (
       : 9999,
   } as React.CSSProperties;
 };
+
+type CornerOffsets = { top: number; right: number; bottom: number; left: number };
+
+/*
+ * The shift from a box at a layout viewport corner to the same corner of the
+ * visible part of the page. `box` is the unshifted box. `offsets` are its
+ * distances from the layout viewport edges, so they give those edges.
+ */
+export const getVisibleCornerShift = (
+  box: Pick<DOMRect, "top" | "right" | "bottom" | "left">,
+  screen: VisualViewportBox,
+  corner: string,
+  offsets: CornerOffsets
+) => ({
+  x: corner.endsWith("-left")
+    ? screen.offsetLeft - (box.left - offsets.left)
+    : screen.offsetLeft + screen.width - (box.right + offsets.right),
+  y: corner.startsWith("top-")
+    ? screen.offsetTop - (box.top - offsets.top)
+    : screen.offsetTop + screen.height - (box.bottom + offsets.bottom),
+});
 
 export default function ChatWidget({
   api_key,
@@ -306,6 +329,7 @@ export default function ChatWidget({
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
   const closedWidgetHintRef = useRef<HTMLDivElement>(null);
+  const triggerAnchorRef = useRef<HTMLDivElement>(null);
   const [closedHintLayout, setClosedHintLayout] = useState<ClosedWidgetHintLayout | null>(null);
 
   useEffect(() => installNitroLinkRecovery(widgetRootRef.current), []);
@@ -1352,7 +1376,9 @@ video {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
   sans-serif;
-  transition-property: all;
+  /* Animate only the open and close scale. A moving screen box (#77) or a
+     relocated trigger moves the window at once, not in a 300 ms glide. */
+  transition-property: transform;
   transition-duration: 300ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -3395,9 +3421,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: "20px", left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
+        return { top: `${CORNER_TOP_OFFSET}px`, left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
       case "top-right":
-        return { top: "20px", right: `${effectiveRightOffset}px`, bottom: "", left: "" };
+        return { top: `${CORNER_TOP_OFFSET}px`, right: `${effectiveRightOffset}px`, bottom: "", left: "" };
       case "bottom-left":
         return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "", right: "" };
       case "bottom-right":
@@ -3444,6 +3470,56 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     ? activeTriggerPosition.y <= CLOSED_HINT_TOP_EDGE_THRESHOLD
     : cornerPosition.startsWith("top-");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
+  const isRelocated = Boolean(activeTriggerPosition);
+
+  /*
+   * On a host page wider than the screen, Chrome on Android makes the layout
+   * viewport larger than the screen, so the corner of the root can be
+   * outside the screen (#77). Move the trigger and its hint to the same
+   * corner of the visible part of the page. Do this only on such pages and
+   * while the window is open. On other pages, the closed trigger stays behind
+   * the on-screen keyboard, as before, and cannot cover a host form field.
+   * A translate on the anchor restyles only the anchor. Relocated triggers
+   * keep their x and y. A hidden root (for example a phone-only embed on a
+   * desktop) has no box to measure, so it gets no translate until host CSS
+   * shows it. This runs before the closed hint layout effect, so the hint
+   * measures the moved trigger.
+   */
+  useLayoutEffect(() => {
+    const root = widgetRootRef.current;
+    const anchor = triggerAnchorRef.current;
+    if (!root || !anchor || isRelocated) return;
+
+    const offsets = {
+      top: CORNER_TOP_OFFSET,
+      right: effectiveRightOffset,
+      bottom: effectiveBottomOffset,
+      left: effectiveLeftOffset,
+    };
+    let screen: VisualViewportBox | null = null;
+    const update = () => {
+      let transform = "";
+      const box = root.getBoundingClientRect();
+      const shown = box.width > 0 || box.height > 0;
+      if (screen && shown && (open || document.documentElement.scrollWidth > screen.width + 1)) {
+        const { x, y } = getVisibleCornerShift(box, screen, cornerPosition, offsets);
+        if (Math.abs(x) >= 0.5 || Math.abs(y) >= 0.5) transform = `translate(${x}px, ${y}px)`;
+      }
+      if (anchor.style.transform !== transform) anchor.style.transform = transform;
+    };
+    const stop = subscribeVisualViewport((box) => {
+      screen = box;
+      update();
+    });
+    // The root gets a box when host CSS shows a hidden embed. No viewport event fires then.
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    observer?.observe(root);
+    return () => {
+      stop();
+      observer?.disconnect();
+      anchor.style.transform = "";
+    };
+  }, [open, isRelocated, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
@@ -3549,7 +3625,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
-      <div style={{ position: "relative" }}>
+      <div ref={triggerAnchorRef} style={{ position: "relative" }}>
         {shouldRenderClosedWidgetHint && (
           <div
             ref={closedWidgetHintRef}
