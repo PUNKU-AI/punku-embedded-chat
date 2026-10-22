@@ -1442,4 +1442,71 @@ describe('ChatWindow', () => {
       expect(window).toHaveStyle({ height: '700px' });
     });
   });
+
+  describe('Visible screen (#77)', () => {
+    // jsdom has no visual viewport. Install a fake 412 x 839 phone screen.
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 43;
+      offsetTop = 88;
+      width = 412;
+      height = 839;
+      scale = 1;
+    }
+
+    const jsdomVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    let viewport: FakeVisualViewport;
+    let frames: FrameRequestCallback[];
+    const runFrames = () => frames.splice(0).forEach((callback) => callback(0));
+    const box = () => {
+      // The fixed window box has no accessible role. Its CSS variables are the result.
+      // eslint-disable-next-line testing-library/no-node-access
+      const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+      return ['left', 'top', 'width', 'height'].map((side) =>
+        chatWindow.style.getPropertyValue(`--cl-visual-viewport-${side}`)
+      );
+    };
+
+    beforeEach(() => {
+      viewport = new FakeVisualViewport();
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+      frames = [];
+      jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback));
+      jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      if (jsdomVisualViewport) Object.defineProperty(window, 'visualViewport', jsdomVisualViewport);
+      else delete (window as { visualViewport?: unknown }).visualViewport;
+    });
+
+    it('gives the open window the visible box and follows it', () => {
+      render(<ChatWindow {...defaultProps} open={true} />);
+      expect(box()).toEqual(['43px', '88px', '412px', '839px']);
+
+      viewport.height = 500;
+      act(() => {
+        viewport.dispatchEvent(new Event('resize'));
+        runFrames();
+      });
+
+      expect(box()).toEqual(['43px', '88px', '412px', '500px']);
+    });
+
+    it('tracks the visible box only while the window is open', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} open={false} />);
+      expect(box()).toEqual(['', '', '', '']);
+
+      rerender(<ChatWindow {...defaultProps} open={true} />);
+      expect(box()).toEqual(['43px', '88px', '412px', '839px']);
+
+      rerender(<ChatWindow {...defaultProps} open={false} />);
+      viewport.width = 300;
+      act(() => {
+        viewport.dispatchEvent(new Event('resize'));
+        runFrames();
+      });
+      expect(box()).toEqual(['43px', '88px', '412px', '839px']);
+    });
+  });
 });

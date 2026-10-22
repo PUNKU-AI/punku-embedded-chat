@@ -132,3 +132,52 @@ export function revealInScrollContainer(element: HTMLElement) {
 		return;
 	}
 }
+
+/*
+ * CSS variables for the visible part of the page (the visual viewport).
+ * A position: fixed box follows the layout viewport. On a phone, a host page
+ * element wider than the screen makes the layout viewport larger than the
+ * screen, and the on-screen keyboard makes the visible part smaller (#77).
+ */
+export const VISUAL_VIEWPORT_PROPERTIES = {
+	offsetLeft: '--cl-visual-viewport-left',
+	offsetTop: '--cl-visual-viewport-top',
+	width: '--cl-visual-viewport-width',
+	height: '--cl-visual-viewport-height',
+} as const;
+
+// Above this scale the visitor has pinch-zoomed in.
+const PINCH_ZOOM_SCALE = 1.01;
+
+/*
+ * Copy the visual viewport box to CSS variables on `element`, now and after
+ * each visual viewport resize or scroll. When the visitor pinch-zooms in,
+ * remove the variables: the element then stays on the layout viewport, and
+ * the visitor can pan over it. Returns a function that stops the updates.
+ */
+export function trackVisualViewport(element: HTMLElement) {
+	const viewport = window.visualViewport;
+	if (!viewport) return () => {};
+
+	let frame: number | undefined;
+	const update = () => {
+		frame = undefined;
+		const zoomedIn = viewport.scale > PINCH_ZOOM_SCALE;
+		for (const [key, property] of Object.entries(VISUAL_VIEWPORT_PROPERTIES)) {
+			if (zoomedIn) element.style.removeProperty(property);
+			else element.style.setProperty(property, `${viewport[key as keyof typeof VISUAL_VIEWPORT_PROPERTIES]}px`);
+		}
+	};
+	const scheduleUpdate = () => {
+		if (frame === undefined) frame = window.requestAnimationFrame(update);
+	};
+
+	update();
+	viewport.addEventListener('resize', scheduleUpdate);
+	viewport.addEventListener('scroll', scheduleUpdate);
+	return () => {
+		viewport.removeEventListener('resize', scheduleUpdate);
+		viewport.removeEventListener('scroll', scheduleUpdate);
+		if (frame !== undefined) window.cancelAnimationFrame(frame);
+	};
+}

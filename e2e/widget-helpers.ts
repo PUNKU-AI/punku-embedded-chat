@@ -34,6 +34,17 @@ export async function loadWidget(page: Page, props: Record<string, string> = {},
   expect(await page.evaluate(() => document.querySelector('punku-chat, punku-control')?.shadowRoot)).toBeNull();
 }
 
+export async function widenHostPage(page: Page, html = '') {
+  // A host element 43 px wider than the viewport, as on the live page in #69:
+  // 433 px on a 390 px phone. `html` adds more host elements after it.
+  const banner = '<div style="width:calc(100vw + 43px);height:40px;background:#c8d3df"></div>';
+  await page.route(/\/fixture\.html(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('<main>', `${banner}${html}<main>`);
+    await route.fulfill({ response, body });
+  });
+}
+
 export async function waitForInputFocus(page: Page) {
   // The open window focuses its input 100 ms after opening or a new message.
   await expect.poll(() => page.evaluate(() => {

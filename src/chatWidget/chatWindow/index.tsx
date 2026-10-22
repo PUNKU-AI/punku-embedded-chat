@@ -1,6 +1,6 @@
 import { Send, RefreshCw, X } from "lucide-react";
-import { extractMessageFromOutput, getAnimationOrigin, getChatPosition } from "../utils";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport } from "../utils";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
@@ -205,6 +205,7 @@ export default function ChatWindow({
     right?: string;
   }>({ left: "0", top: "0" });
   const inputRef = useRef<HTMLTextAreaElement>(null); /* User input Ref */
+  const chatWindowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (triggerRef)
       setWindowPosition(
@@ -216,6 +217,17 @@ export default function ChatWindow({
         )
       );
   }, [triggerRef, width, height, position]);
+
+  /*
+   * The phone styles size and place the window from the visible part of the
+   * page, not from the layout viewport (#77). Set the box before the first
+   * open frame, and follow it while the window is open.
+   */
+  useLayoutEffect(() => {
+    const chatWindow = chatWindowRef.current;
+    if (!open || !chatWindow) return;
+    return trackVisualViewport(chatWindow);
+  }, [open]);
 
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
     ? { left: `${left_offset}px`, right: "auto" }
@@ -694,6 +706,7 @@ export default function ChatWindow({
 
   return (
     <div
+      ref={chatWindowRef}
       className={
         "cl-chat-window" +
         (open ? " cl-scale-100" : " cl-scale-0")
@@ -786,16 +799,22 @@ export default function ChatWindow({
           /* Responsive sizing for all screen sizes */
           /* Mobile - Small phones */
           @media (max-width: 640px) {
+            /*
+             * Fit the visible part of the page (#77). trackVisualViewport sets
+             * the variables. Without them, fill the layout viewport, as before.
+             */
             .cl-chat-window {
-              top: var(--cl-top-offset, 0px) !important;
-              left: 0 !important;
-              right: 0 !important;
-              bottom: 80px !important;
-              width: 100% !important;
-              height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
-              max-height: calc(100% - 80px - var(--cl-top-offset, 0px)) !important;
-              max-width: 100% !important;
+              top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;
+              left: var(--cl-visual-viewport-left, 0px) !important;
+              right: auto !important;
+              bottom: auto !important;
+              width: var(--cl-visual-viewport-width, 100%) !important;
+              height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
+              max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
+              max-width: var(--cl-visual-viewport-width, 100%) !important;
               padding-top: env(safe-area-inset-top, 0px);
+              /* Follow the visible area at once. Animate only the open and close. */
+              transition-property: transform;
             }
 
             .cl-window {
