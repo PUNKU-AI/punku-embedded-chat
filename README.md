@@ -334,7 +334,7 @@ Use the widget API to customize your widget:
 - **error_message_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for error messages in the chat window.
+  - Description: Styling options for error messages in the chat window, for example `backgroundColor`, `color` and `borderColor`. If you set this prop, the error box starts from the classic look (red `#f87171` background, white text), and your values apply on top. Without it, the box has a soft red look with dark variants for the dark themes. The Try again button uses the text colour. See [Thinking and error states](#thinking-and-error-states).
 
 - **flow_id:**
   - Type: String
@@ -382,7 +382,7 @@ Use the widget API to customize your widget:
 - **loading_messages:**
   - Type: JSON
   - Required: No
-  - Description: Array of strings that the widget shows in turn while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in messages.
+  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme shows its crystal phrases.
 
 - **Online:**
   - Type: Boolean
@@ -414,7 +414,7 @@ Use the widget API to customize your widget:
 - **placeholder_sending:**
   - Type: String
   - Required: No
-  - Description: Placeholder text to display while a message is being sent.
+  - Description: Placeholder text of the input field while the assistant answers. Without it, the field keeps its normal `placeholder`. The field stays enabled, so the visitor can write the next message. It does not change the thinking bubble; use `loading_messages` for that.
 
 - **send_button_style:**
   - Type: JSON
@@ -595,6 +595,16 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Thinking and error states
+
+While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
+
+The input field stays enabled while the assistant answers, so the visitor can write the next message. Enter and the send button send it after the reply is complete.
+
+If a reply fails, the chat shows a plain sentence in the chat's language, for example "Sorry, we're experiencing technical issues. Please try again." The visitor never sees technical text: not HTTP status codes, and not the error text that a flow sends in its stream. These details go only to the browser console and to [client error notifications](#client-error-notifications). The newest error has a **Try again** button. It removes the error, sends the visitor's last message again and keeps the keyboard focus in the input field.
+
+Screen readers hear "The assistant is writing" when a message is sent. When the answer is complete, they hear the answer once, as plain text without markdown marks. They also hear each new error once. Messages restored from a stored session are not read again on page load.
 
 ## Stacking order on the host page
 

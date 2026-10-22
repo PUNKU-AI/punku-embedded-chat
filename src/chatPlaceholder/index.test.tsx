@@ -1,6 +1,10 @@
 import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import ChatMessagePlaceholder from './index';
+import { crystallineThinkingMessages, thinkingMessages } from '../translations';
+
+// Some tests below replace global.Math; give every test the real one back.
+const realMath = global.Math;
 
 describe('ChatMessagePlaceholder', () => {
   beforeEach(() => {
@@ -9,7 +13,10 @@ describe('ChatMessagePlaceholder', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    global.Math = realMath;
   });
+
+  const phrase = () => document.querySelector('.cl-typing-text')?.textContent;
 
   describe('Default Theme Rendering', () => {
     it('should render with default theme', () => {
@@ -27,11 +34,19 @@ describe('ChatMessagePlaceholder', () => {
       expect(botMessage).toBeInTheDocument();
     });
 
-    it('should have animate-pulse class for default theme', () => {
+    it('should show three typing dots and a thinking phrase for the default theme', () => {
       render(<ChatMessagePlaceholder />);
 
-      const pulseElement = document.querySelector('.cl-animate-pulse');
-      expect(pulseElement).toBeInTheDocument();
+      const typing = document.querySelector('.cl-bot_message.cl-typing');
+      expect(typing).toBeInTheDocument();
+      expect(typing?.querySelectorAll('.cl-typing-dots span')).toHaveLength(3);
+      expect(phrase()).toBeTruthy();
+    });
+
+    it('should hide the decorative dots from screen readers', () => {
+      render(<ChatMessagePlaceholder />);
+
+      expect(document.querySelector('.cl-typing-dots')).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('should apply custom bot message style', () => {
@@ -70,11 +85,18 @@ describe('ChatMessagePlaceholder', () => {
       expect(loaderImage).toBeInTheDocument();
     });
 
-    it('should NOT have animate-pulse class for swarovski theme', () => {
+    it('should NOT show typing dots for swarovski theme', () => {
       render(<ChatMessagePlaceholder theme="swarovski" />);
 
-      const pulseElement = document.querySelector('.cl-animate-pulse');
-      expect(pulseElement).not.toBeInTheDocument();
+      expect(document.querySelector('.cl-typing-dots')).not.toBeInTheDocument();
+    });
+
+    it('should show a crystal phrase in the chat language with the crystal loader', () => {
+      render(<ChatMessagePlaceholder theme="swarovski" language="de" />);
+
+      const shown = document.querySelector('.cl-thinking-message span')?.textContent;
+      expect(crystallineThinkingMessages.map((message) => message.de)).toContain(shown);
+      expect(document.querySelector('.cl-crystal-loader')).toBeInTheDocument();
     });
   });
 
@@ -157,6 +179,52 @@ describe('ChatMessagePlaceholder', () => {
       const messageContainer = document.querySelector('.cl-thinking-message');
       expect(messageContainer).toBeInTheDocument();
     });
+
+    it('should show an English thinking phrase by default', () => {
+      render(<ChatMessagePlaceholder />);
+
+      expect(thinkingMessages.en).toContain(phrase());
+    });
+
+    it('should show a German thinking phrase for language="de"', () => {
+      render(<ChatMessagePlaceholder language="de" />);
+
+      expect(thinkingMessages.de).toContain(phrase());
+    });
+
+    it('should keep every phrase in the chat language as the phrase rotates', () => {
+      render(<ChatMessagePlaceholder language="en" />);
+
+      for (let step = 0; step < 10; step += 1) {
+        act(() => {
+          jest.advanceTimersByTime(2500);
+        });
+        expect(thinkingMessages.en).toContain(phrase());
+      }
+    });
+
+    it('should have one English phrase for each German phrase', () => {
+      expect(thinkingMessages.de).toHaveLength(30);
+      expect(thinkingMessages.en).toHaveLength(thinkingMessages.de.length);
+      expect(new Set(thinkingMessages.en).size).toBe(thinkingMessages.en.length);
+    });
+  });
+
+  describe('Phrase Sources', () => {
+    it('should prefer loading_messages over the built-in phrases', () => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={['  Checking the timetable…  ']} />);
+
+      expect(phrase()).toBe('Checking the timetable…');
+    });
+
+    it.each([
+      ['empty', []],
+      ['blank', ['   ', '']],
+    ])('should use the built-in phrases when loading_messages is %s', (_case, loadingMessages) => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={loadingMessages} />);
+
+      expect(thinkingMessages.de).toContain(phrase());
+    });
   });
 
   describe('Theme Variants', () => {
@@ -173,10 +241,9 @@ describe('ChatMessagePlaceholder', () => {
         render(<ChatMessagePlaceholder theme={theme} />);
 
         const botMessage = document.querySelector('.cl-bot_message');
-        const pulseElement = document.querySelector('.cl-animate-pulse');
 
-        expect(botMessage).toBeInTheDocument();
-        expect(pulseElement).toBeInTheDocument();
+        expect(botMessage).toHaveClass('cl-typing');
+        expect(botMessage?.querySelectorAll('.cl-typing-dots span')).toHaveLength(3);
       });
     });
 
@@ -221,8 +288,7 @@ describe('ChatMessagePlaceholder', () => {
     it('should use correct interval timing', () => {
       render(<ChatMessagePlaceholder />);
 
-      // Should not have changed immediately
-      const initialState = document.querySelector('.cl-animate-pulse')?.textContent;
+      const initialState = phrase();
 
       // Advance by less than interval
       act(() => {
@@ -230,7 +296,7 @@ describe('ChatMessagePlaceholder', () => {
       });
 
       // Message should still be the same (timer hasn't fired)
-      // Note: this test is probabilistic due to random selection
+      expect(phrase()).toBe(initialState);
     });
   });
 });

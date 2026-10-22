@@ -90,12 +90,12 @@ async function settle(page: Page) {
 }
 
 async function waitForAnswerDone(page: Page) {
-  // The input is disabled while an answer streams. It gets focus 100 ms after
-  // the last message change. WebKit can keep focus on the disabled input, so
-  // wait until the input is enabled, then let that focus timer run.
+  // The send button is disabled while an answer streams. The input gets focus
+  // 100 ms after the answer is complete, so wait until the button is enabled,
+  // then let that focus timer run.
   await expect.poll(() => page.evaluate(() => {
     const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)?.querySelector<HTMLInputElement>('.cl-input-element')?.disabled;
+    return window.__widgetRoots.get(host)?.querySelector<HTMLButtonElement>('.cl-send-button')?.disabled;
   })).toBe(false);
   await settle(page);
 }

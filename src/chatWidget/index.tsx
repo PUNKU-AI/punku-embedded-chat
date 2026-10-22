@@ -366,6 +366,10 @@ export default function ChatWidget({
   function addMessage(message: ChatMessageType) {
     setMessages((prev) => [...prev, message]);
   }
+  // Try again removes the error message before it sends the visitor's text again.
+  function removeLastMessage() {
+    setMessages((prev) => prev.slice(0, -1));
+  }
 
   // Inject Euclid font into document.head for Shadow DOM compatibility
   useEffect(() => {
@@ -1526,21 +1530,66 @@ video {
   padding-right: max(8px, 0.5rem);
 }
 
-@-webkit-keyframes pulse {
-  50% {
-    opacity: .5;
+/* Typing indicator: three dots and a thinking phrase in the assistant's bubble. */
+.cl-typing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cl-typing-dots {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+}
+
+.cl-typing-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: cl-typing 1.2s ease-in-out infinite;
+}
+
+.cl-typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.cl-typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.cl-typing-text {
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+@keyframes cl-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-3px); opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-typing-dots span {
+    animation: none;
+    opacity: 0.6;
   }
 }
 
-@keyframes pulse {
-  50% {
-    opacity: .5;
-  }
-}
-
-.cl-animate-pulse {
-  -webkit-animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* Read by screen readers only. */
+.cl-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Crystal Loader for Swarovski Theme */
@@ -1642,26 +1691,88 @@ video {
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }
 
+/* Errors: a plain sentence in a soft red box, and a Try again button. */
 .cl-error_message {
-  width: -webkit-fit-content;
-  width: -moz-fit-content;
-  width: fit-content;
-  max-width: 90%;
+  --cl-error-bg: #fef2f2;
+  --cl-error-ink: #991b1b;
+  --cl-error-line: #fecaca;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: max(12px, 0.75rem);
-  border-top-left-radius: max(2px, 0.125rem);
-  --tw-bg-opacity: 1;
-  background-color: rgb(248 113 113 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: var(--cl-error-bg);
+  color: var(--cl-error-ink);
+  border: 1px solid var(--cl-error-line);
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
-  --tw-text-opacity: 1;
-  color: rgb(255 255 255 / var(--tw-text-opacity));
+}
+
+.theme-dark .cl-error_message,
+.theme-ocean .cl-error_message {
+  --cl-error-bg: rgba(127, 29, 29, 0.32);
+  --cl-error-ink: #fecaca;
+  --cl-error-line: rgba(248, 113, 113, 0.35);
+}
+
+.theme-aurora .cl-error_message {
+  --cl-error-bg: rgba(127, 29, 29, 0.35);
+  --cl-error-ink: #fecaca;
+  --cl-error-line: rgba(248, 113, 113, 0.4);
+}
+
+/* With error_message_style, start from the classic red box with white text.
+   The site's values apply on top (inline), so a partial style stays readable.
+   Keep this rule after the theme rules: it must win over them. */
+.cl-error_message.cl-error_message--custom {
+  --cl-error-bg: #f87171;
+  --cl-error-ink: #ffffff;
+  --cl-error-line: transparent;
+}
+
+.cl-error-icon {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+/* In a narrow window, the button moves under the sentence instead of
+   squeezing it into a thin column. */
+.cl-error-text {
+  flex: 1 1 190px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cl-retry-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.cl-retry-btn:hover {
+  background: rgba(127, 29, 29, 0.08);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.cl-retry-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .cl-bot_message {
@@ -3688,6 +3799,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           onCheckout={openCheckout}
           triggerRef={triggerRef}
           addMessage={addMessage}
+          removeLastMessage={removeLastMessage}
           output_type={output_type}
           input_type={input_type}
           output_component={output_component}
