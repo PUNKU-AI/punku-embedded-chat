@@ -3,8 +3,17 @@
  * setTriggerPosition. The window is a fixed box with an inline top and left,
  * so the placement must use the size that the window renders at.
  */
+import { RefObject, useLayoutEffect, useState } from "react";
 
 export type ViewportSize = { width: number; height: number };
+
+// The trigger position (x, y) and its rendered size.
+export type AnchoredTrigger = { x: number; y: number; width?: number; height?: number };
+
+export type AnchorMetrics = {
+  viewport: ViewportSize;
+  triggerSize: { width: number; height: number };
+};
 
 export type AnchoredChatWindowPlacement = {
   top: number;
@@ -31,6 +40,11 @@ const getPositiveNumber = (value: number | undefined, fallback: number) =>
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max));
+
+export const getViewportSize = (): ViewportSize => ({
+  width: typeof window === "undefined" ? 1024 : window.innerWidth,
+  height: typeof window === "undefined" ? 768 : window.innerHeight,
+});
 
 /*
  * From 641 to 1023 px wide, the CSS sets the window size and ignores the
@@ -78,25 +92,30 @@ export const getChatWindowSize = (
   };
 };
 
+// A trigger in the left half of the screen opens its window to the right.
+export const isTriggerOnLeftSide = (trigger: AnchoredTrigger, viewport: ViewportSize) =>
+  trigger.x + getPositiveNumber(trigger.width, DEFAULT_TRIGGER_SIZE) / 2 < viewport.width / 2;
+
 export const getAnchoredChatWindowPlacement = (
-  trigger: { x: number; y: number },
+  trigger: AnchoredTrigger,
   viewport: ViewportSize,
   chatWindowWidth?: number,
   chatWindowHeight?: number
 ): AnchoredChatWindowPlacement => {
   const size = getChatWindowSize(viewport, chatWindowWidth, chatWindowHeight);
+  // chat_trigger_style and the host root font size (3rem) can change the trigger size.
+  const triggerWidth = getPositiveNumber(trigger.width, DEFAULT_TRIGGER_SIZE);
+  const triggerHeight = getPositiveNumber(trigger.height, DEFAULT_TRIGGER_SIZE);
   const maxTop = viewport.height - size.height - VIEWPORT_MARGIN;
   const maxLeft = viewport.width - size.width - VIEWPORT_MARGIN;
-  const triggerCenterX = trigger.x + DEFAULT_TRIGGER_SIZE / 2;
-  const triggerCenterY = trigger.y + DEFAULT_TRIGGER_SIZE / 2;
-  const shouldOpenAbove = triggerCenterY >= viewport.height / 2;
-  const shouldAlignLeft = triggerCenterX < viewport.width / 2;
+  const shouldOpenAbove = trigger.y + triggerHeight / 2 >= viewport.height / 2;
+  const shouldAlignLeft = isTriggerOnLeftSide(trigger, viewport);
   let top = shouldOpenAbove
     ? trigger.y - ANCHORED_CHAT_WINDOW_GAP - size.height
-    : trigger.y + DEFAULT_TRIGGER_SIZE + ANCHORED_CHAT_WINDOW_GAP;
+    : trigger.y + triggerHeight + ANCHORED_CHAT_WINDOW_GAP;
   let left = shouldAlignLeft
     ? trigger.x
-    : trigger.x + DEFAULT_TRIGGER_SIZE - size.width;
+    : trigger.x + triggerWidth - size.width;
 
   /*
    * A short screen has no room above or below the trigger for the tablet
@@ -105,11 +124,11 @@ export const getAnchoredChatWindowPlacement = (
    */
   if (isTabletLayout(viewport.width) && (top < VIEWPORT_MARGIN || top > maxTop)) {
     const besideLeft = shouldAlignLeft
-      ? trigger.x + DEFAULT_TRIGGER_SIZE + ANCHORED_CHAT_WINDOW_SIDE_GAP
+      ? trigger.x + triggerWidth + ANCHORED_CHAT_WINDOW_SIDE_GAP
       : trigger.x - ANCHORED_CHAT_WINDOW_SIDE_GAP - size.width;
     if (besideLeft >= VIEWPORT_MARGIN && besideLeft <= maxLeft) {
       left = besideLeft;
-      top = shouldOpenAbove ? trigger.y + DEFAULT_TRIGGER_SIZE - size.height : trigger.y;
+      top = shouldOpenAbove ? trigger.y + triggerHeight - size.height : trigger.y;
     }
   }
 
@@ -119,4 +138,60 @@ export const getAnchoredChatWindowPlacement = (
     width: size.width,
     height: size.height,
   };
+};
+
+const readAnchorMetrics = (trigger: HTMLElement | null): AnchorMetrics => ({
+  viewport: getViewportSize(),
+  // offsetWidth and offsetHeight ignore transforms. 0 means no layout (tests).
+  triggerSize: {
+    width: trigger?.offsetWidth || DEFAULT_TRIGGER_SIZE,
+    height: trigger?.offsetHeight || DEFAULT_TRIGGER_SIZE,
+  },
+});
+
+const isSameMetrics = (first: AnchorMetrics, second: AnchorMetrics) =>
+  first.viewport.width === second.viewport.width &&
+  first.viewport.height === second.viewport.height &&
+  first.triggerSize.width === second.triggerSize.width &&
+  first.triggerSize.height === second.triggerSize.height;
+
+/*
+ * The viewport and the trigger size for the placement. While a trigger is
+ * anchored, read them again after a resize, a rotation, a change of the
+ * visible area (mobile browser toolbars) or a trigger size change. Without
+ * this, the window keeps the place and the size of the old screen.
+ */
+export const useAnchorMetrics = (enabled: boolean, triggerRef: RefObject<HTMLElement>): AnchorMetrics => {
+  const [metrics, setMetrics] = useState(() => readAnchorMetrics(null));
+
+  useLayoutEffect(() => {
+    if (!enabled) return;
+
+    let frame: number | undefined;
+    const update = () => {
+      frame = undefined;
+      const next = readAnchorMetrics(triggerRef.current);
+      setMetrics((previous) => (isSameMetrics(previous, next) ? previous : next));
+    };
+    const scheduleUpdate = () => {
+      if (frame === undefined) frame = window.requestAnimationFrame(update);
+    };
+    update();
+
+    const trigger = triggerRef.current;
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(scheduleUpdate);
+    if (trigger) observer?.observe(trigger);
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("orientationchange", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("orientationchange", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, [enabled, triggerRef]);
+
+  return metrics;
 };

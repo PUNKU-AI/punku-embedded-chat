@@ -38,6 +38,7 @@ async function boxes(page: Page) {
       send: box('.cl-send-button'),
       trigger: box('.cl-trigger'),
       inline: { left: chatWindow.style.left, top: chatWindow.style.top },
+      moving: chatWindow.getAnimations().length > 0,
     };
   });
 }
@@ -59,44 +60,96 @@ async function moveTrigger(page: Page, position: { x: number; y: number }) {
     const api = (window as unknown as Record<string, { setTriggerPosition(position: unknown): boolean }>)[`${widgetId}_api`];
     return api.setTriggerPosition(position);
   }, { widgetId, position })).toBe(true);
+  return settledBoxes(page, position);
+}
 
-  // The window moves with a 300 ms transition. Read the boxes only when the
-  // rendered window is at its inline place and the trigger at the position.
+async function settledBoxes(page: Page, position: { x: number; y: number }) {
+  // The window moves and resizes with a 300 ms transition. Read the boxes
+  // only when no transition runs, the rendered window is at its inline place
+  // and the trigger is at the position.
   await expect.poll(async () => {
     const view = await boxes(page);
-    return `rendered ${Math.round(view.window.left)}px ${Math.round(view.window.top)}px, ` +
+    return `${view.moving ? 'moving' : 'settled'}, ` +
+      `rendered ${Math.round(view.window.left)}px ${Math.round(view.window.top)}px, ` +
       `inline ${view.inline.left} ${view.inline.top}, ` +
       `trigger ${Math.round(view.trigger.left)} ${Math.round(view.trigger.top)}`;
-  }).toMatch(new RegExp(`^rendered (\\d+px) (\\d+px), inline \\1 \\2, trigger ${position.x} ${position.y}$`));
+  }).toMatch(new RegExp(`^settled, rendered (\\d+px) (\\d+px), inline \\1 \\2, trigger ${position.x} ${position.y}$`));
   return boxes(page);
 }
 
-test('the anchored window stays on the screen next to the trigger in every quadrant', async ({ page, viewport }) => {
-  // The close X shows on desktop too, so the test can check it everywhere.
-  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false', show_close_button_on_desktop: 'true' });
+function rounded(box: Box) {
+  return { left: Math.round(box.left), top: Math.round(box.top), right: Math.round(box.right), bottom: Math.round(box.bottom) };
+}
+
+function expectNextToTrigger(view: Awaited<ReturnType<typeof boxes>>) {
+  expect([
+    ...outside('window', view.window, view.screen),
+    ...outside('close X', view.close, view.screen),
+    ...outside('send button', view.send, view.screen),
+    ...outside('trigger', view.trigger, view.screen),
+  ]).toEqual([]);
+  // Next to the trigger: 32 px above or below it, or 12 px beside it.
+  const distance = Math.round(gap(view.window, view.trigger));
+  expect(distance).toBeGreaterThanOrEqual(12);
+  expect(distance).toBeLessThanOrEqual(32);
+}
+
+// The close X shows on desktop too, so the tests can check it everywhere.
+const openWindowProps = { start_open: 'true', show_closed_widget_hint: 'false', show_close_button_on_desktop: 'true' };
+
+for (const triggerSize of [48, 72]) {
+  test(`the anchored window stays on the screen next to a ${triggerSize} px trigger in every quadrant`, async ({ page, viewport }) => {
+    // Customers can change the trigger size with chat_trigger_style.
+    const triggerStyle: Record<string, string> = triggerSize === 48
+      ? {}
+      : { chat_trigger_style: JSON.stringify({ width: `${triggerSize}px`, height: `${triggerSize}px` }) };
+    await loadWidget(page, { ...openWindowProps, ...triggerStyle });
+    await waitForInputFocus(page);
+    // 24 px from each corner of the screen.
+    const right = viewport!.width - 24 - triggerSize;
+    const bottom = viewport!.height - 24 - triggerSize;
+    const quadrants = {
+      'top-left': { x: 24, y: 24 },
+      'top-right': { x: right, y: 24 },
+      'bottom-left': { x: 24, y: bottom },
+      'bottom-right': { x: right, y: bottom },
+    };
+
+    for (const [quadrant, position] of Object.entries(quadrants)) {
+      await test.step(`trigger in the ${quadrant} quadrant at ${position.x}, ${position.y}`, async () => {
+        const view = await moveTrigger(page, position);
+        expect(Math.round(view.trigger.right - view.trigger.left)).toBe(triggerSize);
+        expectNextToTrigger(view);
+      });
+    }
+  });
+}
+
+test('the anchored window follows a resize and a rotation', async ({ page, viewport }) => {
+  await loadWidget(page, openWindowProps);
   await waitForInputFocus(page);
+  const position = { x: 24, y: 24 };
+  await moveTrigger(page, position);
   const { width, height } = viewport!;
-  const quadrants = {
-    'top-left': { x: 24, y: 24 },
-    'top-right': { x: width - 72, y: 24 },
-    'bottom-left': { x: 24, y: height - 72 },
-    'bottom-right': { x: width - 72, y: height - 72 },
+  const screens = {
+    // For example a browser toolbar or a split screen.
+    'a shorter screen': { width, height: Math.round(height * 0.6) },
+    'a rotated screen': { width: height, height: width },
   };
 
-  for (const [quadrant, position] of Object.entries(quadrants)) {
-    await test.step(`trigger in the ${quadrant} quadrant at ${position.x}, ${position.y}`, async () => {
-      const view = await moveTrigger(page, position);
+  for (const [name, size] of Object.entries(screens)) {
+    await test.step(`${name}, ${size.width} x ${size.height}`, async () => {
+      await page.setViewportSize(size);
+      // The phone layout fills the screen and ignores the trigger position.
+      if (size.width <= 640) return;
 
-      expect([
-        ...outside('window', view.window, view.screen),
-        ...outside('close X', view.close, view.screen),
-        ...outside('send button', view.send, view.screen),
-        ...outside('trigger', view.trigger, view.screen),
-      ]).toEqual([]);
-      // Next to the trigger: 32 px above or below it, or 12 px beside it.
-      const distance = Math.round(gap(view.window, view.trigger));
-      expect(distance).toBeGreaterThanOrEqual(12);
-      expect(distance).toBeLessThanOrEqual(32);
+      const view = await settledBoxes(page, position);
+      expectNextToTrigger(view);
+      // The same box as a page that opens at this size.
+      await page.reload();
+      await waitForInputFocus(page);
+      const fresh = await moveTrigger(page, position);
+      expect(rounded(view.window)).toEqual(rounded(fresh.window));
     });
   }
 });

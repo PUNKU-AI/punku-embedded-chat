@@ -13,7 +13,15 @@ import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
-import { DEFAULT_TRIGGER_SIZE, VIEWPORT_MARGIN, getAnchoredChatWindowPlacement, isTabletLayout } from "./anchoredChatWindow";
+import type { AnchorMetrics } from "./anchoredChatWindow";
+import {
+  DEFAULT_TRIGGER_SIZE,
+  VIEWPORT_MARGIN,
+  getAnchoredChatWindowPlacement,
+  isTabletLayout,
+  isTriggerOnLeftSide,
+  useAnchorMetrics,
+} from "./anchoredChatWindow";
 
 type ProgrammaticMessage = {
   id: number;
@@ -45,11 +53,6 @@ const normalizeZIndex = (value: unknown): number | undefined =>
 
 const getZIndex = (value: number | undefined) => normalizeZIndex(value) ?? DEFAULT_Z_INDEX;
 
-const getViewportSize = () => ({
-  width: typeof window === "undefined" ? 1024 : window.innerWidth,
-  height: typeof window === "undefined" ? 768 : window.innerHeight,
-});
-
 const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => {
   if (!position || typeof position !== "object") {
     return null;
@@ -75,11 +78,16 @@ const normalizeTriggerPosition = (position: unknown): TriggerPosition | null => 
 
 const getAnchoredChatWindowStyle = (
   triggerPosition: TriggerPosition,
+  { viewport, triggerSize }: AnchorMetrics,
   chatWindowWidth?: number,
   chatWindowHeight?: number
 ): React.CSSProperties => {
-  const viewport = getViewportSize();
-  const placement = getAnchoredChatWindowPlacement(triggerPosition, viewport, chatWindowWidth, chatWindowHeight);
+  const placement = getAnchoredChatWindowPlacement(
+    { ...triggerPosition, ...triggerSize },
+    viewport,
+    chatWindowWidth,
+    chatWindowHeight
+  );
 
   return {
     top: `${placement.top}px`,
@@ -97,11 +105,6 @@ const getAnchoredChatWindowStyle = (
       ? Math.min(triggerPosition.zIndex + 1, MAX_Z_INDEX)
       : 9999,
   } as React.CSSProperties;
-};
-
-const isTriggerOverrideOnLeftSide = (triggerPosition: TriggerPosition) => {
-  const { width } = getViewportSize();
-  return triggerPosition.x + DEFAULT_TRIGGER_SIZE / 2 < width / 2;
 };
 
 export default function ChatWidget({
@@ -3430,11 +3433,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       }
     : defaultTriggerStyle;
   const chatWindowStyle = getChatWindowOffset(cornerPosition);
+  const anchorMetrics = useAnchorMetrics(Boolean(activeTriggerPosition), triggerRef);
   const anchoredChatWindowStyle = activeTriggerPosition
-    ? getAnchoredChatWindowStyle(activeTriggerPosition, width, height)
+    ? getAnchoredChatWindowStyle(activeTriggerPosition, anchorMetrics, width, height)
     : undefined;
   const isLeftEdgePosition = activeTriggerPosition
-    ? isTriggerOverrideOnLeftSide(activeTriggerPosition)
+    ? isTriggerOnLeftSide({ ...activeTriggerPosition, ...anchorMetrics.triggerSize }, anchorMetrics.viewport)
     : cornerPosition.endsWith("-left");
   const isTopEdgePosition = activeTriggerPosition
     ? activeTriggerPosition.y <= CLOSED_HINT_TOP_EDGE_THRESHOLD

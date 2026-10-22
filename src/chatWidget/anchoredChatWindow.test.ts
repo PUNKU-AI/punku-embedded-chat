@@ -2,6 +2,7 @@ import {
   getAnchoredChatWindowPlacement,
   getChatWindowSize,
   isTabletLayout,
+  isTriggerOnLeftSide,
   ViewportSize,
 } from './anchoredChatWindow';
 
@@ -20,19 +21,20 @@ const previousPlacement = (trigger: { x: number; y: number }, viewport: Viewport
   };
 };
 
-const quadrantTriggers = ({ width, height }: ViewportSize) => ({
-  'top-left': { x: 24, y: 24 },
-  'top-right': { x: width - 72, y: 24 },
-  'bottom-left': { x: 24, y: height - 72 },
-  'bottom-right': { x: width - 72, y: height - 72 },
+// Triggers 24 px from each corner of the screen.
+const quadrantTriggers = ({ width, height }: ViewportSize, size = 48) => ({
+  'top-left': { x: 24, y: 24, width: size, height: size },
+  'top-right': { x: width - 24 - size, y: 24, width: size, height: size },
+  'bottom-left': { x: 24, y: height - 24 - size, width: size, height: size },
+  'bottom-right': { x: width - 24 - size, y: height - 24 - size, width: size, height: size },
 });
 
 const gapBetween = (
   window: { top: number; left: number; width: number; height: number },
-  trigger: { x: number; y: number }
+  trigger: { x: number; y: number; width: number; height: number }
 ) => {
-  const horizontal = Math.max(trigger.x - (window.left + window.width), window.left - (trigger.x + 48), 0);
-  const vertical = Math.max(trigger.y - (window.top + window.height), window.top - (trigger.y + 48), 0);
+  const horizontal = Math.max(trigger.x - (window.left + window.width), window.left - (trigger.x + trigger.width), 0);
+  const vertical = Math.max(trigger.y - (window.top + window.height), window.top - (trigger.y + trigger.height), 0);
   return Math.max(horizontal, vertical);
 };
 
@@ -133,7 +135,10 @@ describe('getAnchoredChatWindowPlacement', () => {
     { width: 810, height: 1080 },
     { width: 1023, height: 500 },
   ])('should keep the tablet window on a %p screen and next to the trigger in every quadrant', (viewport) => {
-    const problems = Object.entries(quadrantTriggers(viewport)).flatMap(([quadrant, trigger]) => {
+    const triggers = [48, 72].flatMap((size) =>
+      Object.entries(quadrantTriggers(viewport, size)).map(([quadrant, trigger]) => [`${size} px ${quadrant}`, trigger] as const)
+    );
+    const problems = triggers.flatMap(([quadrant, trigger]) => {
       const placement = getAnchoredChatWindowPlacement(trigger, viewport, 300, 230);
       const right = placement.left + placement.width;
       const bottom = placement.top + placement.height;
@@ -148,5 +153,32 @@ describe('getAnchoredChatWindowPlacement', () => {
     });
 
     expect(problems).toEqual([]);
+  });
+
+  it('should keep the gaps to a trigger larger than 48 px', () => {
+    const tablet = { width: 810, height: 1080 };
+    const landscape = { width: 750, height: 342 };
+
+    // 32 px below the trigger bottom, right edges aligned.
+    expect(getAnchoredChatWindowPlacement({ x: 714, y: 24, width: 72, height: 72 }, tablet))
+      .toEqual({ top: 128, left: 366, width: 420, height: 600 });
+    // 32 px above the trigger top.
+    expect(getAnchoredChatWindowPlacement({ x: 24, y: 984, width: 72, height: 72 }, tablet))
+      .toEqual({ top: 352, left: 24, width: 420, height: 600 });
+    // 12 px right of the trigger.
+    expect(getAnchoredChatWindowPlacement({ x: 24, y: 120, width: 72, height: 72 }, landscape))
+      .toEqual({ top: 70, left: 108, width: 420, height: 256 });
+    // On desktop too: the window starts 32 px below a 72 px trigger.
+    expect(getAnchoredChatWindowPlacement({ x: 24, y: 24, width: 72, height: 72 }, { width: 1280, height: 720 }, 300, 230))
+      .toEqual({ top: 128, left: 24, width: 300, height: 230 });
+  });
+});
+
+describe('isTriggerOnLeftSide', () => {
+  it('should use the center of the rendered trigger', () => {
+    const viewport = { width: 800, height: 600 };
+
+    expect(isTriggerOnLeftSide({ x: 360, y: 0 }, viewport)).toBe(true);
+    expect(isTriggerOnLeftSide({ x: 360, y: 0, width: 96 }, viewport)).toBe(false);
   });
 });
