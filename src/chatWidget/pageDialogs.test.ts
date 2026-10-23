@@ -29,6 +29,19 @@ describe('pageLayerZIndex', () => {
     addToPage('<div style="z-index:50"><div id="d"></div></div>');
     expect(pageLayerZIndex(byId('d'))).toBeNull();
   });
+
+  it('takes the z-index of a flex item', () => {
+    addToPage('<div style="display:flex"><div style="z-index:7"><div id="d"></div></div></div>');
+    expect(pageLayerZIndex(byId('d'))).toBe(7);
+  });
+
+  it('takes 0 for a dialog inside a transformed or translucent ancestor', () => {
+    // The ancestor makes a stacking context at 0: the inner 999999 counts only inside it.
+    addToPage('<div style="transform:translateX(0)"><div style="position:fixed;z-index:999999"><div id="a"></div></div></div>'
+      + '<div style="opacity:0.99"><div style="position:fixed;z-index:999999"><div id="b"></div></div></div>');
+    expect(pageLayerZIndex(byId('a'))).toBe(0);
+    expect(pageLayerZIndex(byId('b'))).toBe(0);
+  });
 });
 
 describe('blockingDialogZIndex', () => {
@@ -66,6 +79,12 @@ describe('blockingDialogZIndex', () => {
     expect(blockingDialogZIndex()).toBe(10000000);
   });
 
+  it('finds a backdrop named in upper case (GDPR, DSGVO)', () => {
+    addToPage('<div id="d" class="GDPR-OVERLAY" style="position:fixed;z-index:500000"></div>');
+    place(byId('d'), 0, 0, 1024, 768);
+    expect(blockingDialogZIndex()).toBe(500000);
+  });
+
   it('ignores a small cookie settings button and a consent box that does not cover the screen', () => {
     addToPage('<div id="a" class="cookie-settings-button" style="position:fixed;z-index:999998"></div>'
       + '<div id="b" class="cookie-policy" style="z-index:5"></div>');
@@ -74,12 +93,13 @@ describe('blockingDialogZIndex', () => {
     expect(blockingDialogZIndex()).toBeNull();
   });
 
-  it('takes the highest layer of several dialogs', () => {
-    addToPage('<div style="position:fixed;z-index:1000"><div id="a" aria-modal="true"></div></div>'
-      + '<div style="position:fixed;z-index:999999"><div id="b" aria-modal="true"></div></div>');
-    place(byId('a'));
-    place(byId('b'));
-    expect(blockingDialogZIndex()).toBe(999999);
+  it('takes the lowest layer of several dialogs: the widget stays below each one', () => {
+    // The Contao opt-in on a 320 px phone: the backdrop at 10000000, the box at 20000000.
+    addToPage('<div id="a" class="privacy_overlay" style="position:fixed;z-index:10000000"></div>'
+      + '<div id="b" class="privacy_popup" style="position:fixed;z-index:20000000"></div>');
+    place(byId('a'), 0, 0, 1024, 768);
+    place(byId('b'), 16, 0, 960, 600);
+    expect(blockingDialogZIndex()).toBe(10000000);
   });
 
   it('ignores a dialog without a box, outside the screen, hidden or transparent', () => {

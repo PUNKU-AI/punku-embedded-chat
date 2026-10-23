@@ -160,6 +160,20 @@ describe('guardControlColors', () => {
     expect(gradient.colors.noticeInk).toBeUndefined();
   });
 
+  it('measures the AI notice on a translucent input bar over the theme window', () => {
+    // Half white over the dark window (#030712): the grey notice would read at 1.5:1.
+    const { colors, pairs } = guardControlColors({
+      theme: 'dark', input_container_style: { backgroundColor: 'rgba(255, 255, 255, 0.5)' },
+    });
+    expect(colors.noticeInk).toBeDefined();
+    expect(pairs.find((pair) => pair.control === 'AI notice')!.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    // The light Bookingkit window has no colour of its own: the page shows through.
+    const light = guardControlColors({
+      theme: 'punku-ai-bookingkit', input_container_style: { backgroundColor: 'rgba(255, 255, 255, 0.5)' },
+    });
+    expect(light.colors.noticeInk).toBeUndefined();
+  });
+
   it('keeps every colour of a configuration that already reads', () => {
     const { colors } = guardControlColors({
       theme: 'default', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827', link_color: '#2760CF',
@@ -260,6 +274,8 @@ describe('guardHintColors', () => {
   it('gives the text white or black when the site background cannot keep it', () => {
     // A grey text on a mid grey: no small move of the grey reaches 4.5:1.
     expect(guardHintColors('#808080', '#888888')).toEqual({ text: '#000000' });
+    // A faint text colour reads on no background: it turns opaque.
+    expect(guardHintColors(undefined, 'rgba(255, 255, 255, 0.1)')).toEqual({ text: '#000000' });
   });
 
   it('leaves a transparent background or a colour name as it is', () => {

@@ -39,6 +39,8 @@ type ThemeColors = {
   field: string;
   /** The input bar behind a field that is not opaque. */
   fieldBackdrop: string;
+  /** The window behind an input bar that is not opaque. null: the window has no colour. */
+  window: string | null;
   accent: string;
   onAccent: string;
   link: string;
@@ -60,6 +62,7 @@ const LIGHT_BASE: ThemeColors = {
   list: "#f9fafb",
   field: "#ffffff",
   fieldBackdrop: "#ffffff",
+  window: null,
   accent: "#2563eb",
   onAccent: "#ffffff",
   link: "#1d4ed8",
@@ -79,6 +82,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     bubble: "#ffffff",
     bubbleText: "#1e293b",
     list: "#f8fafc",
+    window: "#ffffff",
     accent: "#0969da",
     send: "#0969da",
   },
@@ -88,6 +92,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#030712",
     field: "#111a2e",
     fieldBackdrop: "#0f172a",
+    window: "#030712",
     accent: "#5558e8",
     onAccent: "#ffffff",
     link: "#a5b4fc",
@@ -106,6 +111,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#0f172a",
     field: "#111c30",
     fieldBackdrop: "#0f172a",
+    window: "#0f172a",
     accent: "#0369a1",
     onAccent: "#ffffff",
     link: "#7dd3fc",
@@ -124,6 +130,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#2e1065",
     field: "rgba(46, 16, 101, 0.55)",
     fieldBackdrop: "#1e1b4b",
+    window: "#2e1065",
     accent: "#7c3aed",
     onAccent: "#ffffff",
     link: "#f0abfc",
@@ -313,10 +320,11 @@ function surfaces(props: ControlColorProps) {
   const bubble = bubbleStyle === IMAGE ? null : surface(props.bot_message_color || bubbleStyle || theme.bubble, list);
   const bubbleText = resolve(props.bot_message_text_color || props.bot_message_style?.color || theme.bubbleText, bubble);
   // The field sits on the input bar: background_color, else
-  // input_container_style, else the theme.
+  // input_container_style, else the theme. A bar that is not opaque shows
+  // the theme's window behind it.
   const bar = props.background_color
     ? resolve(props.background_color, null)
-    : surface(styleBackground(props.input_container_style) || theme.fieldBackdrop, null);
+    : surface(styleBackground(props.input_container_style) || theme.fieldBackdrop, resolve(theme.window, null));
   const field = resolve(props.input_style?.backgroundColor || theme.field, bar);
   const customError = !!props.error_message_style && Object.keys(props.error_message_style).length > 0;
   const errorBg = surface(styleBackground(props.error_message_style) || (customError ? "#f87171" : theme.errorBg), list);
@@ -347,6 +355,8 @@ export function guardHintColors(background?: string, text?: string): { backgroun
     // The stylesheet's white gives way to its dark text colour, else white or black.
     const dark = resolve(HINT_TEXT, null)!;
     const next = contrast(labelOn(dark), dark) >= TEXT_MIN ? dark : blackOrWhite(label.rgb);
+    // A translucent text that reads on neither turns opaque black or white.
+    if (contrast(labelOn(next), next) < TEXT_MIN) return { text: toHex(blackOrWhite(fill)) };
     return { background: toHex(next), ...(label.alpha < 0.999 ? { text: toHex(labelOn(next)) } : {}) };
   }
   if (background && text) {

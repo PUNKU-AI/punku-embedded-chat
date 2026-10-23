@@ -21,27 +21,51 @@ import { useEffect, useState } from "react";
 const BLOCKING_DIALOGS = '[aria-modal="true"], [role="alertdialog"]';
 const CONSENT_WORDS = ["cookie", "consent", "privacy", "datenschutz", "gdpr", "dsgvo"];
 const CONSENT_PATTERN = new RegExp(CONSENT_WORDS.join("|"), "i");
-// Lower case and capitalised, without the "i" flag of attribute selectors.
+// Lower case, capitalised and upper case (GDPR), without the "i" flag of
+// attribute selectors.
 const CONSENT_NAMED = CONSENT_WORDS
-  .flatMap((word) => [word, word[0].toUpperCase() + word.slice(1)])
+  .flatMap((word) => [word, word[0].toUpperCase() + word.slice(1), word.toUpperCase()])
   .flatMap((word) => [`[id*="${word}"]`, `[class*="${word}"]`])
   .join(", ");
 
 /** How often the widget looks for a dialog: consent tools add theirs after the page loads. */
 export const PAGE_DIALOG_CHECK_MS = 1000;
 
+/** A computed value that is set and not the initial value (jsdom leaves many empty). */
+const isSet = (value: string | undefined, initial: string) => !!value && value !== initial;
+
 /**
- * The z-index of the layer that holds `element` on the page: the outermost
- * positioned ancestor with a z-index. null when no ancestor sets one.
+ * The z-index at which `node` makes a stacking context, or null when it makes
+ * none. A context from opacity, transform, filter and similar properties sits
+ * at 0.
+ */
+function stackingContextZIndex(node: Element): number | null {
+  const style = window.getComputedStyle(node);
+  const value = parseInt(style.zIndex, 10);
+  const hasZIndex = Number.isFinite(value);
+  // An empty position (jsdom) is static, the same as in a browser.
+  if (style.position === "fixed" || style.position === "sticky") return hasZIndex ? value : 0;
+  if (hasZIndex && isSet(style.position, "static")) return value;
+  const parentDisplay = node.parentElement ? window.getComputedStyle(node.parentElement).display : "";
+  if (hasZIndex && /(^|-)(flex|grid)$/.test(parentDisplay)) return value;
+  if ((style.opacity !== "" && Number(style.opacity) < 1) || isSet(style.transform, "none") ||
+      isSet(style.filter, "none") || isSet(style.backdropFilter, "none") || isSet(style.clipPath, "none") ||
+      isSet(style.perspective, "none") || isSet(style.mixBlendMode, "normal") || style.isolation === "isolate" ||
+      /transform|opacity|filter|perspective/.test(style.willChange || "") ||
+      /paint|layout|strict|content/.test(style.contain || "")) return 0;
+  return null;
+}
+
+/**
+ * The z-index of the layer that holds `element` on the page: the z-index of
+ * its outermost stacking context below <body>. null when it has none.
  */
 export function pageLayerZIndex(element: Element): number | null {
   let zIndex: number | null = null;
-  for (let node: Element | null = element; node && node !== document.documentElement; node = node.parentElement) {
-    const style = window.getComputedStyle(node);
-    const value = parseInt(style.zIndex, 10);
-    // An empty position (jsdom) is static, the same as in a browser.
-    const positioned = style.position !== "" && style.position !== "static";
-    if (positioned && Number.isFinite(value)) zIndex = value;
+  for (let node: Element | null = element; node && node !== document.body && node !== document.documentElement;
+    node = node.parentElement) {
+    const level = stackingContextZIndex(node);
+    if (level !== null) zIndex = level;
   }
   return zIndex;
 }
@@ -87,17 +111,21 @@ function blockingElements(): Element[] {
   return [...Array.from(document.querySelectorAll(BLOCKING_DIALOGS)), ...consentDialogs, ...consentBackdrops];
 }
 
-/** The highest layer z-index of a visible blocking dialog on the page, or null. */
+/**
+ * The lowest layer z-index of the visible blocking dialogs on the page, or
+ * null. The widget must stay below each of them: the Contao opt-in has its
+ * backdrop at 10000000 and its box at 20000000.
+ */
 export function blockingDialogZIndex(): number | null {
-  let highest: number | null = null;
+  let lowest: number | null = null;
   for (const dialog of blockingElements()) {
     // The widget's own dialogs (the checkout) stack inside the widget root.
     // The closed shadow root hides them, but not in a page without it.
     if (dialog.closest(".cl-widget-root") || !isShown(dialog)) continue;
     const zIndex = pageLayerZIndex(dialog);
-    if (zIndex !== null && (highest === null || zIndex > highest)) highest = zIndex;
+    if (zIndex !== null && (lowest === null || zIndex < lowest)) lowest = zIndex;
   }
-  return highest;
+  return lowest;
 }
 
 /** The widget's z-index: just below a blocking dialog that it would cover. */

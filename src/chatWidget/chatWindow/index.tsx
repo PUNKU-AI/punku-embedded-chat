@@ -1037,10 +1037,11 @@ export default function ChatWindow({
           .cl-window .markdown-body a {
             color: ${linkColor} !important;
           }
+          /* No opacity on hover: it would take the link below 4.5:1. The
+             stylesheet makes the underline solid instead. */
           .cl-window .cl-bot_message a:hover,
           .cl-window .markdown-body a:hover {
             color: ${linkColor} !important;
-            opacity: 0.8;
           }
           .cl-window .cl-bot_message a:visited,
           .cl-window .markdown-body a:visited {

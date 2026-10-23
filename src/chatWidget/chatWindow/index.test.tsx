@@ -2157,6 +2157,16 @@ describe('ChatWindow', () => {
       expect(rule ? rule[1] : null).toBe(color);
     });
 
+    it('should keep a site link colour opaque on hover', () => {
+      // #c74388 reads at 4.6:1 on white; 80% opacity on hover would take it to 3.4:1.
+      render(<ChatWindow {...defaultProps} link_color="#c74388" />);
+
+      const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
+      const hover = /\.cl-window \.markdown-body a:hover \{([^}]*)\}/.exec(styles);
+      expect(hover?.[1]).toContain('color: #c74388 !important');
+      expect(hover?.[1]).not.toContain('opacity');
+    });
+
     it('should keep the theme accent for link buttons without button_color', () => {
       render(<ChatWindow {...defaultProps} />);
 
