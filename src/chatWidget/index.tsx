@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
@@ -6,6 +6,13 @@ import { useEffect } from "react";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { Language } from "../translations";
 import { detectBrowserLanguage } from "./utils";
+import { belowBlockingDialog, useBlockingDialogZIndex } from "./pageDialogs";
+
+/** The widget's z-index on the page. */
+const WIDGET_Z_INDEX = 9998;
+
+// TypeScript 4.9 does not know the popover API.
+type PopoverElement = HTMLDivElement & { showPopover?: () => void; hidePopover?: () => void };
 
 export default function ChatWidget({
   api_key,
@@ -134,6 +141,34 @@ export default function ChatWidget({
   const sessionId = useRef(sessionData.sessionId);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // A consent dialog or another modal dialog of the page stays above the
+  // widget, so a visitor can answer it (pageDialogs.ts).
+  const blockingDialogZIndex = useBlockingDialogZIndex();
+  // The open window goes to the browser's top layer (a manual popover), above
+  // every z-index of the page. On Swarovski phones, the Eyeable accessibility
+  // button (z-index 2147483647, added after the widget) covered the window.
+  // Not while a consent dialog is visible: it stays above the widget.
+  // Browsers without popovers keep the widget's z-index.
+  const windowLayerRef = useRef<PopoverElement>(null);
+  const windowOnTopLayer = open && blockingDialogZIndex === null;
+  useLayoutEffect(() => {
+    const layer = windowLayerRef.current;
+    // The popover attribute is set exactly while the layer is shown.
+    if (!layer || !layer.showPopover || !layer.hidePopover || windowOnTopLayer === layer.hasAttribute("popover")) return;
+    try {
+      if (windowOnTopLayer) {
+        layer.setAttribute("popover", "manual");
+        layer.showPopover();
+      } else {
+        layer.hidePopover();
+        layer.removeAttribute("popover");
+      }
+    } catch {
+      // Not shown, for example a detached element: the window keeps the
+      // widget's z-index. A popover that is not shown would be hidden.
+      layer.removeAttribute("popover");
+    }
+  }, [windowOnTopLayer]);
   function updateLastMessage(message: ChatMessageType) {
     setMessages((prev) => {
       prev[prev.length - 1] = message;
@@ -837,6 +872,19 @@ video {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 500ms;
+}
+
+/* The open window's layer in the browser's top layer (a popover, see
+   ChatWidget): undo the browser's popover box. :where() keeps the
+   specificity at 0, so the inline position and every other rule win. */
+:where(.cl-window-layer[popover]) {
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
 }
 
 .cl-chat-window {
@@ -2821,11 +2869,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveTheme: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski" = theme || "default";
 
   return (
-    <div style={{ 
+    <div className="cl-widget-root" style={{ 
       position: "fixed", 
       ...triggerStyle,
       transform: "none",
-      zIndex: 9998
+      zIndex: belowBlockingDialog(WIDGET_Z_INDEX, blockingDialogZIndex)
     }}>
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
       <div style={{ position: "relative" }}>
@@ -2839,7 +2887,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           theme={effectiveTheme}
         />
       </div>
-      <div style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}>
+      <div
+        ref={windowLayerRef}
+        className="cl-window-layer"
+        style={{ position: "fixed", ...chatWindowStyle, zIndex: 9999 }}
+      >
         <ChatWindow
           api_key={api_key}
           hostUrl={host_url}

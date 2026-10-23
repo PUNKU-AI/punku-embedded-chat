@@ -402,3 +402,17 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Customizes the color of all hyperlinks throughout the chat interface (hex code or CSS color). This includes links in bot messages, header branding links, and any other clickable links. The color is applied to all link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Stacking order on the host page
+
+The widget stacks at z-index 9998 on the page.
+
+While the chat window is open, the widget puts it in the browser's top layer (a popover). There it is above every z-index of the page, also above an element at the highest value 2147483647, such as the Eyeable accessibility button. When the window closes, it leaves the top layer. Browsers without popovers (Safari before 17, Firefox before 125) keep the z-index.
+
+A dialog that the visitor must answer first stays above the widget. While such a dialog is visible, the open window stays in the page, and the widget goes just below the dialog's layer if that layer is lower than 9998:
+
+- a dialog marked `aria-modal="true"` or `role="alertdialog"`;
+- a dialog (`role="dialog"`) with cookie, consent, privacy, Datenschutz, GDPR or DSGVO in its name, id or class;
+- a fixed backdrop over the whole screen with such a word in its id or class.
+
+The widget also looks in the open shadow roots of the body's children: Usercentrics draws its banner in the shadow root of `aside#usercentrics-cmp-ui`. The widget checks once a second, so it follows a dialog within a second when the dialog opens or closes.
