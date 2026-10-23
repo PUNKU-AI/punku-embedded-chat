@@ -142,24 +142,26 @@ test('link buttons use the site colours, and link_color still colours links', as
 });
 
 // Tiroler Abend has dark red answers: the theme's blue link would read at 1.6:1,
-// so links take the white answer text. On Livigno's light blue answers the blue
-// link reads well and stays.
-for (const [bubble, textColor, link] of [
-  ['#791f0d', '#ffffff', 'rgb(255, 255, 255)'],
-  ['#eaf1ff', '#1f2937', 'rgb(29, 78, 216)'],
-]) {
+// so links take the white answer text, and the blue button (2:1) turns white
+// with the bubble colour as text. On Livigno's light blue answers the blue
+// link and the blue button read well and stay.
+const ownBubbles = [
+  { bubble: '#791f0d', text: '#ffffff', link: 'rgb(255, 255, 255)', button: 'rgb(255, 255, 255)', label: 'rgb(121, 31, 13)' },
+  { bubble: '#eaf1ff', text: '#1f2937', link: 'rgb(29, 78, 216)', button: 'rgb(9, 105, 218)', label: 'rgb(255, 255, 255)' },
+];
+for (const { bubble, text, link, button, label } of ownBubbles) {
   test(`links stay readable on a site's own bubble colour ${bubble}`, async ({ page }) => {
-    await openConversation(page, { bot_message_color: bubble, bot_message_text_color: textColor });
+    await openConversation(page, { bot_message_color: bubble, bot_message_text_color: text });
     const result = await layout(page);
     expect(result.inlineLink).toEqual({ color: link, underline: 'underline' });
-    // The filled link button keeps the accent colour and its white text.
-    expect(result.linkButton).toMatchObject({ background: 'rgb(9, 105, 218)', color: 'rgb(255, 255, 255)' });
+    expect(result.linkButton).toMatchObject({ background: button, color: label });
   });
 }
 
-test('the dark theme uses a light link colour and its own accent', async ({ page }) => {
+test('the dark theme fills link buttons with its light link colour and dark text', async ({ page }) => {
   await openConversation(page, { theme: 'dark' });
   const result = await layout(page);
   expect(result.inlineLink?.color).toBe('rgb(165, 180, 252)');
-  expect(result.linkButton).toMatchObject({ background: 'rgb(85, 88, 232)', color: 'rgb(255, 255, 255)' });
+  // The accent #5558e8 reads at 2.5:1 on the dark bubble; the link colour at 7:1.
+  expect(result.linkButton).toMatchObject({ background: 'rgb(165, 180, 252)', color: 'rgb(30, 41, 59)' });
 });

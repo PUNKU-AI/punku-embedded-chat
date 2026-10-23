@@ -198,20 +198,24 @@ test('a network failure in the dark theme shows a readable English sentence', as
 
 // A site's error_message_style can set only some colours. The box then starts
 // from the classic red box with white text, so the text stays readable.
+// Try again takes the text colour of the box, or black or white where that
+// colour reads below 4.5:1 (white on the classic #f87171 reads at 2.8:1).
 const partialStyles = [
   {
     name: 'a background colour only',
     style: { backgroundColor: '#b91c1c' },
     colors: { color: 'rgb(255, 255, 255)', background: 'rgb(185, 28, 28)' },
+    retry: 'rgb(255, 255, 255)',
   },
   {
     name: 'a text colour only',
     style: { color: '#ffffff' },
     colors: { color: 'rgb(255, 255, 255)', background: 'rgb(248, 113, 113)' },
+    retry: 'rgb(0, 0, 0)',
   },
 ];
 
-for (const { name, style, colors } of partialStyles) {
+for (const { name, style, colors, retry } of partialStyles) {
   test(`error_message_style with ${name} starts from the classic red box`, async ({ page }) => {
     await mockAssistant(page, ['server-error']);
     await openChat(page, { error_message_style: JSON.stringify(style) });
@@ -221,7 +225,6 @@ for (const { name, style, colors } of partialStyles) {
     await expect.poll(async () => (await chatState(page)).errorText).toBe(technicalSentence);
     const failed = await chatState(page);
     expect(failed.errorColors).toEqual(colors);
-    // Try again uses the text colour of the box.
-    expect(failed.retryColor).toBe(colors.color);
+    expect(failed.retryColor).toBe(retry);
   });
 }

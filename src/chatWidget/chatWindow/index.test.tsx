@@ -634,11 +634,19 @@ describe('ChatWindow', () => {
     });
 
     it('should use button_color for the chip border only, so the text stays readable', () => {
+      render(<ChatWindow {...defaultProps} button_color="#7c2d12" suggestions={['Opening hours']} />);
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#7c2d12');
+      expect(group.style.getPropertyValue('--cl-chip-ink')).toBe('');
+    });
+
+    it('should darken a light button_color for the chip border until it reaches 3:1 on the list', () => {
       render(<ChatWindow {...defaultProps} button_color="#fde68a" suggestions={['Opening hours']} />);
 
       const group = screen.getByRole('group', { name: 'Suggested questions' });
-      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#fde68a');
-      expect(group.style.getPropertyValue('--cl-chip-ink')).toBe('');
+      // #fde68a reads at 1.3:1 on the list (#f8fafc); the same yellow, darker, reaches 3:1.
+      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#988a53');
     });
 
     it('should send a suggested question when the visitor taps it', async () => {
@@ -2126,19 +2134,24 @@ describe('ChatWindow', () => {
       expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
     });
 
+    // The links rule: the answer's text colour (inherit), a readable
+    // replacement when that text colour does not read either, or nothing.
     it.each([
-      ['a dark red bot_message_color', { bot_message_color: '#791f0d' }, true],
-      ['a dark red background in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d' } }, true],
-      ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, true],
-      ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, false],
-      ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, false],
-      ['a dark red bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, false],
-      ['no own bubble colour', {}, false],
-    ])('should let links take the bubble text colour with %s: %s', (_case, props, inherits) => {
+      ['a dark red bot_message_color with white text', { bot_message_color: '#791f0d', bot_message_text_color: '#ffffff' }, 'inherit'],
+      ['a dark red background and white text in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d', color: '#ffffff' } }, 'inherit'],
+      // Without a text colour the theme's dark text does not read on dark red either.
+      ['a dark red bot_message_color without a text colour', { bot_message_color: '#791f0d' }, '#ffffff'],
+      ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, 'inherit'],
+      ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, null],
+      ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, null],
+      ['a dark red bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, null],
+      ['no own bubble colour', {}, null],
+    ])('should let links take the bubble text colour with %s: %s', (_case, props, color) => {
       render(<ChatWindow {...defaultProps} {...props} />);
 
       const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
-      expect(styles.includes('.cl-window .cl-bot_message .markdown-body a {\n            color: inherit !important;')).toBe(inherits);
+      const rule = /\.cl-window \.cl-bot_message \.markdown-body a \{\n\s*color: ([^ ]+) !important;/.exec(styles);
+      expect(rule ? rule[1] : null).toBe(color);
     });
 
     it('should keep the theme accent for link buttons without button_color', () => {
