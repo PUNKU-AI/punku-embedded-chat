@@ -848,11 +848,6 @@ export default function ChatWindow({
   const headerIconColor = button_color
     ? button_text_color || '#FFFFFF'
     : theme === "default" ? "#0f172a" : "white";
-  // The default and dark themes put the header icon on a light accent circle.
-  // The icon takes the circle's colour (currentColor, set in the stylesheet).
-  // Elsewhere it follows the header colour.
-  const avatarOnAccent = !button_color && (theme === "default" || theme === "dark");
-  const avatarIconColor = avatarOnAccent ? "currentColor" : headerIconColor;
 
   // The bar under the messages holds the field and the AI notice. A fixed
   // height from input_container_style sizes the field, so the text never
@@ -1037,10 +1032,11 @@ export default function ChatWindow({
           .cl-window .markdown-body a {
             color: ${linkColor} !important;
           }
+          /* No opacity on hover: it would take the link below 4.5:1. The
+             stylesheet makes the underline solid instead. */
           .cl-window .cl-bot_message a:hover,
           .cl-window .markdown-body a:hover {
             color: ${linkColor} !important;
-            opacity: 0.8;
           }
           .cl-window .cl-bot_message a:visited,
           .cl-window .markdown-body a:visited {
@@ -1156,9 +1152,13 @@ export default function ChatWindow({
               max-height: var(--cl-anchored-window-height, min(${vh(70)}, var(--cl-window-room))) !important;
             }
 
+            /* The inline minWidth (the width prop, 450 px by default) would
+               win over the 420 px box: the window covered the trigger on a
+               phone in landscape and ran off an iPad in portrait. */
             .cl-window {
               width: 100% !important;
               height: 100% !important;
+              min-width: unset !important;
             }
 
             /* Show close button on tablet */
@@ -1257,6 +1257,7 @@ export default function ChatWindow({
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
           ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
+          ...(guarded.noticeInk ? {"--cl-notice-ink": guarded.noticeInk} : {}),
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
@@ -1277,12 +1278,18 @@ export default function ChatWindow({
                 height="38"
               />
             ) : (
-              <div className="cl-default-header-icon cl-header-avatar" aria-hidden="true">
+              // The icon sits on the header. A plate carries it only where its
+              // colour would vanish on the header (controlColors.ts).
+              <div
+                className={"cl-default-header-icon cl-header-avatar" + (guarded.headerIconPlate ? " cl-header-avatar--plate" : "")}
+                style={guarded.headerIconPlate ? {backgroundColor: guarded.headerIconPlate} : undefined}
+                aria-hidden="true"
+              >
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={avatarIconColor}
-                  size={20}
+                  color={headerIconColor}
+                  size={24}
                 />
               </div>
             )}

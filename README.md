@@ -138,8 +138,12 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
 - If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
 - The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
-- Your `link_color` stays from 3:1 on the answer bubble. Below that, the widget makes it just dark or light enough to reach 4.5:1.
+- Link text needs 4.5:1 on the answer bubble. Your `link_color` stays if it reaches that. Below that, the widget makes it just dark or light enough.
+- Without `link_color`, links use the theme's link colour if it reaches 4.5:1. Else they take the answer text colour. If that text colour also falls below 4.5:1, links take a dark or light shade of the bubble colour.
+- The AI notice under the input field needs 4.5:1 on the input bar (`background_color` or `input_container_style`). Below that, its grey becomes just dark or light enough.
+- The closed hint text needs 4.5:1 on the hint. Your own colours win over the widget's: with only `closed_widget_hint_background_color`, the text turns white or black; with only `closed_widget_hint_text_color`, the hint turns dark. With both, the widget makes your background just dark or light enough for your text, else the text takes white or black.
 - "Try again" in an error message takes white or black if the error text colour falls below 4.5:1.
+- The header icon needs 3:1 on the header. Below that, it sits on a plate in a shade of the header colour (see [Header and input bar](#header-and-input-bar)).
 - Gradients and colour names cannot be measured: those controls stay as they are.
 
 **Color recommendations:**
@@ -281,7 +285,7 @@ Use the widget API to customize your widget:
 - **ai_notice_text:**
   - Type: String
   - Required: No
-  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant. Answers can contain mistakes." In German: "Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten."
+  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: the built-in notice in the chat's language, for example "You are chatting with an AI assistant." or, in German, "Sie chatten mit einem KI-Assistenten."
 
 - **show_ai_notice:**
   - Type: Boolean
@@ -357,7 +361,13 @@ Use the widget API to customize your widget:
 - **default_language:**
   - Type: String
   - Required: No
-  - Description: Sets the default language for the chat interface. Supported values are "en" (English) and "de" (German). If not specified, the widget automatically detects the browser's language preference. This affects all UI text including welcome messages, placeholders, and system messages.
+  - Description: Sets the language of the built-in texts: the default welcome message and placeholder, the AI notice, error messages, "Try again", the thinking phrases and the screen-reader labels. Supported values: `en` (English), `de` (German), `it` (Italian), `es` (Spanish), `pt` (Portuguese), `fr` (French) and `pl` (Polish). A region tag such as `it-IT` also works. Your own texts (`welcome_message`, `placeholder`, `loading_messages`, `ai_notice_text`) always show as you wrote them.
+  - Without `default_language`, the widget takes:
+    1. the page language (`<html lang>`), if the widget has that language,
+    2. else the first browser language that the widget has,
+    3. else English.
+
+    The `swarovski` theme is German unless `default_language` is set. If the page changes `<html lang>` later, for example with a language switch, the chat follows.
 
 - **error_message_style:**
   - Type: JSON
@@ -410,7 +420,7 @@ Use the widget API to customize your widget:
 - **loading_messages:**
   - Type: JSON
   - Required: No
-  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme shows its crystal phrases.
+  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme shows its crystal phrases.
 
 - **Online:**
   - Type: Boolean
@@ -631,17 +641,17 @@ Use the widget API to customize your widget:
 
 ## Header and input bar
 
-The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
+The header is one row: the header icon, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
 
-In the default and dark themes, the avatar is a light circle with the icon in the theme's blue. A `header_icon` image shows without a circle.
+The header icon sits directly on the header, in the colour of the title: the theme's header text colour, or `button_text_color` with `button_color`. Only where that colour would vanish on the header (below 3:1, WCAG 1.4.11), for example a white icon on a white `button_color`, the icon sits on a round plate. The plate is a darker or lighter shade of the header colour, just enough for 3:1. A `header_icon` image never gets a plate.
 
-The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button, the header icon and the link buttons.
+The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button and the link buttons.
 
 The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 
 ## Thinking and error states
 
-While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
+While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
 
 The input field stays enabled while the assistant answers, so the visitor can write the next message. Enter and the send button send it after the reply is complete.
 
@@ -651,9 +661,9 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 
 ## Accessibility and motion
 
-- The launcher button says what it does ("Open chat" or "Close chat", in German "Chat öffnen" or "Chat schließen") and tells screen readers whether the chat is open.
-- The message list is a log named "Conversation" ("Unterhaltung"). New answers are read once from a status region, so the log itself does not announce changes.
-- The feedback buttons are "Helpful" and "Not helpful" ("Hilfreich", "Nicht hilfreich") and report the vote.
+- The launcher button says what it does ("Open chat" or "Close chat", in the chat's language) and tells screen readers whether the chat is open.
+- The message list is a log named "Conversation", in the chat's language. New answers are read once from a status region, so the log itself does not announce changes.
+- The feedback buttons are "Helpful" and "Not helpful", in the chat's language, and report the vote.
 - When the chat closes with the close button or Escape, the keyboard focus returns to the launcher. A closed chat window is out of the tab order.
 - The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
 - The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.
@@ -661,6 +671,15 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 ## Stacking order on the host page
 
 The widget uses one z-index for the trigger, the hint and the chat window. The default is 2147483000. It puts the widget above most other elements of the host page.
+
+A dialog that the visitor must answer first stays above the widget. While the page shows one of these, the widget takes a z-index just below the layer of that dialog:
+- a dialog with `aria-modal="true"` or `role="alertdialog"`, for example Borlabs Cookie;
+- a dialog (`role="dialog"`) whose name, id or class contains cookie, consent, privacy, Datenschutz, GDPR or DSGVO, for example CookieScript ("Cookie consent dialog");
+- a fixed backdrop over the whole screen with one of these words in its id or class, for example the Contao privacy opt-in (`privacy_overlay`).
+
+When the dialog closes, the widget returns to its own z-index within a second. A floating WhatsApp button or a greeting bubble is none of these, so the widget stays above it.
+
+While the chat window is open, the widget puts it in the browser's top layer (a popover). There it is above every z-index of the page, also above an element at the highest value 2147483647, such as an accessibility button. This does not apply while a consent dialog is visible (see above) or on a scaled Wix page. Browsers without popovers (Safari before 17, Firefox before 125) keep the z-index.
 
 ### Known values
 
@@ -681,12 +700,14 @@ These values come from the published code of each product (October 2026). A prod
 | Intercom launcher | 2147483001 | Yes |
 | HubSpot chat | 2147483647 | Yes |
 
+The last column compares the z-index values only. While a consent dialog is visible, the widget steps below it (see the start of this section). This was checked on the real pages of Borlabs Cookie, CookieScript and the Contao privacy opt-in.
+
 Menus, lightboxes, popups and newsletter dialogs of the site itself often use values from 9999 to 999999. The widget now paints above them too. Before this default, the widget used 9998 and stayed below most of them.
 
 ### When the widget covers a consent banner or a site element
 
 - Closed widget: the trigger and the hint can cover a button of a banner or menu in the same corner.
-- Open widget on a phone: the chat window fills the screen above the trigger. It covers a centered consent dialog of every tool with a value below 2147483000, for example Borlabs Cookie, Complianz, CookieYes or Iubenda. This happens with `start_open="true"`, or when a visitor opens the chat before they answer the consent dialog.
+- Open widget on a phone: the chat window fills the screen above the trigger. It covers a centered consent dialog with a value below 2147483000 that the widget does not recognise (see the start of this section). This happens with `start_open="true"`, or when a visitor opens the chat before they answer the consent dialog.
 - Open widget on a tablet: the chat window fills a large part of the screen and can cover a part of a centered dialog.
 - Open widget on a desktop: the chat window stays in its corner. It normally does not reach a centered dialog.
 

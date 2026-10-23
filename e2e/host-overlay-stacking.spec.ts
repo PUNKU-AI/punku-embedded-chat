@@ -14,6 +14,31 @@ const whatsApp = `
 const consentBanner = `
   <div id="consent-banner"
        style="position:fixed;left:0;right:0;bottom:0;height:120px;background:#222;color:#fff;z-index:2147483631">We use cookies.</div>`;
+// Consent tools with a layer below the widget's default. While their dialog
+// is visible, the widget goes below it. Borlabs Cookie marks its dialog as
+// modal, CookieScript names it "Cookie consent dialog", and the Contao privacy
+// opt-in shows a backdrop over the whole screen without marks.
+const consentDialogs = [
+  {
+    tool: 'Borlabs Cookie', layer: 999999, html: `
+  <div id="consent-layer" style="position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.4)">
+    <div role="alertdialog" aria-modal="true" aria-label="Privacy settings"
+         style="margin:40px auto;width:260px;padding:16px;background:#fff">We use cookies.</div>
+  </div>`,
+  },
+  {
+    tool: 'CookieScript', layer: 999997, html: `
+  <div id="consent-layer" role="dialog" aria-label="Cookie consent dialog"
+       style="position:fixed;left:0;right:0;bottom:0;height:70%;z-index:999997;background:#fff">We use cookies.</div>`,
+  },
+  {
+    tool: 'the Contao privacy opt-in', layer: 10000000, html: `
+  <div class="mod_privacy_optin open">
+    <div id="consent-layer" class="privacy_overlay"
+         style="position:fixed;inset:0;z-index:10000000;background:rgba(0,0,0,0.5)"></div>
+  </div>`,
+  },
+];
 
 const errors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -120,6 +145,87 @@ test('a Cookiebot-level consent banner still covers the widget', async ({ page }
 
   const trigger = await settledBox(page, '.cl-trigger');
   expect(await topmostAt(page, center(trigger))).toBe('consent-banner');
+});
+
+for (const { tool, layer, html } of consentDialogs) {
+  test(`the consent dialog of ${tool} stays above the widget until the visitor answers it`, async ({ page }) => {
+    await injectHostElements(page, html);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+    const trigger = await settledBox(page, '.cl-trigger');
+    await expect.poll(() => widgetZIndex(page)).toBe(String(layer - 1));
+    expect(await topmostAt(page, center(trigger))).toBe('consent-layer');
+
+    // The visitor answers the dialog, and the consent tool removes it.
+    await page.evaluate(() => document.getElementById('consent-layer')!.remove());
+    await expect.poll(() => widgetZIndex(page)).toBe('2147483000');
+    expect(await topmostAt(page, center(trigger))).toBe('punku-chat');
+  });
+}
+
+// An accessibility button at the highest z-index, added after the widget
+// (Eyeable on Swarovski). No z-index can cover it, so the open window goes to
+// the browser's top layer.
+const accessibilityButton = `
+  <div id="eyeable-trigger" role="button" aria-label="Accessibility"
+       style="position:fixed;right:0;top:40%;width:60px;height:60px;background:#1a73e8;z-index:2147483647"></div>`;
+
+test('the open window covers an accessibility button at the highest z-index', async ({ page }) => {
+  await injectHostElements(page, accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  const covered = overlap(await settledBox(page, '.cl-chat-window'), await hostBox(page, 'eyeable-trigger'));
+  test.skip(covered.width <= 0 || covered.height <= 0, 'The window does not reach the button at this size.');
+  expect(await topmostAt(page, center(covered))).toBe('punku-chat');
+});
+
+test('a consent dialog still covers the open window', async ({ page }) => {
+  await injectHostElements(page, consentDialogs[0].html + accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  await expect.poll(() => widgetZIndex(page)).toBe('999998');
+  const chatWindow = await settledBox(page, '.cl-chat-window');
+  await expect.poll(() => topmostAt(page, center(chatWindow))).toBe('consent-layer');
+});
+
+// Usercentrics draws its banner in the open shadow root of
+// aside#usercentrics-cmp-ui, in a layer at 2147483646.
+const usercentrics = `
+  <aside id="usercentrics-cmp-ui"></aside>
+  <script>
+    document.getElementById('usercentrics-cmp-ui').attachShadow({ mode: 'open' }).innerHTML =
+      '<div style="position:fixed;left:0;right:0;bottom:0;height:70%;z-index:2147483646;background:#fff">' +
+      '<div id="uc-main-dialog" role="dialog" class="cmp first bottom mobile ltr gdpr" style="height:100%">We use cookies.</div></div>';
+  </script>`;
+
+test('a consent banner in an open shadow root still covers the open window (Usercentrics)', async ({ page }) => {
+  await injectHostElements(page, usercentrics + accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  const chatWindow = await settledBox(page, '.cl-chat-window');
+  const banner = await page.evaluate(() => {
+    const dialog = document.getElementById('usercentrics-cmp-ui')!.shadowRoot!.getElementById('uc-main-dialog')!;
+    const { x, y, width, height } = dialog.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  const shared = overlap(chatWindow, banner);
+  expect(shared.height).toBeGreaterThan(0);
+  // The window stays out of the top layer, so the banner's layer covers it.
+  await expect.poll(() => page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    return root.querySelector('.cl-window-layer')!.getAttribute('popover');
+  })).toBeNull();
+  expect(await topmostAt(page, center(shared))).toBe('usercentrics-cmp-ui');
+});
+
+test('a consent dialog that opens after the widget also stays above it', async ({ page }) => {
+  await loadWidget(page, { show_closed_widget_hint: 'false' });
+  const trigger = await settledBox(page, '.cl-trigger');
+  expect(await widgetZIndex(page)).toBe('2147483000');
+
+  await page.evaluate((html) => document.body.insertAdjacentHTML('beforeend', html), consentDialogs[0].html);
+  await expect.poll(() => widgetZIndex(page)).toBe('999998');
+  expect(await topmostAt(page, center(trigger))).toBe('consent-layer');
 });
 
 // The widget rounds and clamps z_index. 1e21 is invalid CSS (1e+21), and the

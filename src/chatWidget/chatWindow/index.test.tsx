@@ -2134,13 +2134,16 @@ describe('ChatWindow', () => {
       expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
     });
 
-    // The links rule: the answer's text colour (inherit), a readable
-    // replacement when that text colour does not read either, or nothing.
+    // The links rule: the answer's text colour (inherit), a readable shade of
+    // the bubble when that text colour does not read either, or nothing.
     it.each([
       ['a dark red bot_message_color with white text', { bot_message_color: '#791f0d', bot_message_text_color: '#ffffff' }, 'inherit'],
       ['a dark red background and white text in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d', color: '#ffffff' } }, 'inherit'],
-      // Without a text colour the theme's dark text does not read on dark red either.
-      ['a dark red bot_message_color without a text colour', { bot_message_color: '#791f0d' }, '#ffffff'],
+      // Without a text colour the theme's dark text does not read on dark red
+      // either: links take a light shade of the red (4.6:1).
+      ['a dark red bot_message_color without a text colour', { bot_message_color: '#791f0d' }, '#c9a59e'],
+      // White text on a mid green reads at 3:1 only: links take a dark green.
+      ['a mid green bot_message_color with white text', { bot_message_color: '#3aaa35', bot_message_text_color: '#ffffff' }, '#113310'],
       ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, 'inherit'],
       ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, null],
       ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, null],
@@ -2152,6 +2155,16 @@ describe('ChatWindow', () => {
       const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
       const rule = /\.cl-window \.cl-bot_message \.markdown-body a \{\n\s*color: ([^ ]+) !important;/.exec(styles);
       expect(rule ? rule[1] : null).toBe(color);
+    });
+
+    it('should keep a site link colour opaque on hover', () => {
+      // #c74388 reads at 4.6:1 on white; 80% opacity on hover would take it to 3.4:1.
+      render(<ChatWindow {...defaultProps} link_color="#c74388" />);
+
+      const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
+      const hover = /\.cl-window \.markdown-body a:hover \{([^}]*)\}/.exec(styles);
+      expect(hover?.[1]).toContain('color: #c74388 !important');
+      expect(hover?.[1]).not.toContain('opacity');
     });
 
     it('should keep the theme accent for link buttons without button_color', () => {
@@ -2191,40 +2204,69 @@ describe('ChatWindow', () => {
         document.querySelector(selector)?.getAttribute('stroke')
       );
 
-    // Header text colour of each theme without button_color, and the header
-    // icon colour: the light accent circle's colour (currentColor) in the
-    // default and dark themes.
+    // Header text colour of each theme without button_color. The header icon
+    // takes it too.
     const themeHeaderColors = [
-      ['default', '#0f172a', 'currentColor'],
-      ['dark', 'white', 'currentColor'],
-      ['ocean', 'white', 'white'],
-      ['aurora', 'white', 'white'],
-      ['punku-ai-bookingkit', 'white', 'white'],
-      ['swarovski', 'white', 'white'],
+      ['default', '#0f172a'],
+      ['dark', 'white'],
+      ['ocean', 'white'],
+      ['aurora', 'white'],
+      ['punku-ai-bookingkit', 'white'],
+      ['swarovski', 'white'],
     ] as const;
 
-    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color, logo) => {
+    const avatar = () => document.querySelector('.cl-header-avatar') as HTMLElement;
+
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
       renderHeader({ theme });
 
-      expect(headerIconStrokes()).toEqual([logo, color, color]);
+      expect(headerIconStrokes()).toEqual([color, color, color]);
+      // Every theme icon reads on its header: no plate.
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+      expect(avatar().getAttribute('style')).toBeNull();
     });
 
     it.each(themeHeaderColors)(
       'ignores button_text_color without button_color in the %s theme',
-      (theme, color, logo) => {
+      (theme, color) => {
         renderHeader({ theme, button_text_color: '#FFEE00' });
 
-        expect(headerIconStrokes()).toEqual([logo, color, color]);
+        expect(headerIconStrokes()).toEqual([color, color, color]);
       }
     );
 
-    it('keeps the default header actions dark when button_text_color is white', () => {
+    it('keeps the default header icons dark when button_text_color is white', () => {
       renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
 
       const header = document.querySelector('.cl-header') as HTMLElement;
       expect(header.getAttribute('style')).toBeNull();
-      // The header icon takes its circle's colour; the actions sit on the white header.
-      expect(headerIconStrokes()).toEqual(['currentColor', '#0f172a', '#0f172a']);
+      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+    });
+
+    it('puts the header icon on a plate only where it would vanish on the header', () => {
+      // White on a white header: a grey plate carries the white icon (3:1).
+      const { rerender } = renderHeader({ button_color: '#ffffff' });
+      expect(avatar()).toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('rgb(140, 140, 140)');
+      expect(headerIconStrokes()[0]).toBe('#FFFFFF');
+
+      // Red on red: a lighter shade of the red carries the red icon.
+      rerender(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} button_color="#c81e1e" button_text_color="#c81e1e" />);
+      expect(avatar()).toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('rgb(236, 176, 176)');
+
+      // White on a dark red reads (8.4:1): no plate.
+      rerender(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} button_color="#9e183b" button_text_color="#ffffff" />);
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('');
+    });
+
+    it('never puts an uploaded header image on a plate', () => {
+      renderHeader({ button_color: '#ffffff', header_icon: 'https://example.com/logo.png' });
+
+      expect(document.querySelector('img.cl-header-logo-image')).toBeInTheDocument();
+      expect(document.querySelector('.cl-header-avatar')).not.toBeInTheDocument();
     });
 
     it.each(themeHeaderColors.map(([theme]) => theme))(
@@ -2282,8 +2324,8 @@ describe('ChatWindow', () => {
     });
 
     it.each([
-      ['en', 'You are chatting with an AI assistant. Answers can contain mistakes.'],
-      ['de', 'Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten.'],
+      ['en', 'You are chatting with an AI assistant.'],
+      ['de', 'Sie chatten mit einem KI-Assistenten.'],
     ] as const)('should show the AI notice in %s by default', (language, notice) => {
       render(<ChatWindow {...defaultProps} language={language} />);
 

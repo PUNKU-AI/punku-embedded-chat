@@ -2,7 +2,9 @@ import {
   getChatPosition,
   getAnimationOrigin,
   extractMessageFromOutput,
+  chooseLanguage,
   detectBrowserLanguage,
+  detectPageLanguage,
   revealInScrollContainer,
   getPageScale,
   subscribeVisualViewport,
@@ -226,6 +228,79 @@ describe('detectBrowserLanguage', () => {
   });
 });
 
+// The language of the built-in texts when the snippet sets no default_language.
+describe('detectPageLanguage and chooseLanguage', () => {
+  const originalNavigator = global.navigator;
+  const setBrowser = (...languages: string[]) => {
+    Object.defineProperty(global, 'navigator', {
+      value: { languages, language: languages[0] },
+      configurable: true,
+    });
+  };
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('lang');
+    Object.defineProperty(global, 'navigator', { value: originalNavigator, configurable: true });
+  });
+
+  it('reads the page language from <html lang>', () => {
+    document.documentElement.setAttribute('lang', 'it-IT');
+    expect(detectPageLanguage()).toBe('it');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(detectPageLanguage()).toBeNull();
+    document.documentElement.removeAttribute('lang');
+    expect(detectPageLanguage()).toBeNull();
+  });
+
+  it.each([
+    ['it-IT', 'it'],
+    ['es', 'es'],
+    ['pt-PT', 'pt'],
+    ['fr', 'fr'],
+    ['pl-PL', 'pl'],
+    ['de', 'de'],
+  ])('takes the page language %s over an English browser', (pageLang, language) => {
+    setBrowser('en-US', 'en');
+    document.documentElement.setAttribute('lang', pageLang);
+    expect(chooseLanguage()).toBe(language);
+  });
+
+  it('takes the browser language on a page without a language the widget has', () => {
+    setBrowser('pl-PL', 'en');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(chooseLanguage()).toBe('pl');
+    document.documentElement.removeAttribute('lang');
+    expect(chooseLanguage()).toBe('pl');
+  });
+
+  it('falls back to English when neither the page nor the browser language is known', () => {
+    setBrowser('nl-NL', 'ja');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(chooseLanguage()).toBe('en');
+  });
+
+  it('keeps an explicit default_language over the page and the browser', () => {
+    setBrowser('it-IT');
+    document.documentElement.setAttribute('lang', 'it');
+    expect(chooseLanguage('en')).toBe('en');
+    expect(chooseLanguage('de')).toBe('de');
+    expect(chooseLanguage('FR-ca')).toBe('fr');
+  });
+
+  it('detects the language when default_language is one the widget does not have', () => {
+    setBrowser('en-US');
+    document.documentElement.setAttribute('lang', 'es-ES');
+    expect(chooseLanguage('nl')).toBe('es');
+  });
+
+  it('keeps German on the swarovski theme unless default_language is set', () => {
+    setBrowser('it-IT');
+    document.documentElement.setAttribute('lang', 'it');
+    expect(chooseLanguage(undefined, 'swarovski')).toBe('de');
+    expect(chooseLanguage('en', 'swarovski')).toBe('en');
+  });
+});
+
 describe('revealInScrollContainer', () => {
   // jsdom has no layout. Each test sets the list geometry: its client area
   // starts at y = 100, is 200 px tall, and its content is 2000 px tall.
@@ -290,6 +365,18 @@ describe('revealInScrollContainer', () => {
     place(20, 30);
     revealInScrollContainer(link);
     expect(list.scrollTop).toBe(440);
+  });
+
+  it('takes no scale from a fractional list height', () => {
+    // 76.25 px tall: offsetHeight reads 76. As a scale of 1.003, 1474 px of
+    // scrolling stopped 4.5 px short of the link.
+    const { list, link, place } = setup('overflow-y: auto; box-sizing: border-box; height: 76.25px');
+    Object.defineProperty(list, 'offsetHeight', { configurable: true, value: 76 });
+    list.scrollTop = 1558;
+    list.getBoundingClientRect = () => ({ top: 100, bottom: 176.25, height: 76.25 } as DOMRect);
+    place(-1374, -1332);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(84);
   });
 
   it('never scrolls the page when no ancestor scrolls', () => {

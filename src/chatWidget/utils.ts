@@ -1,3 +1,5 @@
+import { Language, LANGUAGES, toLanguage } from "../translations";
+
 export function getChatPosition(
 	triggerPosition: DOMRect,
 	Cwidth:number,
@@ -89,7 +91,7 @@ export function extractMessageFromOutput(output:{type:string, message:any}){
 	return "Unknown message structure"
 }
 
-export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de']): string {
+export function detectBrowserLanguage(availableLanguages: string[] = [...LANGUAGES]): string {
 	// Get browser languages in order of preference
 	const browserLanguages = navigator.languages || [navigator.language];
 
@@ -107,6 +109,26 @@ export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de'
 	// Default to English if no supported language is found
 	return 'en';
 }
+
+/** The page language (<html lang>, such as "it-IT"), if the widget has it. Else null. */
+export function detectPageLanguage(): Language | null {
+	return toLanguage(document.documentElement.getAttribute('lang'));
+}
+
+/*
+ * The language of the built-in texts. The site's default_language wins. The
+ * swarovski theme is German. Else the page language: the site's own texts
+ * (welcome message, placeholder) are written in it, and a visitor who reads
+ * the Italian page reads Italian. Else the first browser language that the
+ * widget has, else English.
+ */
+export function chooseLanguage(defaultLanguage?: string, theme?: string): Language {
+	return toLanguage(defaultLanguage)
+		|| (theme === 'swarovski' ? 'de' : null)
+		|| detectPageLanguage()
+		|| (detectBrowserLanguage([...LANGUAGES]) as Language);
+}
+
 /*
  * Rendered px per layout px of an element, from its client rect size and its
  * offset size. Below 1 inside a scaled page frame (scaledPage.ts). 1 without
@@ -114,6 +136,20 @@ export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de'
  */
 export function renderedScale(renderedSize: number, layoutSize: number) {
 	return renderedSize > 0 && layoutSize > 0 ? renderedSize / layoutSize : 1;
+}
+
+/*
+ * The border-box height of an element in layout px, with its fraction.
+ * offsetHeight rounds: a list 76.2 px tall read as 76 px gave a scale of
+ * 1.003, and 1474 px of scrolling then stopped 4.5 px short of a link (#90).
+ */
+function layoutHeight(element: HTMLElement) {
+	const style = getComputedStyle(element);
+	const height = parseFloat(style.height);
+	if (!Number.isFinite(height)) return element.offsetHeight;
+	if (style.boxSizing === "border-box") return height;
+	return height + parseFloat(style.paddingTop || "0") + parseFloat(style.paddingBottom || "0") +
+		parseFloat(style.borderTopWidth || "0") + parseFloat(style.borderBottomWidth || "0");
 }
 
 /*
@@ -134,7 +170,7 @@ export function revealInScrollContainer(element: HTMLElement) {
 		// Client rects are page px. A scaled page frame (scaledPage.ts) makes them
 		// smaller than the container px of scrollTop.
 		const parentBox = parent.getBoundingClientRect();
-		const scale = renderedScale(parentBox.height, parent.offsetHeight);
+		const scale = renderedScale(parentBox.height, layoutHeight(parent));
 		const top = parentBox.top / scale + parent.clientTop;
 		const target = element.getBoundingClientRect();
 		const above = top - target.top / scale;

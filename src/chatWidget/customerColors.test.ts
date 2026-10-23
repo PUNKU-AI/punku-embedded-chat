@@ -1,14 +1,24 @@
 import { CUSTOMER_COLORS } from './__fixtures__/customerColors';
 import { contrastRatio, parseOpaqueColor, Rgb } from './colorContrast';
-import { guardControlColors } from './controlColors';
+import { guardControlColors, guardHintColors, TEXT_MIN } from './controlColors';
 
 // Every saved customer configuration: no control may fall below its minimum
-// (3:1 for fills, outlines, icons and links; 4.5:1 for text labels).
+// (3:1 for fills, outlines and icons; 4.5:1 for links, labels and the AI notice).
 describe('controls on every saved customer configuration', () => {
   it.each(CUSTOMER_COLORS.map((colors) => [colors.name, colors] as const))('%s', (_name, colors) => {
     const { pairs } = guardControlColors(colors);
     const failing = pairs.filter((pair) => pair.ratio < pair.minimum);
     expect(failing).toEqual([]);
+  });
+
+  it.each(CUSTOMER_COLORS.filter((colors) => colors.closed_widget_hint_background_color || colors.closed_widget_hint_text_color)
+    .map((colors) => [colors.name, colors] as const))('%s: the closed hint text reads', (_name, colors) => {
+    const background = colors.closed_widget_hint_background_color;
+    const text = colors.closed_widget_hint_text_color;
+    const guarded = guardHintColors(background, text);
+    const fill = parseOpaqueColor(guarded.background || background || '#ffffff') as Rgb;
+    const label = parseOpaqueColor(guarded.text || text || '#111827') as Rgb;
+    expect(contrastRatio(label, fill)).toBeGreaterThanOrEqual(TEXT_MIN);
   });
 
   it('covers the cases from the review', () => {
