@@ -208,7 +208,11 @@ test.describe('width=320 page on a 740 x 360 screen', () => {
     expect(await hitOutside()).toBe(true);
 
     await tapWidget(page, '.cl-close-btn', hasTouch, browserName);
-    await expect.poll(async () => (await elementState(page, '.cl-chat-window'))?.width).toBe(0);
+    // Closed: scaled to zero, or hidden after the close fade of #86.
+    await expect.poll(async () => {
+      const closed = await elementState(page, '.cl-chat-window');
+      return !closed || closed.width === 0 || closed.visibility === 'hidden';
+    }).toBe(true);
   });
 
   test('the checkout dialog opens and its close button closes it', async ({ page, hasTouch, browserName }) => {
