@@ -1,0 +1,235 @@
+name: Widget checks
+
+# Build the release bundle once, test that exact file in one job per browser
+# profile, merge the profile reports, and run the real Gemini review once.
+# CI and the release workflow both call this workflow.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or tag to check. Empty uses the caller's commit.
+        type: string
+        default: ""
+      real_gemini:
+        description: Require real Gemini calls. False only when PR secrets are unavailable.
+        type: boolean
+        required: true
+      check_committed_bundle:
+        description: Require the committed CDN fallback bytes to match the build.
+        type: boolean
+        default: false
+      bundle_artifact_name:
+        description: Name for the tested release bundle artifact.
+        type: string
+        default: widget-tested-bundle
+    secrets:
+      GEMINI_API_KEY:
+        description: Existing encrypted Gemini credential, used only by the live check.
+        required: false
+    outputs:
+      commit_sha:
+        description: Commit used to build and test the bundle.
+        value: ${{ jobs.report.outputs.commit_sha }}
+      bundle_sha:
+        description: SHA256 of the tested bundle.
+        value: ${{ jobs.report.outputs.bundle_sha }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user pwuser --init --ipc=host
+    outputs:
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+      bundle_sha: ${{ steps.identity.outputs.bundle_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Audit all dependencies
+        run: npm run audit:dependencies
+      - name: Check types and lint
+        run: |
+          npx tsc --noEmit
+          npm run typecheck:browser
+          npx eslint src --ext .ts,.tsx --ignore-pattern '**/*.test.*'
+          npx eslint e2e scripts/build-widget-bundle.cjs scripts/dev-server*.cjs scripts/lint-compatibility.test.cjs scripts/publish-header-icon-overrides*.cjs scripts/jest-svg-transform.cjs scripts/release-*.cjs scripts/visual-audit*.mjs playwright.config.ts webpack.config.js babel.config.cjs src/controllers/index.ts src/controllers/index.test.ts
+      - name: Build the release bundle once
+        env:
+          CI: "false"
+        run: npm run build:release
+      - name: Require committed release and fallback bytes to match
+        if: inputs.check_committed_bundle
+        run: node scripts/release-bundle.cjs verify-committed
+      - name: Check release and visual result contracts
+        run: |
+          npm run test:release-contract
+          npm run test:visual-contract
+      - name: Record bundle identity
+        id: identity
+        run: node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"
+      - name: Save the built bundle for the browser jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-built-bundle
+          path: |
+            dist/build/static/js/bundle.min.js
+            dist/build/static/js/bundle.min.js.LICENSE.txt
+            output/playwright/bundle-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  browser:
+    name: browser (${{ matrix.project }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user pwuser --init --ipc=host
+    strategy:
+      # Finish every profile, so one run shows all failing profiles.
+      fail-fast: false
+      matrix:
+        project:
+          - desktop-chromium
+          - desktop-firefox
+          - desktop-webkit
+          - android
+          - iphone
+          - narrow-phone
+          - phone-landscape
+          - tablet
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Download the built bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: widget-built-bundle
+          path: .
+      - name: Require the built bundle bytes
+        env:
+          BUNDLE_SHA: ${{ needs.build.outputs.bundle_sha }}
+        run: |
+          node scripts/release-bundle.cjs verify
+          echo "$BUNDLE_SHA  dist/build/static/js/bundle.min.js" | sha256sum --check --strict
+      - name: Test exact bundle in one profile
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: output/playwright/blob-report
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.project }}.zip
+        run: xvfb-run --auto-servernum npm run test:browser -- --project=${{ matrix.project }} --max-failures=2 --reporter=line,blob
+      - name: Save the profile report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-blob-report-${{ matrix.project }}
+          path: output/playwright/blob-report/report-${{ matrix.project }}.zip
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  report:
+    name: report and Gemini
+    needs: [build, browser]
+    # Merge the reports of failed profiles too. Later gates stop on failure.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+      bundle_sha: ${{ steps.identity.outputs.bundle_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Download the built bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: widget-built-bundle
+          path: .
+      - name: Download the profile reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: widget-blob-report-*
+          merge-multiple: true
+          path: output/playwright/blob-reports
+      # The configured reporters write output/playwright/report and
+      # output/playwright/test-results.json, as a single local run does.
+      - name: Merge the profile reports
+        run: npx playwright merge-reports --config playwright.config.ts output/playwright/blob-reports
+      - name: Require every browser profile to pass
+        env:
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: |
+          if [ "$BROWSER_RESULT" != "success" ]; then
+            echo "The browser profiles did not all pass ($BROWSER_RESULT). See the merged report."
+            exit 1
+          fi
+      - name: Test screenshots with real Gemini
+        if: inputs.real_gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-3.1-flash-lite
+        run: npm run test:visual-live
+      - name: Explain unavailable visual credentials
+        if: ${{ !inputs.real_gemini }}
+        run: echo "Real Gemini checks require repository secrets. Fork and Dependabot PRs still run browser checks."
+      - name: Verify tested bundle identity
+        id: identity
+        run: node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"
+      - name: Save tested release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.bundle_artifact_name }}
+          path: |
+            dist/build/static/js/bundle.min.js
+            dist/build/static/js/bundle.min.js.LICENSE.txt
+            output/playwright/bundle-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+      - name: Save browser and Gemini evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-browser-evidence
+          path: |
+            output/playwright/report
+            output/playwright/test-results.json
+            output/playwright/blob-reports/resources
+            output/playwright/gemini-visual-review.json
+            output/playwright/bundle-manifest.json
+          retention-days: 14
+          overwrite: true

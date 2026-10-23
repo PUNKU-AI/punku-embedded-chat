@@ -1,20 +1,33 @@
 /* eslint-env node */
 /* eslint-disable no-template-curly-in-string -- GitHub expressions are literal workflow values. */
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const yaml = require('js-yaml');
 
 const repoRoot = path.resolve(__dirname, '..');
-const readYaml = (filename) => yaml.load(fs.readFileSync(path.join(repoRoot, filename), 'utf8'));
+const readText = (filename) => fs.readFileSync(path.join(repoRoot, filename), 'utf8');
+const readYaml = (filename) => yaml.load(readText(filename));
 const ci = readYaml('.github/workflows/ci.yml');
 const release = readYaml('.github/workflows/publish-cdn.yml');
-const action = readYaml('.github/actions/check-widget-bundle/action.yml');
-const sharedAction = './.github/actions/check-widget-bundle';
-const actionSteps = action.runs.steps;
+const checks = readYaml('.github/workflows/widget-checks.yml');
+const sharedChecks = './.github/workflows/widget-checks.yml';
+const { build, browser, report } = checks.jobs;
+const tagJob = release.jobs.tag;
 const validate = release.jobs.validate;
 const publish = release.jobs.publish;
+const workflows = [ci, release, checks];
+const playwrightConfig = readText('playwright.config.ts');
+const playwrightProjects = [...playwrightConfig.matchAll(/\{ name: '([^']+)'/g)].map((match) => match[1]);
+const rebuild = /npm\s+run\s+build(?::(?:release|react|bundle|browser-tests))?(?:\s|$)|build-widget-bundle\.cjs|react-scripts\s+build|\bwebpack\b/;
+const releaseFiles = [
+  'dist/build/static/js/bundle.min.js',
+  'dist/build/static/js/bundle.min.js.LICENSE.txt',
+  'output/playwright/bundle-manifest.json',
+];
 
 function uniqueStep(steps, predicate, description) {
   const matches = steps.filter(predicate);
@@ -33,41 +46,66 @@ function assertOrdered(steps, selected) {
     'Required gates must keep their execution order');
 }
 
+function paths(value) {
+  return value.trim().split(/\s+/);
+}
+
+const tagStep = uniqueStep(tagJob.steps, (step) => step.id === 'ref', 'release tag validation');
+
+function runTagStep(env) {
+  const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-tag-')), 'output');
+  fs.writeFileSync(outputFile, '');
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', tagStep.run], {
+    env: { PATH: process.env.PATH, GITHUB_OUTPUT: outputFile, DRY_RUN: '', DRY_RUN_SHA: '', ...env },
+    encoding: 'utf8',
+  });
+  const outputs = Object.fromEntries(fs.readFileSync(outputFile, 'utf8').trim().split('\n').filter(Boolean)
+    .map((line) => line.split(/=(.*)/s).slice(0, 2)));
+  fs.rmSync(path.dirname(outputFile), { recursive: true, force: true });
+  return { status: result.status, outputs };
+}
+
 test('publication requires successful validation with real Gemini and committed bundle checks', () => {
-  assert.deepEqual([publish.needs].flat(), ['validate']);
-  assert.equal(condition(publish.if), "needs.validate.result == 'success'");
-  const check = uniqueStep(validate.steps, (step) => step.uses === sharedAction, 'release validation');
-  assert.equal(String(check.with.real_gemini), 'true');
-  assert.equal(String(check.with.check_committed_bundle), 'true');
-  assert.equal(check.with.gemini_api_key, '${{ secrets.GEMINI_API_KEY }}');
-  assert.equal(check.if, undefined, 'Release validation must not skip its shared checks');
-  assert.equal(validate.outputs.commit_sha, '${{ steps.check.outputs.commit_sha }}');
-  assert.equal(check.id, 'check');
-  for (const job of [validate, publish]) {
-    assert.equal(job['continue-on-error'], undefined);
-    for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
+  assert.deepEqual([publish.needs].flat(), ['tag', 'validate']);
+  assert.equal(condition(publish.if), "needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'");
+  assert.equal(validate.uses, sharedChecks);
+  assert.equal(validate.needs, 'tag');
+  assert.equal(validate.if, undefined, 'Release validation must not skip its shared checks');
+  assert.equal(validate.with.real_gemini, true);
+  assert.equal(validate.with.check_committed_bundle, true);
+  assert.equal(validate.secrets.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
+  for (const workflow of [release, checks]) {
+    for (const job of Object.values(workflow.jobs)) {
+      assert.equal(job['continue-on-error'], undefined);
+      for (const step of job.steps || []) assert.equal(step['continue-on-error'], undefined);
+    }
   }
 });
 
-test('CI and releases use the same bundle checking action', () => {
-  const ciCheck = uniqueStep(ci.jobs.browser.steps, (step) => step.uses === sharedAction, 'CI validation');
-  const releaseCheck = uniqueStep(validate.steps, (step) => step.uses === sharedAction, 'release validation');
-  assert.equal(ciCheck.uses, releaseCheck.uses);
-  assert.equal(ciCheck.with.gemini_api_key, '${{ secrets.GEMINI_API_KEY }}');
-  assert.equal(condition(ciCheck.with.real_gemini),
+test('CI and releases call the same widget checks', () => {
+  const widget = ci.jobs.widget;
+  assert.equal(widget.uses, sharedChecks);
+  assert.equal(widget.secrets.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
+  assert.equal(condition(widget.with.real_gemini),
     "github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)");
-  assert.equal(action.runs.using, 'composite');
+  assert.equal(widget.with.check_committed_bundle, undefined, 'PRs need not commit a rebuilt bundle');
+  const call = checks.on.workflow_call;
+  assert.equal(call.inputs.real_gemini.type, 'boolean');
+  assert.equal(call.inputs.check_committed_bundle.default, false);
+  assert.equal(call.secrets.GEMINI_API_KEY.required, false);
+  assert.equal(call.outputs.commit_sha.value, '${{ jobs.report.outputs.commit_sha }}');
+  assert.equal(report.outputs.commit_sha, '${{ steps.identity.outputs.commit_sha }}');
 });
 
 test('publisher downloads the tested artifact at the validated commit without rebuilding the bundle', () => {
   const checkout = uniqueStep(publish.steps, (step) => step.uses?.startsWith('actions/checkout@'), 'publisher checkout');
   const download = uniqueStep(publish.steps, (step) => step.uses?.startsWith('actions/download-artifact@'), 'tested bundle download');
-  const check = uniqueStep(validate.steps, (step) => step.uses === sharedAction, 'release validation');
+  const version = uniqueStep(publish.steps, (step) => step.id === 'v', 'version path');
   assert.equal(checkout.with.ref, '${{ needs.validate.outputs.commit_sha }}');
-  assert.equal(download.with.name, check.with.bundle_artifact_name);
+  assert.equal(download.with.name, validate.with.bundle_artifact_name);
   assert.equal(download.with.path, '.');
+  assert.equal(version.env.RELEASE_TAG, '${{ needs.tag.outputs.tag }}');
   assertOrdered(publish.steps, [checkout, download]);
-  const rebuild = /npm\s+run\s+build(?::(?:release|react|bundle|browser-tests))?(?:\s|$)|build-widget-bundle\.cjs|react-scripts\s+build|\bwebpack\b/;
   for (const step of publish.steps) {
     assert.doesNotMatch(step.run || '', rebuild, 'Publisher must retain the tested bundle bytes');
   }
@@ -87,46 +125,111 @@ test('publisher verifies downloaded bytes before credentials and every upload', 
   }
 });
 
-test('shared checks build once, test browsers and Gemini, verify identity, then save the bundle', () => {
-  const audit = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run audit:dependencies', 'dependency audit');
-  const types = uniqueStep(actionSteps, (step) => step.run?.includes('npx tsc --noEmit'), 'application type check');
-  const build = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run build:release', 'release build');
-  const browser = uniqueStep(actionSteps, (step) => step.run?.includes('npm run test:browser'), 'browser check');
-  const gemini = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
-  const identity = uniqueStep(actionSteps, (step) => step.id === 'identity', 'bundle identity check');
-  const artifact = uniqueStep(actionSteps, (step) => step.uses?.startsWith('actions/upload-artifact@')
-    && step.with.name === '${{ inputs.bundle_artifact_name }}', 'tested bundle artifact');
-  assertOrdered(actionSteps, [audit, types, build, browser, gemini, identity, artifact]);
-  assert.equal(types.if, undefined, 'Application checks must run for every release');
+test('the build job audits, checks types, builds once, and saves the built bundle', () => {
+  const steps = build.steps;
+  const checkout = uniqueStep(steps, (step) => step.uses?.startsWith('actions/checkout@'), 'build checkout');
+  const audit = uniqueStep(steps, (step) => step.run?.trim() === 'npm run audit:dependencies', 'dependency audit');
+  const types = uniqueStep(steps, (step) => step.run?.includes('npx tsc --noEmit'), 'application type check');
+  const bundle = uniqueStep(steps, (step) => step.run?.trim() === 'npm run build:release', 'release build');
+  const committed = uniqueStep(steps, (step) => step.run?.trim() === 'node scripts/release-bundle.cjs verify-committed', 'committed bundle check');
+  const contracts = uniqueStep(steps, (step) => step.run?.includes('npm run test:release-contract'), 'contract check');
+  const identity = uniqueStep(steps, (step) => step.id === 'identity', 'bundle identity');
+  const artifact = uniqueStep(steps, (step) => step.uses?.startsWith('actions/upload-artifact@'), 'built bundle artifact');
+  assertOrdered(steps, [checkout, audit, types, bundle, committed, contracts, identity, artifact]);
+  assert.equal(checkout.with.ref, '${{ inputs.ref }}');
   assert.match(types.run, /npx eslint src --ext \.ts,\.tsx/);
-  const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.scripts['audit:dependencies'], 'npm audit --audit-level=low');
-  assert.equal(audit.if, undefined, 'Dependency checks must run for every release');
-  assert.equal(condition(gemini.if), "inputs.real_gemini == 'true'");
+  assert.match(contracts.run, /npm run test:visual-contract/);
+  assert.equal(condition(committed.if), 'inputs.check_committed_bundle');
   assert.equal(identity.run.trim(), 'node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"');
-  for (const step of [build, browser, identity, artifact]) assert.equal(step.if, undefined);
-  for (const step of actionSteps) assert.equal(step['continue-on-error'], undefined);
+  for (const step of [checkout, audit, types, bundle, contracts, identity, artifact]) assert.equal(step.if, undefined);
+  const packageJson = JSON.parse(readText('package.json'));
+  assert.equal(packageJson.scripts['audit:dependencies'], 'npm audit --audit-level=low');
   assert.equal(artifact.with['if-no-files-found'], 'error');
-  assert.deepEqual(artifact.with.path.trim().split(/\s+/), [
-    'dist/build/static/js/bundle.min.js',
-    'dist/build/static/js/bundle.min.js.LICENSE.txt',
-    'output/playwright/bundle-manifest.json',
-  ]);
+  assert.deepEqual(paths(artifact.with.path), releaseFiles);
+  assert.deepEqual(build.outputs, {
+    commit_sha: '${{ steps.identity.outputs.commit_sha }}',
+    bundle_sha: '${{ steps.identity.outputs.bundle_sha }}',
+  });
+  for (const job of [browser, report]) {
+    for (const step of job.steps) assert.doesNotMatch(step.run || '', rebuild, 'Only the build job may build the bundle');
+  }
+  assert.deepEqual(browser.container, build.container, 'Build and browser jobs must use the same pinned image');
+  assert.match(build.container.image, /^mcr\.microsoft\.com\/playwright:v[\d.]+-noble@sha256:[0-9a-f]{64}$/);
+});
+
+test('every browser profile tests the downloaded bundle in its own job', () => {
+  const steps = browser.steps;
+  const builtArtifact = uniqueStep(build.steps, (step) => step.uses?.startsWith('actions/upload-artifact@'), 'built bundle artifact');
+  const checkout = uniqueStep(steps, (step) => step.uses?.startsWith('actions/checkout@'), 'browser checkout');
+  const download = uniqueStep(steps, (step) => step.uses?.startsWith('actions/download-artifact@'), 'built bundle download');
+  const bytes = uniqueStep(steps, (step) => step.run?.includes('sha256sum'), 'built bundle check');
+  const run = uniqueStep(steps, (step) => step.run?.includes('npm run test:browser'), 'browser check');
+  const blob = uniqueStep(steps, (step) => step.uses?.startsWith('actions/upload-artifact@'), 'profile report');
+  assertOrdered(steps, [checkout, download, bytes, run, blob]);
+  assert.equal(browser.needs, 'build');
+  assert.equal(playwrightProjects.length, 8);
+  assert.deepEqual(browser.strategy.matrix.project, playwrightProjects, 'Each Playwright project needs its own job');
+  assert.equal(browser.strategy['fail-fast'], false);
+  assert.equal(checkout.with.ref, '${{ needs.build.outputs.commit_sha }}');
+  assert.equal(download.with.name, builtArtifact.with.name);
+  assert.equal(download.with.path, '.');
+  assert.match(bytes.run, /^node scripts\/release-bundle\.cjs verify$/m);
+  assert.match(bytes.run, /"\$BUNDLE_SHA {2}dist\/build\/static\/js\/bundle\.min\.js" \| sha256sum --check --strict/);
+  assert.equal(bytes.env.BUNDLE_SHA, '${{ needs.build.outputs.bundle_sha }}');
+  assert.equal(run.run.trim(),
+    'xvfb-run --auto-servernum npm run test:browser -- --project=${{ matrix.project }} --max-failures=2 --reporter=line,blob');
+  assert.equal(run.env.PLAYWRIGHT_BLOB_OUTPUT_NAME, 'report-${{ matrix.project }}.zip');
+  assert.equal(blob.with.path, `${run.env.PLAYWRIGHT_BLOB_OUTPUT_DIR}/${run.env.PLAYWRIGHT_BLOB_OUTPUT_NAME}`);
+  assert.equal(blob.with.name, 'widget-blob-report-${{ matrix.project }}');
+  assert.equal(blob.with['if-no-files-found'], 'error');
+  assert.equal(condition(blob.if), '!cancelled()');
+  for (const step of [checkout, download, bytes, run]) assert.equal(step.if, undefined);
+  for (const job of Object.values(checks.jobs)) assert.ok(job['timeout-minutes'] <= 20, 'Each check job needs a short timeout');
+});
+
+test('the report job merges every profile, then runs Gemini, verifies identity, and saves the tested bundle', () => {
+  const steps = report.steps;
+  const blobs = uniqueStep(steps, (step) => step.with?.pattern, 'profile report download');
+  const merge = uniqueStep(steps, (step) => step.run?.includes('merge-reports'), 'report merge');
+  const gate = uniqueStep(steps, (step) => step.env?.BROWSER_RESULT, 'browser result gate');
+  const gemini = uniqueStep(steps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
+  const identity = uniqueStep(steps, (step) => step.id === 'identity', 'bundle identity check');
+  const artifact = uniqueStep(steps, (step) => step.uses?.startsWith('actions/upload-artifact@')
+    && step.with.name === '${{ inputs.bundle_artifact_name }}', 'tested bundle artifact');
+  const evidence = uniqueStep(steps, (step) => step.with?.name === 'widget-browser-evidence', 'browser evidence');
+  assertOrdered(steps, [blobs, merge, gate, gemini, identity, artifact]);
+  assert.deepEqual(report.needs, ['build', 'browser']);
+  assert.equal(condition(report.if), "!cancelled() && needs.build.result == 'success'");
+  assert.equal(blobs.with.pattern, 'widget-blob-report-*');
+  assert.equal(blobs.with['merge-multiple'], true);
+  assert.equal(merge.run.trim(), `npx playwright merge-reports --config playwright.config.ts ${blobs.with.path}`);
+  assert.match(playwrightConfig, /\['json', \{ outputFile: 'output\/playwright\/test-results\.json' \}\]/);
+  assert.equal(gate.env.BROWSER_RESULT, '${{ needs.browser.result }}');
+  assert.match(gate.run, /"\$BROWSER_RESULT" != "success"/);
+  assert.match(gate.run, /exit 1/);
+  assert.equal(condition(gemini.if), 'inputs.real_gemini');
+  assert.equal(identity.run.trim(), 'node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"');
+  for (const step of [blobs, merge, gate, identity, artifact]) assert.equal(step.if, undefined);
+  assert.equal(artifact.with['if-no-files-found'], 'error');
+  assert.deepEqual(paths(artifact.with.path), releaseFiles);
+  assert.equal(condition(evidence.if), 'always()');
+  assert.ok(paths(evidence.with.path).includes(`${blobs.with.path}/resources`), 'Evidence must keep the merged screenshots');
 });
 
 test('only the live Gemini step receives the key and only the publisher has OIDC permission', () => {
-  const gemini = uniqueStep(actionSteps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
-  assert.equal(gemini.env.GEMINI_API_KEY, '${{ inputs.gemini_api_key }}');
+  const gemini = uniqueStep(report.steps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
+  assert.equal(gemini.env.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
   assert.equal(gemini.env.GEMINI_MODEL, 'gemini-3.1-flash-lite');
-  for (const step of actionSteps.filter((candidate) => candidate !== gemini)) {
-    assert.equal(step.env?.GEMINI_API_KEY, undefined, 'Other steps must not receive the credential');
-  }
-  for (const workflow of [ci, release]) {
+  assert.equal(readText('.github/workflows/widget-checks.yml').match(/secrets\.GEMINI_API_KEY/g).length, 1);
+  for (const workflow of workflows) {
     assert.notEqual(workflow.permissions?.['id-token'], 'write');
     assert.equal(workflow.env?.GEMINI_API_KEY, undefined);
     for (const job of Object.values(workflow.jobs)) {
+      assert.notEqual(job.secrets, 'inherit', 'Pass only the Gemini secret');
       assert.equal(job.env?.GEMINI_API_KEY, undefined);
-      for (const step of job.steps) assert.equal(step.env?.GEMINI_API_KEY, undefined);
+      for (const step of job.steps || []) {
+        if (step !== gemini) assert.equal(step.env?.GEMINI_API_KEY, undefined, 'Other steps must not receive the credential');
+      }
       if (job !== publish) assert.notEqual(job.permissions?.['id-token'], 'write');
     }
   }
@@ -134,16 +237,37 @@ test('only the live Gemini step receives the key and only the publisher has OIDC
 });
 
 test('release tags enter through an environment variable and resolve to a canonical tag ref', () => {
-  const tag = uniqueStep(validate.steps, (step) => step.id === 'ref', 'release tag validation');
-  const checkout = uniqueStep(validate.steps, (step) => step.uses?.startsWith('actions/checkout@'), 'validation checkout');
-  assert.equal(tag.env.RELEASE_REF, '${{ github.event.inputs.tag || github.ref }}');
-  assert.match(tag.run, /TAG="\$\{RELEASE_REF#refs\/tags\/\}"/);
-  assert.match(tag.run, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/);
-  assert.match(tag.run, /exit 1/);
-  assert.match(tag.run, /echo "ref=refs\/tags\/\$TAG" >> "\$GITHUB_OUTPUT"/);
-  assert.doesNotMatch(tag.run, /\$\{\{/);
-  assert.equal(checkout.with.ref, '${{ steps.ref.outputs.ref }}');
-  assert.equal(validate.outputs.tag, '${{ steps.ref.outputs.tag }}');
-  assert.equal(tag.if, undefined);
-  assertOrdered(validate.steps, [tag, checkout]);
+  assert.equal(condition(tagJob.if), "vars.CDN_DEPLOY_ROLE_ARN != ''");
+  assert.equal(tagStep.env.RELEASE_REF, '${{ github.event.inputs.tag || github.ref }}');
+  assert.match(tagStep.run, /TAG="\$\{RELEASE_REF#refs\/tags\/\}"/);
+  assert.match(tagStep.run, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/);
+  assert.match(tagStep.run, /exit 1/);
+  assert.match(tagStep.run, /echo "ref=refs\/tags\/\$TAG" >> "\$GITHUB_OUTPUT"/);
+  assert.doesNotMatch(tagStep.run, /\$\{\{/);
+  assert.equal(tagStep.if, undefined);
+  assert.equal(validate.with.ref, '${{ needs.tag.outputs.ref }}');
+  assert.deepEqual(tagJob.outputs, {
+    ref: '${{ steps.ref.outputs.ref }}',
+    tag: '${{ steps.ref.outputs.tag }}',
+    publish: '${{ steps.ref.outputs.publish }}',
+  });
+  for (const env of [{ RELEASE_REF: 'refs/tags/v1.0.22' }, { RELEASE_REF: 'v1.0.22', DRY_RUN: 'false' }]) {
+    assert.deepEqual(runTagStep(env), { status: 0, outputs: { tag: 'v1.0.22', ref: 'refs/tags/v1.0.22', publish: 'true' } });
+  }
+  for (const RELEASE_REF of ['refs/heads/main', 'v1.0', 'v1.0.22;id', '']) {
+    assert.deepEqual(runTagStep({ RELEASE_REF }), { status: 1, outputs: {} });
+  }
+});
+
+test('a dry run checks the dispatched commit and never reaches the publish job', () => {
+  const input = release.on.workflow_dispatch.inputs.dry_run;
+  assert.equal(input.type, 'boolean');
+  assert.equal(input.default, false);
+  assert.equal(tagStep.env.DRY_RUN, '${{ github.event.inputs.dry_run }}');
+  assert.equal(tagStep.env.DRY_RUN_SHA, '${{ github.sha }}');
+  const sha = 'd6e1b9e71413b6d872ce013f4936067919a2d93e';
+  assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', DRY_RUN: 'true', DRY_RUN_SHA: sha }),
+    { status: 0, outputs: { tag: 'v1.0.22', ref: sha, publish: 'false' } });
+  assert.deepEqual(runTagStep({ RELEASE_REF: 'main', DRY_RUN: 'true', DRY_RUN_SHA: sha }), { status: 1, outputs: {} });
+  assert.match(condition(publish.if), /&& needs\.tag\.outputs\.publish == 'true'$/);
 });
