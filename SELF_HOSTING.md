@@ -85,9 +85,9 @@ The workflow is in this repo at **[`.github/workflows/publish-cdn.yml`](./.githu
 On `git push --tags` (e.g. `v1.0.7`) it:
 
 1. Builds the release bundle once with `npm run build:release`.
-2. Tests that file across eight browser and device profiles.
-3. Runs real Gemini checks on the resulting screenshots.
-4. Verifies that committed fallback files match the tested bundle and license.
+2. Verifies that committed fallback files match the built bundle and license.
+3. Tests that file across eight browser and device profiles, with one parallel job for each profile.
+4. Merges the profile reports and runs real Gemini checks on the screenshots.
 5. Downloads the tested artifact in the publish job and verifies its commit and checksums.
 6. Uploads the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache).
 7. Overwrites the floating copy → `chat/v1/bundle.min.js` (5-min cache).
@@ -95,12 +95,20 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 
 Failed checks block CDN uploads.
 The publish job does not rebuild the JavaScript bundle.
-CI uses the same build and browser/Gemini action.
-See [widget browser tests](./docs/widget-browser-tests.md) for the coverage and limitations.
+CI calls the same checks workflow, [`widget-checks.yml`](./.github/workflows/widget-checks.yml).
+See [widget browser tests](./docs/widget-browser-tests.md) for the coverage, the CI jobs, and the limitations.
 
 Rebuild and commit `dist` before creating a release tag.
 Wait for CI on that commit to pass before pushing the tag.
 Tag-based fallback CDNs can serve a pushed tag before this workflow finishes.
+
+To rehearse a release, run the workflow by hand on a branch with `dry_run` on.
+The dry run checks the branch's latest commit as the given tag, with all release checks.
+It never starts the publish job, so it uploads nothing:
+
+```sh
+gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
+```
 
 **Activate it** by adding these **repo variables** (Settings → Secrets and variables → Actions → *Variables*):
 
@@ -113,7 +121,15 @@ Tag-based fallback CDNs can serve a pushed tag before this workflow finishes.
 
 GitHub tags remain available to fallback CDNs.
 Manual publication requires an existing version tag with the release gate files and matching committed bundle.
-Old tags that lack those files fail validation and cannot use this new workflow.
+Start a manual publication from the tag itself, so that the checks test the tagged commit:
+
+```sh
+gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7
+```
+
+A run from any other branch or tag fails, unless `dry_run` is on.
+A manual run uses the workflow file of the selected tag.
+Old tags that lack the gate files fail validation.
 
 ### Header icons (`header_icon_name`)
 

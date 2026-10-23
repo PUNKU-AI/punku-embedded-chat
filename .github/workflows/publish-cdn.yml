@@ -8,6 +8,11 @@ name: Publish widget bundle to CDN (S3 + CloudFront)
 # INACTIVE until the AWS resources + repo variables exist: the job is guarded on
 # the CDN_DEPLOY_ROLE_ARN repo *variable*, so tagging before setup is a no-op
 # (no red/failed runs). See SELF_HOSTING.md for the one-time setup.
+#
+# The validate job calls widget-checks.yml, as CI does: one bundle build, one
+# browser job per profile, then one real Gemini review. A manual run must start
+# from the tag it publishes. A manual run with dry_run checks the selected
+# branch's commit and never starts the publish job.
 
 on:
   push:
@@ -15,52 +20,66 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to (re)publish, e.g. v1.0.7"
+        description: "Tag to (re)publish, e.g. v1.0.7. Run the workflow from this tag."
         required: true
+      dry_run:
+        description: "Dry run: check the selected branch's commit as this tag. Nothing is published."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  tag:
+    name: release tag
     if: ${{ vars.CDN_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
-      options: --user pwuser --init --ipc=host
+    timeout-minutes: 5
     outputs:
-      commit_sha: ${{ steps.check.outputs.commit_sha }}
       tag: ${{ steps.ref.outputs.tag }}
+      publish: ${{ steps.ref.outputs.publish }}
     steps:
+      # The checks always test the commit of this run. A publishing run must
+      # therefore start from the tag itself: a tag push, or a manual run from it.
       - name: Validate version tag
         id: ref
         shell: bash
         env:
           RELEASE_REF: ${{ github.event.inputs.tag || github.ref }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          RUN_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
         run: |
           TAG="${RELEASE_REF#refs/tags/}"
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*([+][0-9A-Za-z.-]+)?$ ]]; then
             echo "Release requires an existing version tag such as v1.0.7."
             exit 1
           fi
-          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.ref.outputs.ref }}
-      - name: Build and check exact release bundle
-        id: check
-        uses: ./.github/actions/check-widget-bundle
-        with:
-          real_gemini: "true"
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          check_committed_bundle: "true"
-          bundle_artifact_name: widget-tested-release-bundle
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Dry run: checking $RUN_SHA as $TAG. The publish job does not run."
+          elif [[ "$RUN_REF" == "refs/tags/$TAG" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Run the release from its tag: gh workflow run publish-cdn.yml --ref $TAG -f tag=$TAG"
+            exit 1
+          fi
+
+  validate:
+    needs: tag
+    uses: ./.github/workflows/widget-checks.yml
+    with:
+      real_gemini: true
+      check_committed_bundle: true
+      bundle_artifact_name: widget-tested-release-bundle
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
   publish:
-    needs: validate
-    if: needs.validate.result == 'success'
+    needs: [tag, validate]
+    if: needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -91,7 +110,7 @@ jobs:
       - name: Resolve version paths
         id: v
         env:
-          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_TAG: ${{ needs.tag.outputs.tag }}
         run: |
           TAG="$RELEASE_TAG"
           MAJOR="${TAG%%.*}"

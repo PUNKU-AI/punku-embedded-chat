@@ -68,6 +68,20 @@ test("collects profiles in a stable order when the report lists projects in reve
   assert.deepEqual(collectScreenshots(report, REPO_ROOT).slice(0, 8).map((batch) => batch.name), PROFILES);
 });
 
+test("collects screenshots from a report merged from one blob report per profile", () => {
+  const report = browserReport();
+  // Playwright merge-reports extracts attachments to <blob dir>/resources/<sha1>.png.
+  let resource = 0;
+  for (const spec of report.suites[0].suites[0].specs) {
+    for (const test of spec.tests) {
+      test.results[0].attachments[0].path = path.join(REPO_ROOT, "output/playwright/blob-reports/resources", `${resource++}.png`);
+    }
+  }
+  const screenshots = collectScreenshots(report, REPO_ROOT).flatMap((batch) => batch.screenshots);
+  assert.equal(new Set(screenshots).size, 40);
+  assert.ok(screenshots.every((screenshot) => screenshot.startsWith("output/playwright/blob-reports/resources/")));
+});
+
 test("rejects missing report metadata and missing, duplicate, or unknown profiles", () => {
   const missingProfile = browserReport();
   missingProfile.config.projects.pop();

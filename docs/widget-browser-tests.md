@@ -110,16 +110,41 @@ npm run test:browser
 Run one profile with `npm run test:browser -- --project=iphone`.
 Do not increase the worker count on a shared machine.
 
-CI builds current source before running the matrix.
-CI and release validation use the same composite action.
 Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
 Chromium uses the full browser's new headless mode.
-CI uses the matching Playwright image with a fixed digest.
 Resize checks synchronize WebKit's virtual display, verify bounds, then save the settled screenshot.
 Keyboard checks wait for initial input focus before they focus a link.
-The matrix uses one worker.
-CI saves screenshots, failure traces, and the HTML report for 14 days.
 Local evidence stays under `output/playwright` and is ignored by Git.
+
+## CI jobs
+
+CI and release validation call the same reusable workflow, [`widget-checks.yml`](../.github/workflows/widget-checks.yml).
+It runs these jobs:
+
+1. `build bundle` installs, audits, checks types and lint, and builds the bundle once from current source.
+   It records the commit and the SHA256 of the bundle, and saves the bundle as an artifact.
+2. `browser (<profile>)` runs once for each of the eight profiles, in parallel.
+   Each job downloads the built bundle, checks its commit and SHA256, and runs only its own Playwright project with one worker.
+   It saves a Playwright blob report.
+3. `report and Gemini` merges the eight blob reports with `playwright merge-reports`.
+   The merge writes `output/playwright/report` and `output/playwright/test-results.json`, as one local run does.
+   The job then requires all profiles to pass, runs the real Gemini check once, and saves the tested bundle.
+
+All profiles use the same bundle bytes.
+A failed profile does not stop the other profiles, so one run shows every failing profile.
+The report job also merges the reports of failed profiles, and then fails.
+Each job has a time limit of 20 minutes or less.
+The slowest profile, `iphone`, takes about 6 minutes of test time.
+The build and browser jobs use the matching Playwright image with a fixed digest.
+
+CI saves screenshots, failure traces, and the merged HTML report for 14 days.
+The merged report keeps its attachments in `output/playwright/blob-reports/resources`.
+To merge the profile reports of a CI run on your computer, download the `widget-blob-report-*` artifacts into one folder.
+Then run:
+
+```sh
+npx playwright merge-reports --config playwright.config.ts <folder>
+```
 
 ## Real Gemini checks in CI
 
@@ -127,7 +152,7 @@ Gemini can review visibility, clipping, overlap, and readability.
 Browser assertions prove that links open.
 CI sends 40 synthetic screenshots to the real Gemini API after the browser matrix passes.
 Each of eight profiles provides four visible-hint screenshots and one disabled-hint control.
-The runner requires all screenshots from the completed browser report before sending any request.
+The runner requires all screenshots from the merged browser report before sending any request.
 It makes ten serial requests, with four images in each request and no retries.
 Missing, unreadable, clipped, or uncertain visible hints fail the check.
 Intentional two-line truncation is valid when every displayed line and the complete bubble border remain inside the viewport.
@@ -156,8 +181,8 @@ npm run test:visual-live
 
 The release workflow audits all dependencies, including development tools, before building the bundle.
 Any reported vulnerability fails the audit. The workflow does not omit packages or suppress findings.
-The release workflow builds the bundle once before testing it.
-Browser checks, real Gemini checks, and checksum checks must pass before publication.
+The release workflow runs the same CI jobs. It builds the bundle once before testing it.
+Browser checks for all eight profiles, real Gemini checks, and checksum checks must pass before publication.
 The publish job downloads the tested artifact and verifies its commit and checksums.
 It uploads that artifact without rebuilding the JavaScript bundle.
 
@@ -168,6 +193,18 @@ Rebuild and commit `dist` before creating a release tag.
 Wait for CI on that commit to pass before pushing the tag.
 Tag-based fallback CDNs can serve a pushed tag before the publish workflow finishes.
 Old tags without these gate files cannot pass the new release workflow.
+
+Every job checks out the commit of its own run, never a ref from an input.
+A manual publication must therefore start from its tag: `gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7`.
+
+To rehearse a release before you create the tag, run the release workflow by hand with `dry_run` on.
+The dry run checks the latest commit of the selected branch as that tag.
+It builds the bundle, compares it with the committed bundle, and runs the browser and Gemini checks.
+The publish job does not run.
+
+```sh
+gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
+```
 
 ## Manual screenshot review
 
