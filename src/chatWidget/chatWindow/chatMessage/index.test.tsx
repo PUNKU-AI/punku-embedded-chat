@@ -249,8 +249,29 @@ describe('ChatMessage', () => {
         />
       );
 
-      expect(screen.getByTitle('Thumbs up')).toBeInTheDocument();
-      expect(screen.getByTitle('Thumbs down')).toBeInTheDocument();
+      expect(screen.getByTitle('Helpful')).toBeInTheDocument();
+      expect(screen.getByTitle('Not helpful')).toBeInTheDocument();
+    });
+
+    it('should name the feedback buttons in the chat language and report the vote', async () => {
+      mockedSendFeedback.mockResolvedValueOnce({} as any);
+      render(
+        <ChatMessage
+          {...defaultProps}
+          message_id="test-message-id"
+          helpfulLabel="Hilfreich"
+          notHelpfulLabel="Nicht hilfreich"
+        />
+      );
+
+      const helpful = screen.getByRole('button', { name: 'Hilfreich' });
+      const notHelpful = screen.getByRole('button', { name: 'Nicht hilfreich' });
+      expect(helpful).toHaveAttribute('type', 'button');
+      expect(helpful).toHaveAttribute('aria-pressed', 'false');
+
+      fireEvent.click(helpful);
+      await waitFor(() => expect(helpful).toHaveAttribute('aria-pressed', 'true'));
+      expect(notHelpful).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('should NOT show feedback buttons for user messages', () => {
@@ -262,8 +283,8 @@ describe('ChatMessage', () => {
         />
       );
 
-      expect(screen.queryByTitle('Thumbs up')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Thumbs down')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Helpful')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Not helpful')).not.toBeInTheDocument();
     });
 
     it('should NOT show feedback buttons for welcome message', () => {
@@ -274,8 +295,8 @@ describe('ChatMessage', () => {
         />
       );
 
-      expect(screen.queryByTitle('Thumbs up')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Thumbs down')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Helpful')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Not helpful')).not.toBeInTheDocument();
     });
 
     it('should NOT show feedback buttons for error messages', () => {
@@ -287,8 +308,8 @@ describe('ChatMessage', () => {
         />
       );
 
-      expect(screen.queryByTitle('Thumbs up')).not.toBeInTheDocument();
-      expect(screen.queryByTitle('Thumbs down')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Helpful')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Not helpful')).not.toBeInTheDocument();
     });
 
     it('should call sendFeedback when thumbs up is clicked', async () => {
@@ -302,7 +323,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      const thumbsUpButton = screen.getByTitle('Helpful');
       fireEvent.click(thumbsUpButton);
 
       await waitFor(() => {
@@ -326,7 +347,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsDownButton = screen.getByTitle('Thumbs down');
+      const thumbsDownButton = screen.getByTitle('Not helpful');
       fireEvent.click(thumbsDownButton);
 
       await waitFor(() => {
@@ -352,7 +373,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      const thumbsUpButton = screen.getByTitle('Helpful');
       fireEvent.click(thumbsUpButton);
 
       await waitFor(() => {
@@ -369,7 +390,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      const thumbsUpButton = screen.getByTitle('Helpful');
       expect(thumbsUpButton).toHaveClass('selected');
     });
 
@@ -382,7 +403,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsDownButton = screen.getByTitle('Thumbs down');
+      const thumbsDownButton = screen.getByTitle('Not helpful');
       expect(thumbsDownButton).toHaveClass('selected');
     });
 
@@ -398,7 +419,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      const thumbsUpButton = screen.getByTitle('Helpful');
       fireEvent.click(thumbsUpButton);
 
       await waitFor(() => {
@@ -422,7 +443,7 @@ describe('ChatMessage', () => {
         />
       );
 
-      const thumbsUpButton = screen.getByTitle('Thumbs up');
+      const thumbsUpButton = screen.getByTitle('Helpful');
       fireEvent.click(thumbsUpButton);
 
       await waitFor(() => {

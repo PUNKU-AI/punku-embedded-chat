@@ -4,7 +4,7 @@ import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
-import { Language } from "../translations";
+import { Language, translations } from "../translations";
 import { detectBrowserLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
@@ -1386,11 +1386,53 @@ video {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
   sans-serif;
-  /* Animate only the open and close scale. A moving screen box (#77) or a
-     relocated trigger moves the window at once, not in a 300 ms glide. */
-  transition-property: transform;
-  transition-duration: 300ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Animate only opening and closing: a fade and a 12px rise. A moving screen
+     box (#77) or a relocated trigger moves the window at once. */
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out, visibility 0s;
+}
+
+/* Closed: invisible. When the fade ends, visibility: hidden also takes the
+   window's controls out of the tab order and the accessibility tree. */
+.cl-chat-window.cl-scale-0 {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.16s ease-in, transform 0.16s ease-in, visibility 0s linear 0.16s;
+}
+
+/* Open. A transform that is not "none" keeps the window the containing
+   block of its fixed parts, as the scale did before. */
+.cl-chat-window.cl-scale-100 {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+}
+
+/* New messages fade in. Only the opacity changes, so the layout never moves. */
+@keyframes cl-message-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cl-chat-window .cl-chat-message {
+  animation: cl-message-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-chat-window,
+  .cl-chat-window.cl-scale-0,
+  .cl-chat-window.cl-scale-100 {
+    transition: none;
+  }
+
+  .cl-chat-window.cl-scale-0 {
+    transform: none;
+  }
+
+  .cl-chat-window .cl-chat-message {
+    animation: none;
+  }
 }
 
 .cl-online-message {
@@ -4158,6 +4200,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           buttonTextColor={button_text_color}
           theme={effectiveTheme}
           triggerIcon={trigger_icon}
+          openLabel={(translations[currentLanguage] || translations.en).triggerOpen}
+          closeLabel={(translations[currentLanguage] || translations.en).triggerClose}
         />
       </div>
       <div

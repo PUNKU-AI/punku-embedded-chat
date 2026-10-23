@@ -631,6 +631,15 @@ If a reply fails, the chat shows a plain sentence in the chat's language, for ex
 
 Screen readers hear "The assistant is writing" when a message is sent. When the answer is complete, they hear the answer once, as plain text without markdown marks. They also hear each new error once. Messages restored from a stored session are not read again on page load.
 
+## Accessibility and motion
+
+- The launcher button says what it does ("Open chat" or "Close chat", in German "Chat öffnen" or "Chat schließen") and tells screen readers whether the chat is open.
+- The message list is a log named "Conversation" ("Unterhaltung"). New answers are read once from a status region, so the log itself does not announce changes.
+- The feedback buttons are "Helpful" and "Not helpful" ("Hilfreich", "Nicht hilfreich") and report the vote.
+- When the chat closes with the close button or Escape, the keyboard focus returns to the launcher. A closed chat window is out of the tab order.
+- The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
+- The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.
+
 ## Stacking order on the host page
 
 The widget uses one z-index for the trigger, the hint and the chat window. The default is 2147483000. It puts the widget above most other elements of the host page.
