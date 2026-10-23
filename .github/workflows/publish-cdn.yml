@@ -160,3 +160,25 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "$DIST_ID" \
             --paths "/chat/${{ steps.v.outputs.major }}/bundle.min.js"
+
+      # Some sites load the jsDelivr aliases @<major>, no version, or @latest.
+      # jsDelivr keeps an alias up to 7 days. The purge makes the new tag
+      # reach those sites sooner. The bundle is already on cdn.punku.ai here,
+      # so a failed purge only logs a warning and never fails the release.
+      - name: Purge jsDelivr aliases (best effort)
+        continue-on-error: true
+        env:
+          MAJOR: ${{ steps.v.outputs.major }}
+        run: |
+          FILE=dist/build/static/js/bundle.min.js
+          for REF in "@$MAJOR" "" "@latest"; do
+            URL="https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}${REF}/${FILE}"
+            echo "Purge $URL"
+            CODE=$(curl -sS --max-time 30 -o purge-response.json -w '%{http_code}' "$URL") || CODE=000
+            cat purge-response.json 2>/dev/null || true
+            echo
+            if [ "$CODE" != "200" ]; then
+              echo "::warning::jsDelivr purge of '${REF:-no version}' answered HTTP $CODE"
+            fi
+            rm -f purge-response.json
+          done

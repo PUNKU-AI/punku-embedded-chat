@@ -92,6 +92,15 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 6. Uploads the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache).
 7. Overwrites the floating copy → `chat/v1/bundle.min.js` (5-min cache).
 8. Invalidates the floating path on CloudFront.
+9. Purges the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
+
+Step 9 is for the sites that still load jsDelivr `@v1` or a URL without a version.
+jsDelivr keeps these aliases in its cache for up to 7 days, so the purge makes a release reach them sooner.
+The step logs each purge response.
+A failed purge shows a warning and does not fail the release, because the bundle is already on `cdn.punku.ai`.
+jsDelivr can refuse purges until it approves access by email. Read the step log after each release.
+The step does not purge branch URLs such as `@swarovski-widget`.
+Visitor browsers can keep an alias file for up to 7 days (`max-age=604800`). A purge does not change that.
 
 Failed checks block CDN uploads.
 The publish job does not rebuild the JavaScript bundle.
