@@ -200,6 +200,26 @@ describe('guardControlColors', () => {
     expect(send.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
   });
 
+  it('keeps a send button in the colour of the field as an icon-only button', () => {
+    // The swarovski embed: a white button with a black paper plane in a white field.
+    const { colors, pairs } = guardControlColors({
+      theme: 'swarovski', send_button_style: { backgroundColor: '#FFFFFF' }, send_icon_style: { stroke: '#000000' },
+    });
+    expect(colors.sendFill).toBeUndefined();
+    expect(colors.sendIcon).toBeUndefined();
+    expect(pairs.find((pair) => pair.control === 'send button')).toBeUndefined();
+    expect(pairs.find((pair) => pair.control === 'send button icon')).toMatchObject({ background: '#ffffff', ratio: 21 });
+  });
+
+  it('gives an icon-only send button an icon that reads on the field', () => {
+    const { colors, pairs } = guardControlColors({
+      theme: 'default', send_button_style: { backgroundColor: '#ffffff' }, send_icon_style: { stroke: '#f1f5f9' },
+    });
+    expect(colors.sendFill).toBeUndefined();
+    expect(colors.sendIcon).toBe('#000000');
+    expect(pairs.find((pair) => pair.control === 'send button icon')!.ratio).toBeGreaterThanOrEqual(ICON_MIN);
+  });
+
   it('measures a translucent label on the new fill and sets it opaque', () => {
     const { colors, pairs } = guardControlColors({
       theme: 'default', button_color: '#9e183b', button_text_color: 'rgba(0, 0, 0, 0.2)',

@@ -2963,6 +2963,32 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline: 2px solid var(--cl-accent);
   outline-offset: 2px;
 }
+
+/* ---------- Swarovski: the look of the swarovski-widget branch ----------
+   Links are text links in the branch blue and in the weight of the answer
+   (300; bold where the answer makes them bold). Links on their own line stay
+   text links too (ChatWindow linkButtons). The light underline stays: the
+   blue is below 3:1 against the answer text (WCAG 1.4.1). Focus is dark, in
+   the colour of the header, instead of blue. The guard knows the link
+   colour (controlColors.ts THEME_COLORS.swarovski): change both together. */
+.cl-window.theme-swarovski {
+  --cl-link: #0969da;
+  --cl-ring: rgba(26, 26, 26, 0.14);
+}
+
+.cl-window.theme-swarovski .cl-bot_message .markdown-body a {
+  font-weight: inherit;
+}
+
+.cl-window.theme-swarovski .cl-composer-field:focus-within {
+  border-color: #1a1a1a;
+}
+
+.cl-window.theme-swarovski .cl-send-button:focus-visible,
+.cl-window.theme-swarovski .markdown-body a:focus-visible {
+  outline: 2px solid #1a1a1a;
+  outline-offset: 2px;
+}
     `;
 
   const markdownBody = `

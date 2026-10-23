@@ -133,9 +133,11 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
 - With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency.
+- The `swarovski` theme shows no link buttons. All links are text links in `#0969da`, in the weight of the answer text, with the light underline. Lists of links keep their bullets.
 
 **Readable controls on your colours:** your colours can make a control vanish, for example a filled link button in the same colour as the answer bubble. The widget checks every control on the surface behind it (WCAG 1.4.11 and 1.4.3) and keeps every colour that reads:
 - A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
+- A send button in the colour of the input field (for example `send_button_style='{"backgroundColor":"#FFFFFF"}'` in a white field) shows only its icon. The widget then checks only the icon: 3:1 on the field.
 - If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
 - The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
 - Link text needs 4.5:1 on the answer bubble. Your `link_color` stays if it reaches that. Below that, the widget makes it just dark or light enough.
@@ -474,7 +476,7 @@ Use the widget API to customize your widget:
 - **send_button_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message".
+  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message". The icon is an arrow up; the `swarovski` theme shows a paper plane.
 
 - **send_icon_style:**
   - Type: JSON

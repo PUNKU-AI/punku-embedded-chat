@@ -128,6 +128,7 @@ export default function ChatMessage({
   retryLabel = "Try again",
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
+  linkButtons = true,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
@@ -147,13 +148,16 @@ export default function ChatMessage({
   /** Names of the feedback buttons for screen readers, in the chat language. */
   helpfulLabel?: string;
   notHelpfulLabel?: string;
+  /** false: a link on its own line stays a text link (the swarovski theme). */
+  linkButtons?: boolean;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
 
   // Keep the opener mounted so checkout can capture and restore its focus.
   // A link that stands alone in a paragraph or list item is an action: it
-  // renders as a button (see .cl-link-only in the widget stylesheet).
+  // renders as a button (see .cl-link-only in the widget stylesheet), unless
+  // linkButtons is false.
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
@@ -161,16 +165,16 @@ export default function ChatMessage({
       </BookingkitCheckoutLink>
     ),
     p: ({ node, children, ...props }) => (
-      <p {...props} className={isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
+      <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
     ),
     // react-markdown 8 passes ordered, checked and index to list items; they
     // are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={[className, isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+      <li {...props} className={[className, linkButtons && isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
         {children}
       </li>
     ),
-  }), [onCheckout]);
+  }), [onCheckout, linkButtons]);
 
   // Initialize feedback state from the message's feedback property
   const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(

@@ -9,6 +9,8 @@
  * - the fill, or the outline, against the surface: at least 3:1,
  * - the label on the fill: at least 4.5:1 for text, 3:1 for an icon,
  * - links on the bubble and the AI notice on the input bar: at least 4.5:1.
+ * A send button in the field's own colour is an icon-only button: only its
+ * icon is checked, on the field.
  * A colour that passes stays as it is. A colour that fails gets a fallback:
  * the site's link colour if it passes, else the site's own colour made just
  * dark or light enough while its label still reads, else white or black.
@@ -164,7 +166,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     headerInk: "#ffffff",
   },
   "punku-ai-bookingkit": LIGHT_BASE,
-  swarovski: LIGHT_BASE,
+  // Links in the blue of the swarovski-widget branch (.theme-swarovski in the stylesheet).
+  swarovski: { ...LIGHT_BASE, link: "#0969da" },
 };
 
 /** The props that set colours of the controls. */
@@ -481,7 +484,15 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
   const sendStyle = styleBackground(props.send_button_style);
   const sendFill = sendStyle === IMAGE ? null : resolve(sendStyle || props.button_color || theme.send || undefined, field);
   const sendIcon = parseColor(props.send_icon_style?.stroke || props.button_text_color || theme.sendIcon);
-  if (field && sendFill && sendIcon) {
+  if (field && sendFill && sendIcon && same(sendFill, field)) {
+    // A fill in the field's own colour shows no button, only its icon: an
+    // icon-only button (Swarovski: a black paper plane in a white field).
+    // Only the icon must read on the field.
+    const icon = paintOver(sendIcon.rgb, sendIcon.alpha, field);
+    const guardedIcon = contrast(icon, field) >= ICON_MIN ? icon : pickLabel(field, ICON_MIN, null, null);
+    if (!same(guardedIcon, icon)) colors.sendIcon = toHex(guardedIcon);
+    measure("send button icon", guardedIcon, field, ICON_MIN);
+  } else if (field && sendFill && sendIcon) {
     const guarded = guardFilled({
       fill: sendFill, label: sendIcon.rgb, labelAlpha: sendIcon.alpha, surface: field, labelMin: ICON_MIN,
       own: !!(sendStyle || props.button_color),

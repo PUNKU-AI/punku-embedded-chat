@@ -33,15 +33,21 @@ jest.mock('./chatMessage', () => {
     onRetry,
     retryLabel,
     isLatest,
+    linkButtons,
   }: {
     message: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
     isLatest?: boolean;
+    linkButtons?: boolean;
   }) {
     return (
-      <div data-testid={isSend ? 'user-message' : 'bot-message'} data-latest={isLatest ? 'true' : undefined}>
+      <div
+        data-testid={isSend ? 'user-message' : 'bot-message'}
+        data-latest={isLatest ? 'true' : undefined}
+        data-link-buttons={String(linkButtons)}
+      >
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
       </div>
@@ -2112,6 +2118,21 @@ describe('ChatWindow', () => {
   });
 
   describe('Theming', () => {
+    it('keeps the swarovski-widget branch look in the swarovski theme: text links and a paper plane', () => {
+      const { unmount } = render(<ChatWindow {...defaultProps} theme="default" />);
+      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'true');
+      // eslint-disable-next-line testing-library/no-node-access
+      expect(document.querySelector('.cl-send-icon')).toHaveClass('lucide-arrow-up');
+      unmount();
+
+      render(<ChatWindow {...defaultProps} theme="swarovski" />);
+      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'false');
+      // eslint-disable-next-line testing-library/no-node-access
+      const icon = document.querySelector('.cl-send-icon')!;
+      expect(icon).toHaveClass('lucide-send');
+      expect(icon).toHaveStyle({ width: '18px', height: '18px' });
+    });
+
     it('should apply theme class', () => {
       render(<ChatWindow {...defaultProps} theme="dark" />);
 

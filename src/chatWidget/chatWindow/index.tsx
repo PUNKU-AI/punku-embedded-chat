@@ -1,4 +1,4 @@
-import { ArrowUp, RefreshCw, X } from "lucide-react";
+import { ArrowUp, RefreshCw, Send, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
@@ -258,6 +258,13 @@ export default function ChatWindow({
   // Viewport units measure the small page on a scaled page. See viewportLength.
   const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
   const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
+  // The swarovski theme keeps the look of the swarovski-widget branch: links
+  // on their own line stay text links, and the send button is a paper plane.
+  const branchLook = theme === "swarovski";
+  const linkButtons = !branchLook;
+  const SendIcon = branchLook ? Send : ArrowUp;
+  const sendIconSize = branchLook ? "18px" : "20px";
+  const sendIconStroke = branchLook ? 2 : 2.5;
   // The phone window box: the defaults, or mobile_chat_window_style (mobileChatWindowStyle.ts).
   const phoneWindowBox = useMemo(
     () => phoneWindowDeclarations(readMobileChatWindowStyle(mobile_chat_window_style), scaledPage)
@@ -1380,6 +1387,7 @@ export default function ChatWindow({
               onClientError={notifyClientError}
               onCheckout={onCheckout}
               onFeedbackUpdate={undefined}
+              linkButtons={linkButtons}
             />
           )}
 
@@ -1439,6 +1447,7 @@ export default function ChatWindow({
               host_url={hostUrl}
               onClientError={notifyClientError}
               onCheckout={onCheckout}
+              linkButtons={linkButtons}
               isLatest={index === latestAnswerIndex}
               onRetry={index === messages.length - 1 ? handleRetry : undefined}
               retryLabel={t.retry}
@@ -1531,12 +1540,12 @@ export default function ChatWindow({
               disabled={sendingMessage || !value.trim()}
               onClick={handleClick}
             >
-              <ArrowUp
+              <SendIcon
                 aria-hidden="true"
-                strokeWidth={2.5}
+                strokeWidth={sendIconStroke}
                 style={{
-                  width: '20px',
-                  height: '20px',
+                  width: sendIconSize,
+                  height: sendIconSize,
                   stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
                   ...(send_icon_style || {}),
                   ...(guarded.sendIcon ? { stroke: guarded.sendIcon } : {})

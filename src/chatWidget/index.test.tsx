@@ -120,6 +120,7 @@ jest.mock('./utils', () => ({
 // Import after mocks
 import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX } from './index';
 import { PAGE_DIALOG_CHECK_MS } from './pageDialogs';
+import { THEME_COLORS } from './controlColors';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -198,6 +199,16 @@ describe('ChatWidget', () => {
       expect(css).toMatch(
         /@media \(hover: none\), \(any-pointer: coarse\) \{\s*\.cl-window \.cl-chat-message \.feedback-container \{\s*opacity: 1;/
       );
+    });
+
+    it('should give the swarovski theme the link colour that the contrast guard checks', () => {
+      const { container } = render(<ChatWidget {...defaultProps} />);
+
+      const css = container.querySelector('style')?.textContent ?? '';
+      const rule = css.match(/\.cl-window\.theme-swarovski \{([^}]*)\}/);
+      expect(rule?.[1]).toContain(`--cl-link: ${THEME_COLORS.swarovski.link};`);
+      // Dark focus instead of the blue ring.
+      expect(css).toMatch(/\.cl-window\.theme-swarovski \.cl-composer-field:focus-within \{\s*border-color: #1a1a1a;/);
     });
 
     it('should floor every rem length at its designed px size, so a small host root cannot shrink it', () => {
