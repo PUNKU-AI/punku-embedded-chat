@@ -53,10 +53,14 @@ function layout(page: Page) {
   return page.evaluate(() => {
     const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
     const rows = Array.from(root.querySelectorAll<HTMLElement>('.cl-chat-message'));
-    const bubbles = rows.map((row) => row.querySelector<HTMLElement>('.cl-user_message, .cl-bot_message')!);
+    // An answer is its stack (the bubble and the feedback row under it) where
+    // the stack exists: the stack holds the width limit, and spacing counts
+    // from its bottom.
+    const bubbles = rows.map((row) => row.querySelector<HTMLElement>('.cl-user_message, .cl-message-stack, .cl-bot_message')!);
     const style = (element: Element | null) => (element ? getComputedStyle(element) : null);
     const user = style(root.querySelector('.cl-user_message'));
     const bot = style(root.querySelector('.cl-bot_message'));
+    const botFrame = style(root.querySelector('.cl-message-stack') ?? root.querySelector('.cl-bot_message'));
     const button = root.querySelector<HTMLElement>('.markdown-body > p.cl-link-only > a');
     const listButton = root.querySelector<HTMLElement>('.markdown-body li.cl-link-only > a');
     const looseButton = root.querySelector<HTMLElement>('.markdown-body li.cl-link-only > p > a');
@@ -69,8 +73,8 @@ function layout(page: Page) {
         radius: user.borderTopLeftRadius,
         tail: user.borderBottomRightRadius,
       },
-      bot: bot && {
-        maxWidth: bot.maxWidth,
+      bot: bot && botFrame && {
+        maxWidth: botFrame.maxWidth,
         tail: bot.borderBottomLeftRadius,
         border: bot.borderTopWidth,
         shadow: bot.boxShadow,
