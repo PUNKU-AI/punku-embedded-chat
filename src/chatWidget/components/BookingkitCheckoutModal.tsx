@@ -2,11 +2,12 @@ import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { revealInScrollContainer, trackVisualViewport, VISUAL_VIEWPORT_PROPERTIES } from "../utils";
 import type { ScaledPage } from "../scaledPage";
+import { Language, translations } from "../../translations";
 
 interface BookingkitCheckoutModalProps {
   url: string | null;
   onClose: () => void;
-  language: "en" | "de";
+  language: Language;
   returnFocusTo?: HTMLElement;
   /** A page that the browser scales up, such as Wix with width=320 (scaledPage.ts). */
   scaledPage?: ScaledPage | null;
@@ -151,9 +152,10 @@ export default function BookingkitCheckoutModal({
       }
     : undefined;
 
-  const title = language === "de" ? "Buchung" : "Checkout";
-  const closeLabel = language === "de" ? "Buchung schließen" : "Close checkout";
-  const externalLabel = language === "de" ? "In neuem Tab öffnen" : "Open in new tab";
+  const t = translations[language] || translations.en;
+  const title = t.checkoutTitle;
+  const closeLabel = t.closeCheckout;
+  const externalLabel = t.openInNewTab;
 
   return (
     <dialog

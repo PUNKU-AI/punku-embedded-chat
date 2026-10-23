@@ -1,3 +1,5 @@
+import { Language, LANGUAGES, toLanguage } from "../translations";
+
 export function getChatPosition(
 	triggerPosition: DOMRect,
 	Cwidth:number,
@@ -89,7 +91,7 @@ export function extractMessageFromOutput(output:{type:string, message:any}){
 	return "Unknown message structure"
 }
 
-export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de']): string {
+export function detectBrowserLanguage(availableLanguages: string[] = [...LANGUAGES]): string {
 	// Get browser languages in order of preference
 	const browserLanguages = navigator.languages || [navigator.language];
 
@@ -107,6 +109,26 @@ export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de'
 	// Default to English if no supported language is found
 	return 'en';
 }
+
+/** The page language (<html lang>, such as "it-IT"), if the widget has it. Else null. */
+export function detectPageLanguage(): Language | null {
+	return toLanguage(document.documentElement.getAttribute('lang'));
+}
+
+/*
+ * The language of the built-in texts. The site's default_language wins. The
+ * swarovski theme is German. Else the page language: the site's own texts
+ * (welcome message, placeholder) are written in it, and a visitor who reads
+ * the Italian page reads Italian. Else the first browser language that the
+ * widget has, else English.
+ */
+export function chooseLanguage(defaultLanguage?: string, theme?: string): Language {
+	return toLanguage(defaultLanguage)
+		|| (theme === 'swarovski' ? 'de' : null)
+		|| detectPageLanguage()
+		|| (detectBrowserLanguage([...LANGUAGES]) as Language);
+}
+
 /*
  * Rendered px per layout px of an element, from its client rect size and its
  * offset size. Below 1 inside a scaled page frame (scaledPage.ts). 1 without

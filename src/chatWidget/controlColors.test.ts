@@ -1,4 +1,4 @@
-import { contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex } from './colorContrast';
+import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
   BOUNDARY_MIN, guardControlColors, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN, TEXT_MIN,
   THEME_COLORS, ThemeName,
@@ -281,5 +281,70 @@ describe('guardHintColors', () => {
   it('leaves a transparent background or a colour name as it is', () => {
     expect(guardHintColors('rgba(0, 0, 0, 0.5)', '#777777')).toEqual({});
     expect(guardHintColors('green', '#ffffff')).toEqual({});
+  });
+});
+
+// The header icon sits on the header without a plate. It gets a plate only
+// where its colour would vanish on the header (WCAG 1.4.11, 3:1).
+describe('header icon plate', () => {
+  const headerIcon = (props: Parameters<typeof guardControlColors>[0]) => {
+    const { colors, pairs } = guardControlColors(props);
+    return { plate: colors.headerIconPlate, pair: pairs.find((pair) => pair.control === 'header icon') };
+  };
+
+  it.each(Object.keys(THEME_COLORS) as ThemeName[])('needs no plate in the %s theme', (theme) => {
+    const { plate, pair } = headerIcon({ theme });
+    expect(plate).toBeUndefined();
+    expect(pair!.ratio).toBeGreaterThanOrEqual(ICON_MIN);
+  });
+
+  it('measures the stop of a gradient header where the icon reads worst', () => {
+    // Aurora: white reads worst on the pink end (#db2777).
+    expect(headerIcon({ theme: 'aurora' }).pair).toMatchObject({ foreground: '#ffffff', background: '#db2777' });
+  });
+
+  it('needs no plate where button_text_color reads on button_color', () => {
+    expect(headerIcon({ button_color: '#9e183b', button_text_color: '#ffffff' }).plate).toBeUndefined();
+    expect(headerIcon({ theme: 'dark', button_color: '#ff8000', button_text_color: '#000000' }).plate).toBeUndefined();
+  });
+
+  it('puts a white icon on a white header on a grey plate', () => {
+    const { plate, pair } = headerIcon({ button_color: '#ffffff' });
+    // The smallest 5% step toward black that reaches 3:1 (3.4:1). One step
+    // less reads at 2.8:1.
+    expect(plate).toBe(toHex(mix(WHITE, BLACK, 0.45)));
+    expect(contrastRatio(WHITE, mix(WHITE, BLACK, 0.4))).toBeLessThan(ICON_MIN);
+    expect(pair).toMatchObject({ foreground: '#ffffff', background: plate, minimum: ICON_MIN });
+    expect(pair!.ratio).toBeGreaterThanOrEqual(ICON_MIN);
+  });
+
+  it('puts a red icon on a red header on a light shade of the red', () => {
+    const { plate } = headerIcon({ button_color: '#c81e1e', button_text_color: '#c81e1e' });
+    expect(ratio('#c81e1e', plate!)).toBeGreaterThanOrEqual(ICON_MIN);
+    // A shade of the header colour: red stays the strongest channel.
+    const [r, g, b] = rgb(plate!);
+    expect(r).toBeGreaterThan(g);
+    expect(r).toBeGreaterThan(b);
+  });
+
+  it('darkens a mid-tone header behind a white icon', () => {
+    // White on #f2b705 (yellow) reads at about 1.8:1.
+    const { plate } = headerIcon({ button_color: '#f2b705' });
+    expect(ratio('#ffffff', plate!)).toBeGreaterThanOrEqual(ICON_MIN);
+    expect(contrastRatio(rgb(plate!), BLACK)).toBeLessThan(ratio('#f2b705', '#000000'));
+  });
+
+  it('measures a translucent icon colour on the plate it shows through', () => {
+    const { plate, pair } = headerIcon({ button_color: '#ffffff', button_text_color: 'rgba(255, 255, 255, 0.8)' });
+    expect(plate).toBeDefined();
+    expect(pair!.ratio).toBeGreaterThanOrEqual(ICON_MIN);
+    // A nearly transparent icon takes the colour of any plate: no plate helps.
+    expect(headerIcon({ button_color: '#ffffff', button_text_color: 'rgba(0, 0, 0, 0.1)' }).plate).toBeUndefined();
+  });
+
+  it('leaves a header colour that it cannot read as it is', () => {
+    expect(headerIcon({ button_color: 'white' })).toEqual({ plate: undefined, pair: undefined });
+    expect(headerIcon({ button_color: 'rgba(255, 255, 255, 0.5)' })).toEqual({ plate: undefined, pair: undefined });
+    expect(headerIcon({ button_color: '#ffffff', button_text_color: 'white' })).toEqual({ plate: undefined, pair: undefined });
   });
 });

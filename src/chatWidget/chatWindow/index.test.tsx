@@ -2204,40 +2204,69 @@ describe('ChatWindow', () => {
         document.querySelector(selector)?.getAttribute('stroke')
       );
 
-    // Header text colour of each theme without button_color, and the header
-    // icon colour: the light accent circle's colour (currentColor) in the
-    // default and dark themes.
+    // Header text colour of each theme without button_color. The header icon
+    // takes it too.
     const themeHeaderColors = [
-      ['default', '#0f172a', 'currentColor'],
-      ['dark', 'white', 'currentColor'],
-      ['ocean', 'white', 'white'],
-      ['aurora', 'white', 'white'],
-      ['punku-ai-bookingkit', 'white', 'white'],
-      ['swarovski', 'white', 'white'],
+      ['default', '#0f172a'],
+      ['dark', 'white'],
+      ['ocean', 'white'],
+      ['aurora', 'white'],
+      ['punku-ai-bookingkit', 'white'],
+      ['swarovski', 'white'],
     ] as const;
 
-    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color, logo) => {
+    const avatar = () => document.querySelector('.cl-header-avatar') as HTMLElement;
+
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
       renderHeader({ theme });
 
-      expect(headerIconStrokes()).toEqual([logo, color, color]);
+      expect(headerIconStrokes()).toEqual([color, color, color]);
+      // Every theme icon reads on its header: no plate.
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+      expect(avatar().getAttribute('style')).toBeNull();
     });
 
     it.each(themeHeaderColors)(
       'ignores button_text_color without button_color in the %s theme',
-      (theme, color, logo) => {
+      (theme, color) => {
         renderHeader({ theme, button_text_color: '#FFEE00' });
 
-        expect(headerIconStrokes()).toEqual([logo, color, color]);
+        expect(headerIconStrokes()).toEqual([color, color, color]);
       }
     );
 
-    it('keeps the default header actions dark when button_text_color is white', () => {
+    it('keeps the default header icons dark when button_text_color is white', () => {
       renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
 
       const header = document.querySelector('.cl-header') as HTMLElement;
       expect(header.getAttribute('style')).toBeNull();
-      // The header icon takes its circle's colour; the actions sit on the white header.
-      expect(headerIconStrokes()).toEqual(['currentColor', '#0f172a', '#0f172a']);
+      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+    });
+
+    it('puts the header icon on a plate only where it would vanish on the header', () => {
+      // White on a white header: a grey plate carries the white icon (3:1).
+      const { rerender } = renderHeader({ button_color: '#ffffff' });
+      expect(avatar()).toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('rgb(140, 140, 140)');
+      expect(headerIconStrokes()[0]).toBe('#FFFFFF');
+
+      // Red on red: a lighter shade of the red carries the red icon.
+      rerender(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} button_color="#c81e1e" button_text_color="#c81e1e" />);
+      expect(avatar()).toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('rgb(236, 176, 176)');
+
+      // White on a dark red reads (8.4:1): no plate.
+      rerender(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} button_color="#9e183b" button_text_color="#ffffff" />);
+      expect(avatar()).not.toHaveClass('cl-header-avatar--plate');
+      expect(avatar().style.backgroundColor).toBe('');
+    });
+
+    it('never puts an uploaded header image on a plate', () => {
+      renderHeader({ button_color: '#ffffff', header_icon: 'https://example.com/logo.png' });
+
+      expect(document.querySelector('img.cl-header-logo-image')).toBeInTheDocument();
+      expect(document.querySelector('.cl-header-avatar')).not.toBeInTheDocument();
     });
 
     it.each(themeHeaderColors.map(([theme]) => theme))(

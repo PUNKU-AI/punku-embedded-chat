@@ -4,8 +4,8 @@ import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
-import { Language, translations } from "../translations";
-import { detectBrowserLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
+import { Language, toLanguage, translations } from "../translations";
+import { chooseLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -322,23 +322,18 @@ export default function ChatWidget({
   const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
   const [triggerPositionOverride, setTriggerPositionOverride] = useState<TriggerPosition | null>(null);
 
-  // Initialize language based on browser detection or default_language prop
-  const getInitialLanguage = (): Language => {
-    // If default_language prop is provided and valid, use it
-    if (default_language && (default_language === 'en' || default_language === 'de')) {
-      return default_language as Language;
-    }
-
-    // Swarovski theme defaults to German
-    if (theme === 'swarovski') {
-      return 'de';
-    }
-
-    // Otherwise, detect browser language
-    return detectBrowserLanguage(['en', 'de']) as Language;
-  };
-
-  const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
+  // default_language, else the page or browser language (utils.ts).
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(() => chooseLanguage(default_language, theme));
+  // Follow a page that sets or changes <html lang> after the widget starts,
+  // such as a language switch in a single-page app.
+  useEffect(() => {
+    const update = () => setCurrentLanguage(chooseLanguage(default_language, theme));
+    update();
+    if (toLanguage(default_language)) return;
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [default_language, theme]);
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
@@ -2461,7 +2456,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* ---------- Header and composer colours, per theme ----------
    --cl-line separates the header and the composer from the list, --cl-field
    and --cl-field-line draw the composer field, --cl-ring is its focus ring,
-   --cl-muted colours the AI notice, --cl-accent colours the avatar icon. */
+   --cl-muted colours the AI notice, --cl-accent marks the focused field. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-line: #e6ebf1;
@@ -2529,34 +2524,31 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   font-weight: 600;
 }
 
+/* The header icon sits on the header, in the colour of the title. */
 .cl-window .cl-header-avatar {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.16);
-  background: color-mix(in srgb, currentColor 16%, transparent);
-}
-
-/* The default and dark headers are neutral: a light circle carries the icon,
-   which takes the circle's colour (currentColor). */
-.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: #e1edfb; /* #0969da at 12% on white */
-  color: var(--cl-accent);
-}
-
-.cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: #202758; /* #5558e8 at 24% on the dark header */
-  color: #a5b4fc;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
+/* A plate only where the icon colour would vanish on the header, for example
+   white on a white header (controlColors.ts sets its colour). */
+.cl-window .cl-header-avatar--plate {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.cl-window .cl-header-avatar--plate .cl-header-logo {
   width: 20px;
   height: 20px;
-  margin: 0;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo path,
