@@ -2,13 +2,13 @@ import { ArrowUp, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
-import { isReadableOn } from "../colorContrast";
+import { guardControlColors } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -33,10 +33,6 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,
 };
-
-// The link colour of each theme in answers: --cl-link in the widget stylesheet.
-const themeLinkColor = (theme: string) =>
-  ({ dark: "#a5b4fc", ocean: "#7dd3fc", aurora: "#f0abfc" } as Record<string, string>)[theme] || "#1d4ed8";
 
 /*
  * The visitor sees a plain sentence in the chat's language, never technical
@@ -878,14 +874,18 @@ export default function ChatWindow({
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
 
-  // A site's own answer colour (bot_message_color, or a background in
-  // bot_message_style) can clash with the theme's link colour: blue on dark
-  // red reads at 1.6:1. Then links take the answer's text colour. Also when
-  // the colour cannot be read, for example a gradient.
-  const customBotBackground =
-    bot_message_color || bot_message_style?.backgroundColor || bot_message_style?.background;
-  const linksTakeTextColor =
-    !!customBotBackground && !link_color && !isReadableOn(themeLinkColor(theme), customBotBackground);
+  // A site's colours can make a control vanish, for example a button in the
+  // same red as the answer bubble, or blue links on dark red (1.6:1). The
+  // guard keeps every colour that reads and replaces the others
+  // (controlColors.ts). The style props are objects, so compare their contents.
+  const colorStyles = JSON.stringify([bot_message_style, input_style, send_button_style, send_icon_style, error_message_style]);
+  const guarded = useMemo(() => guardControlColors({
+    theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color,
+    bot_message_style, background_color, input_style, send_button_style, send_icon_style, error_message_style,
+  }).colors,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color, background_color, colorStyles]);
+  const linkColor = link_color ? guarded.link || link_color : undefined;
 
   const effectiveBranding =
     branding === "punku-ai" ? "punku-ai" : "punku-ai-bookingkit";
@@ -1023,27 +1023,27 @@ export default function ChatWindow({
 
           /* The theme's link colour is hard to read on the site's own bubble
              colour. Links take the bubble's text colour and keep their
-             underline. Filled link buttons keep the accent colour. */
-          ${linksTakeTextColor ? `
+             underline. Filled link buttons have their own colours. */
+          ${guarded.linksTakeTextColor ? `
           .cl-window .cl-bot_message .markdown-body a {
-            color: inherit !important;
+            color: ${guarded.link || "inherit"} !important;
           }
           ` : ''}
 
           /* Link color customization - scoped to chat messages only, not footer */
-          ${link_color ? `
+          ${linkColor ? `
           .cl-window .cl-bot_message a,
           .cl-window .markdown-body a {
-            color: ${link_color} !important;
+            color: ${linkColor} !important;
           }
           .cl-window .cl-bot_message a:hover,
           .cl-window .markdown-body a:hover {
-            color: ${link_color} !important;
+            color: ${linkColor} !important;
             opacity: 0.8;
           }
           .cl-window .cl-bot_message a:visited,
           .cl-window .markdown-body a:visited {
-            color: ${link_color} !important;
+            color: ${linkColor} !important;
           }
           ` : ''}
 
@@ -1251,7 +1251,11 @@ export default function ChatWindow({
           ...(background_color ? {backgroundColor: background_color} : {}),
           // A site's button colour is the accent for link buttons in answers,
           // and its button text colour is the text on them.
-          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {})
+          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {}),
+          // Readable replacements where a colour would vanish (controlColors.ts).
+          ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
+          ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
+          ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
@@ -1376,7 +1380,10 @@ export default function ChatWindow({
               aria-label={t.suggestions}
               // A site colour for the border only: as text, a light or dark
               // button_color could be unreadable on the chip background.
-              style={button_color ? {"--cl-chip-line": button_color} as React.CSSProperties : undefined}
+              style={{
+                ...(button_color || guarded.chipLine ? {"--cl-chip-line": guarded.chipLine || button_color} : {}),
+                ...(guarded.chipInk ? {"--cl-chip-ink": guarded.chipInk} : {}),
+              } as React.CSSProperties}
             >
               {suggestionList.map((suggestion) => (
                 <button
@@ -1505,7 +1512,9 @@ export default function ChatWindow({
                 // Only set button color if explicitly provided (otherwise CSS theme handles it)
                 ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
                 // Apply remaining styles from send_button_style (if any)
-                ...(send_button_style || {})
+                ...(send_button_style || {}),
+                // A fill that would vanish in the field gets a readable one (controlColors.ts).
+                ...(guarded.sendFill ? { background: guarded.sendFill, backgroundColor: guarded.sendFill } : {})
               }}
               // Nothing to send: an empty field, or an answer still on its way.
               disabled={sendingMessage || !value.trim()}
@@ -1518,7 +1527,8 @@ export default function ChatWindow({
                   width: '20px',
                   height: '20px',
                   stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
-                  ...(send_icon_style || {})
+                  ...(send_icon_style || {}),
+                  ...(guarded.sendIcon ? { stroke: guarded.sendIcon } : {})
                 }}
                 className={
                   "cl-send-icon " +
