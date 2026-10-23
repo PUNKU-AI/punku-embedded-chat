@@ -1,0 +1,56 @@
+name: Swarovski widget CI
+
+# Checks every PR into swarovski-widget and every push to it. The Swarovski
+# page loads the committed bundle of this branch from jsDelivr
+# (@swarovski-widget), so a push to the branch goes live there.
+
+on:
+  push:
+    branches: [swarovski-widget]
+  pull_request:
+    branches: [swarovski-widget]
+
+concurrency:
+  group: swarovski-widget-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      # uglifyjs-webpack-plugin asks for webpack 4. The lockfile has webpack 5.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx react-scripts test --watchAll=false --maxWorkers=2
+
+      # With CI=true, react-scripts stops on lint warnings. This branch has
+      # older warnings. The value does not change the bundle.
+      - name: Build the bundle
+        run: npm run build:react && npm run build:bundle
+        env:
+          CI: false
+
+      - name: Check that the committed bundle matches the build
+        run: git diff --exit-code --stat -- dist/build/static/js/bundle.min.js
+
+      - name: Install the browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Browser tests
+        run: npm run test:browser
