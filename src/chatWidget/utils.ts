@@ -117,6 +117,20 @@ export function renderedScale(renderedSize: number, layoutSize: number) {
 }
 
 /*
+ * The border-box height of an element in layout px, with its fraction.
+ * offsetHeight rounds: a list 76.2 px tall read as 76 px gave a scale of
+ * 1.003, and 1474 px of scrolling then stopped 4.5 px short of a link (#90).
+ */
+function layoutHeight(element: HTMLElement) {
+	const style = getComputedStyle(element);
+	const height = parseFloat(style.height);
+	if (!Number.isFinite(height)) return element.offsetHeight;
+	if (style.boxSizing === "border-box") return height;
+	return height + parseFloat(style.paddingTop || "0") + parseFloat(style.paddingBottom || "0") +
+		parseFloat(style.borderTopWidth || "0") + parseFloat(style.borderBottomWidth || "0");
+}
+
+/*
  * Scroll the nearest scrolling ancestor, such as the message list, so that
  * `element` is visible. focus() and scrollIntoView() also scroll the host page
  * and the visual viewport. On a phone page wider than the screen, that pans the
@@ -134,7 +148,7 @@ export function revealInScrollContainer(element: HTMLElement) {
 		// Client rects are page px. A scaled page frame (scaledPage.ts) makes them
 		// smaller than the container px of scrollTop.
 		const parentBox = parent.getBoundingClientRect();
-		const scale = renderedScale(parentBox.height, parent.offsetHeight);
+		const scale = renderedScale(parentBox.height, layoutHeight(parent));
 		const top = parentBox.top / scale + parent.clientTop;
 		const target = element.getBoundingClientRect();
 		const above = top - target.top / scale;

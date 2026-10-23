@@ -292,6 +292,18 @@ describe('revealInScrollContainer', () => {
     expect(list.scrollTop).toBe(440);
   });
 
+  it('takes no scale from a fractional list height', () => {
+    // 76.25 px tall: offsetHeight reads 76. As a scale of 1.003, 1474 px of
+    // scrolling stopped 4.5 px short of the link.
+    const { list, link, place } = setup('overflow-y: auto; box-sizing: border-box; height: 76.25px');
+    Object.defineProperty(list, 'offsetHeight', { configurable: true, value: 76 });
+    list.scrollTop = 1558;
+    list.getBoundingClientRect = () => ({ top: 100, bottom: 176.25, height: 76.25 } as DOMRect);
+    place(-1374, -1332);
+    revealInScrollContainer(link);
+    expect(list.scrollTop).toBe(84);
+  });
+
   it('never scrolls the page when no ancestor scrolls', () => {
     const { list, link, place } = setup('overflow: visible');
     place(2000, 2020);

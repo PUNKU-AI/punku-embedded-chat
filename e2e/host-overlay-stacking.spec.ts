@@ -188,6 +188,36 @@ test('a consent dialog still covers the open window', async ({ page }) => {
   await expect.poll(() => topmostAt(page, center(chatWindow))).toBe('consent-layer');
 });
 
+// Usercentrics draws its banner in the open shadow root of
+// aside#usercentrics-cmp-ui, in a layer at 2147483646.
+const usercentrics = `
+  <aside id="usercentrics-cmp-ui"></aside>
+  <script>
+    document.getElementById('usercentrics-cmp-ui').attachShadow({ mode: 'open' }).innerHTML =
+      '<div style="position:fixed;left:0;right:0;bottom:0;height:70%;z-index:2147483646;background:#fff">' +
+      '<div id="uc-main-dialog" role="dialog" class="cmp first bottom mobile ltr gdpr" style="height:100%">We use cookies.</div></div>';
+  </script>`;
+
+test('a consent banner in an open shadow root still covers the open window (Usercentrics)', async ({ page }) => {
+  await injectHostElements(page, usercentrics + accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  const chatWindow = await settledBox(page, '.cl-chat-window');
+  const banner = await page.evaluate(() => {
+    const dialog = document.getElementById('usercentrics-cmp-ui')!.shadowRoot!.getElementById('uc-main-dialog')!;
+    const { x, y, width, height } = dialog.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  const shared = overlap(chatWindow, banner);
+  expect(shared.height).toBeGreaterThan(0);
+  // The window stays out of the top layer, so the banner's layer covers it.
+  await expect.poll(() => page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    return root.querySelector('.cl-window-layer')!.getAttribute('popover');
+  })).toBeNull();
+  expect(await topmostAt(page, center(shared))).toBe('usercentrics-cmp-ui');
+});
+
 test('a consent dialog that opens after the widget also stays above it', async ({ page }) => {
   await loadWidget(page, { show_closed_widget_hint: 'false' });
   const trigger = await settledBox(page, '.cl-trigger');

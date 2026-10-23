@@ -13,8 +13,10 @@
  *   privacy or Datenschutz (CookieScript: "Cookie consent dialog");
  * - a fixed backdrop over the whole screen with such a word in its id or
  *   class (the Contao privacy opt-in, div.privacy_overlay, has no marks).
- * A floating WhatsApp button or a greeting bubble is none of these: the
- * widget stays above it.
+ * The search also covers the open shadow roots of the body's children:
+ * Usercentrics draws its banner in the shadow root of
+ * aside#usercentrics-cmp-ui. A floating WhatsApp button or a greeting bubble
+ * is none of these: the widget stays above it.
  */
 import { useEffect, useState } from "react";
 
@@ -24,8 +26,8 @@ const CONSENT_PATTERN = new RegExp(CONSENT_WORDS.join("|"), "i");
 // Lower case, capitalised and upper case (GDPR), without the "i" flag of
 // attribute selectors.
 const CONSENT_NAMED = CONSENT_WORDS
-  .flatMap((word) => [word, word[0].toUpperCase() + word.slice(1), word.toUpperCase()])
-  .flatMap((word) => [`[id*="${word}"]`, `[class*="${word}"]`])
+  .map((word) => [word, word[0].toUpperCase() + word.slice(1), word.toUpperCase()]
+    .map((name) => `[id*="${name}"], [class*="${name}"]`).join(", "))
   .join(", ");
 
 /** How often the widget looks for a dialog: consent tools add theirs after the page loads. */
@@ -33,6 +35,13 @@ export const PAGE_DIALOG_CHECK_MS = 1000;
 
 /** A computed value that is set and not the initial value (jsdom leaves many empty). */
 const isSet = (value: string | undefined, initial: string) => !!value && value !== initial;
+
+/** The parent of `node`. The top element of a shadow root has the shadow host as its parent. */
+function parentOf(node: Element): Element | null {
+  if (node.parentElement) return node.parentElement;
+  const root = node.getRootNode();
+  return root instanceof ShadowRoot ? root.host : null;
+}
 
 /**
  * The z-index at which `node` makes a stacking context, or null when it makes
@@ -46,7 +55,8 @@ function stackingContextZIndex(node: Element): number | null {
   // An empty position (jsdom) is static, the same as in a browser.
   if (style.position === "fixed" || style.position === "sticky") return hasZIndex ? value : 0;
   if (hasZIndex && isSet(style.position, "static")) return value;
-  const parentDisplay = node.parentElement ? window.getComputedStyle(node.parentElement).display : "";
+  const parent = parentOf(node);
+  const parentDisplay = parent ? window.getComputedStyle(parent).display : "";
   if (hasZIndex && /(^|-)(flex|grid)$/.test(parentDisplay)) return value;
   if ((style.opacity !== "" && Number(style.opacity) < 1) || isSet(style.transform, "none") ||
       isSet(style.filter, "none") || isSet(style.backdropFilter, "none") || isSet(style.clipPath, "none") ||
@@ -63,7 +73,7 @@ function stackingContextZIndex(node: Element): number | null {
 export function pageLayerZIndex(element: Element): number | null {
   let zIndex: number | null = null;
   for (let node: Element | null = element; node && node !== document.body && node !== document.documentElement;
-    node = node.parentElement) {
+    node = parentOf(node)) {
     const level = stackingContextZIndex(node);
     if (level !== null) zIndex = level;
   }
@@ -78,7 +88,7 @@ function isShown(element: Element): boolean {
   if (typeof element.checkVisibility === "function") {
     return element.checkVisibility({ opacityProperty: true, visibilityProperty: true });
   }
-  for (let node: Element | null = element; node; node = node.parentElement) {
+  for (let node: Element | null = element; node; node = parentOf(node)) {
     const style = window.getComputedStyle(node);
     if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
   }
@@ -87,8 +97,10 @@ function isShown(element: Element): boolean {
 
 /** The id, the class and the accessible name of an element. */
 function names(element: Element): string {
+  // aria-labelledby refers to ids in the element's own document or shadow root.
+  const root = element.getRootNode() as Document | ShadowRoot;
   const labelledBy = (element.getAttribute("aria-labelledby") || "").split(/\s+/)
-    .map((id) => (id && document.getElementById(id)?.textContent) || "");
+    .map((id) => (id && root.getElementById(id)?.textContent) || "");
   return [element.id, element.getAttribute("class") || "", element.getAttribute("aria-label") || "", ...labelledBy].join(" ");
 }
 
@@ -103,12 +115,27 @@ function coversScreen(element: Element): boolean {
     window.getComputedStyle(element).position === "fixed";
 }
 
+/**
+ * The document and the open shadow roots of the body's children. Consent
+ * tools add their host to the body. The widget's own shadow root is closed.
+ */
+function searchRoots(): Array<Document | ShadowRoot> {
+  const shadowRoots = Array.from(document.body.children)
+    .map((child) => child.shadowRoot)
+    .filter((root): root is ShadowRoot => root !== null);
+  return [document, ...shadowRoots];
+}
+
 /** The dialogs, consent dialogs and consent backdrops on the page (visible or not). */
 function blockingElements(): Element[] {
-  const consentDialogs = Array.from(document.querySelectorAll('[role="dialog"]'))
-    .filter((dialog) => CONSENT_PATTERN.test(names(dialog)));
-  const consentBackdrops = Array.from(document.querySelectorAll(CONSENT_NAMED)).filter(coversScreen);
-  return [...Array.from(document.querySelectorAll(BLOCKING_DIALOGS)), ...consentDialogs, ...consentBackdrops];
+  const elements: Element[] = [];
+  for (const root of searchRoots()) {
+    const consentDialogs = Array.from(root.querySelectorAll('[role="dialog"]'))
+      .filter((dialog) => CONSENT_PATTERN.test(names(dialog)));
+    const consentBackdrops = Array.from(root.querySelectorAll(CONSENT_NAMED)).filter(coversScreen);
+    elements.push(...Array.from(root.querySelectorAll(BLOCKING_DIALOGS)), ...consentDialogs, ...consentBackdrops);
+  }
+  return elements;
 }
 
 /**
@@ -135,7 +162,9 @@ export function belowBlockingDialog(zIndex: number, dialogZIndex: number | null)
 
 /** The layer z-index of a visible blocking dialog, checked once a second. */
 export function useBlockingDialogZIndex(): number | null {
-  const [zIndex, setZIndex] = useState<number | null>(null);
+  // The first check runs in the first render: a window that starts open must
+  // not show above a dialog that is already there, not even for one frame.
+  const [zIndex, setZIndex] = useState<number | null>(blockingDialogZIndex);
   useEffect(() => {
     const update = () => setZIndex(blockingDialogZIndex());
     update();

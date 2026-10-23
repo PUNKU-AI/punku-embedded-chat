@@ -64,6 +64,28 @@ describe('blockingDialogZIndex', () => {
     expect(blockingDialogZIndex()).toBe(999997);
   });
 
+  it('finds a consent dialog in the open shadow root of a body child (Usercentrics)', () => {
+    // aside#usercentrics-cmp-ui > #shadow-root > div (fixed, 2147483646) > #uc-main-dialog.
+    const host = document.createElement('aside');
+    host.id = 'usercentrics-cmp-ui';
+    document.body.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<div style="position:fixed;z-index:2147483646">'
+      + '<div id="uc-main-dialog" role="dialog" class="cmp first bottom mobile ltr gdpr">We use cookies.</div></div>';
+    place(root.getElementById('uc-main-dialog')!);
+    expect(blockingDialogZIndex()).toBe(2147483646);
+  });
+
+  it('reads the aria-labelledby heading inside the same shadow root', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<div id="d" role="dialog" aria-labelledby="t" style="position:fixed;z-index:700">'
+      + '<h2 id="t">Cookie settings</h2></div>';
+    place(root.getElementById('d')!);
+    expect(blockingDialogZIndex()).toBe(700);
+  });
+
   it('finds a consent dialog by the text of its aria-labelledby heading', () => {
     addToPage('<div id="d" role="dialog" aria-labelledby="t" style="position:fixed;z-index:500">'
       + '<h2 id="t">Datenschutz-Einstellungen</h2></div>');
