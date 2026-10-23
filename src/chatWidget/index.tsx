@@ -12,6 +12,8 @@ import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookin
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
+import { guardHintColors } from "./controlColors";
+import { belowBlockingDialog, useBlockingDialogZIndex } from "./pageDialogs";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
 import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
@@ -41,7 +43,9 @@ const CORNER_TOP_OFFSET = 20;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // Above floating WhatsApp buttons (99999999 and lower). Below the banners of
 // large cookie consent tools (Cookiebot 2147483631, Usercentrics 2147483640,
-// OneTrust 2147483645), so the trigger cannot cover their buttons.
+// OneTrust 2147483645), so the trigger cannot cover their buttons. A modal or
+// consent dialog with a lower value, such as Borlabs Cookie (999999), makes
+// the widget step below it while it is visible (pageDialogs.ts).
 export const DEFAULT_Z_INDEX = 2147483000;
 export const MAX_Z_INDEX = 2147483647;
 
@@ -1386,6 +1390,19 @@ video {
   object-fit: contain;
 }
 
+/* The open window's layer in the browser's top layer (a popover, see
+   ChatWidget): undo the browser's popover box. :where() keeps the
+   specificity at 0, so the inline position and every other rule win. */
+:where(.cl-window-layer[popover]) {
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
 .cl-chat-window {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
@@ -2704,12 +2721,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline-offset: 2px;
 }
 
-/* EU AI Act, Article 50: visitors see that an AI system answers. */
+/* EU AI Act, Article 50: visitors see that an AI system answers.
+   --cl-notice-ink: a readable colour on a site's input bar (controlColors.ts). */
 .cl-window .cl-ai-notice {
   text-align: center;
   font-size: 11.5px;
   line-height: 1.35;
-  color: var(--cl-muted);
+  color: var(--cl-notice-ink, var(--cl-muted));
   padding: 0 6px;
 }
 
@@ -4258,6 +4276,41 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     ? activeTriggerPosition.y <= CLOSED_HINT_TOP_EDGE_THRESHOLD
     : cornerPosition.startsWith("top-");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
+  // The hint text must read on the hint's colour, for example white on a
+  // light green (3.5:1). The guard keeps colours that read (controlColors.ts).
+  const hintColors = useMemo(() => guardHintColors(closed_widget_hint_background_color, closed_widget_hint_text_color),
+    [closed_widget_hint_background_color, closed_widget_hint_text_color]);
+  const hintBackground = hintColors.background || closed_widget_hint_background_color;
+  const hintText = hintColors.text || closed_widget_hint_text_color;
+  // A consent dialog or another modal dialog of the page stays above the
+  // widget, so a visitor can answer it (pageDialogs.ts).
+  const blockingDialogZIndex = useBlockingDialogZIndex();
+  // The open window goes to the browser's top layer (a manual popover), above
+  // every z-index of the page. An accessibility button at 2147483647 that the
+  // page adds after the widget (Eyeable on Swarovski) covered the window. Not
+  // while a consent dialog is visible: it stays above the widget. Not in a
+  // scaled page frame: the top layer would leave the frame's scale. Browsers
+  // without popovers keep the widget's z-index.
+  const windowLayerRef = useRef<HTMLDivElement>(null);
+  const windowOnTopLayer = open && blockingDialogZIndex === null && !scaledPage;
+  useLayoutEffect(() => {
+    const layer = windowLayerRef.current;
+    // The popover attribute is set exactly while the layer is shown.
+    if (!layer || typeof layer.showPopover !== "function" || windowOnTopLayer === layer.hasAttribute("popover")) return;
+    try {
+      if (windowOnTopLayer) {
+        layer.setAttribute("popover", "manual");
+        layer.showPopover();
+      } else {
+        layer.hidePopover();
+        layer.removeAttribute("popover");
+      }
+    } catch {
+      // Not shown, for example a detached element: the window keeps the
+      // widget's z-index. A popover that is not shown would be hidden.
+      layer.removeAttribute("popover");
+    }
+  }, [windowOnTopLayer]);
   const isRelocated = Boolean(activeTriggerPosition);
 
   /*
@@ -4419,7 +4472,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           : { position: "fixed", ...triggerStyle, transform: "none" }),
         // The root is a stacking context. This one value places the whole
         // widget against the host page. Inner layers stack only inside it.
-        zIndex: activeTriggerPosition?.zIndex ?? getZIndex(z_index)
+        zIndex: belowBlockingDialog(activeTriggerPosition?.zIndex ?? getZIndex(z_index), blockingDialogZIndex)
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
@@ -4434,9 +4487,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
             className={`cl-closed-widget-hint ${closedHintLayout?.positionClass ?? preferredClosedHintPositionClass} ${showClosedWidgetHint ? "cl-visible" : ""}`}
             aria-hidden={!showClosedWidgetHint}
             style={{
-              ...(closed_widget_hint_background_color ? { ["--cl-closed-hint-bg" as any]: closed_widget_hint_background_color } : {}),
-              ...(closed_widget_hint_background_color ? { backgroundColor: closed_widget_hint_background_color } : {}),
-              ...(closed_widget_hint_text_color ? { color: closed_widget_hint_text_color } : {}),
+              ...(hintBackground ? { ["--cl-closed-hint-bg" as any]: hintBackground } : {}),
+              ...(hintBackground ? { backgroundColor: hintBackground } : {}),
+              ...(hintText ? { color: hintText } : {}),
             }}
           >
             <div className="cl-closed-widget-hint-text">{closed_widget_hint_text}</div>
@@ -4457,6 +4510,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         />
       </div>
       <div
+        ref={windowLayerRef}
+        className="cl-window-layer"
         style={{
           position: "fixed",
           ...(anchoredChatWindowStyle || chatWindowStyle),

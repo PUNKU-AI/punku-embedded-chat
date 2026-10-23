@@ -1037,10 +1037,11 @@ export default function ChatWindow({
           .cl-window .markdown-body a {
             color: ${linkColor} !important;
           }
+          /* No opacity on hover: it would take the link below 4.5:1. The
+             stylesheet makes the underline solid instead. */
           .cl-window .cl-bot_message a:hover,
           .cl-window .markdown-body a:hover {
             color: ${linkColor} !important;
-            opacity: 0.8;
           }
           .cl-window .cl-bot_message a:visited,
           .cl-window .markdown-body a:visited {
@@ -1156,9 +1157,13 @@ export default function ChatWindow({
               max-height: var(--cl-anchored-window-height, min(${vh(70)}, var(--cl-window-room))) !important;
             }
 
+            /* The inline minWidth (the width prop, 450 px by default) would
+               win over the 420 px box: the window covered the trigger on a
+               phone in landscape and ran off an iPad in portrait. */
             .cl-window {
               width: 100% !important;
               height: 100% !important;
+              min-width: unset !important;
             }
 
             /* Show close button on tablet */
@@ -1257,6 +1262,7 @@ export default function ChatWindow({
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
           ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
+          ...(guarded.noticeInk ? {"--cl-notice-ink": guarded.noticeInk} : {}),
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}

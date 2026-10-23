@@ -116,6 +116,7 @@ jest.mock('./utils', () => ({
 
 // Import after mocks
 import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX } from './index';
+import { PAGE_DIALOG_CHECK_MS } from './pageDialogs';
 import { SessionStorage } from '../utils/sessionStorage';
 
 describe('ChatWidget', () => {
@@ -708,9 +709,10 @@ describe('ChatWidget', () => {
       const newSessionButton = screen.getByTestId('new-session');
       fireEvent.click(newSessionButton);
 
-      // Fast-forward timers for the setTimeout in startNewSession
+      // Fast-forward timers for the setTimeout in startNewSession. Only the
+      // pending ones: the check for page dialogs repeats every second.
       act(() => {
-        jest.runAllTimers();
+        jest.runOnlyPendingTimers();
       });
 
       jest.useRealTimers();
@@ -907,6 +909,84 @@ describe('ChatWidget', () => {
       // Above WhatsApp-style buttons, below the banners of large consent tools.
       expect(DEFAULT_Z_INDEX).toBe(2147483000);
       expect(document.querySelector('.cl-widget-root')).toHaveStyle({ zIndex: '2147483000' });
+    });
+
+    it('should stay below a consent dialog of the page while it is visible', () => {
+      // Borlabs Cookie: a modal dialog in a full-screen layer at 999999.
+      const layer = document.createElement('div');
+      layer.style.cssText = 'position: fixed; z-index: 999999;';
+      layer.innerHTML = '<div role="alertdialog" aria-modal="true">Privacy settings</div>';
+      layer.firstElementChild!.getBoundingClientRect = () => ({
+        x: 20, y: 40, left: 20, top: 40, width: 280, height: 300, right: 300, bottom: 340, toJSON: () => ({}),
+      }) as DOMRect;
+      document.body.appendChild(layer);
+      jest.useFakeTimers();
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        const widgetRoot = document.querySelector('.cl-widget-root') as HTMLElement;
+        expect(widgetRoot.style.zIndex).toBe('999998');
+
+        // The visitor answers the dialog: the widget returns to its own value.
+        act(() => {
+          layer.remove();
+          jest.advanceTimersByTime(PAGE_DIALOG_CHECK_MS);
+        });
+        expect(widgetRoot.style.zIndex).toBe(String(DEFAULT_Z_INDEX));
+      } finally {
+        jest.useRealTimers();
+        layer.remove();
+      }
+    });
+
+    // jsdom has no popovers: record the calls of the top layer.
+    function mockPopovers() {
+      const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+      const had = { show: 'showPopover' in proto, hide: 'hidePopover' in proto };
+      const original = { show: proto.showPopover, hide: proto.hidePopover };
+      const showPopover = jest.fn();
+      const hidePopover = jest.fn();
+      proto.showPopover = showPopover;
+      proto.hidePopover = hidePopover;
+      const restore = () => {
+        if (had.show) proto.showPopover = original.show; else delete proto.showPopover;
+        if (had.hide) proto.hidePopover = original.hide; else delete proto.hidePopover;
+      };
+      return { showPopover, hidePopover, restore };
+    }
+
+    it('should lift the open window to the top layer and take it back when it closes', () => {
+      const popovers = mockPopovers();
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        const layer = document.querySelector('.cl-window-layer') as HTMLElement;
+        expect(layer.getAttribute('popover')).toBe('manual');
+        expect(popovers.showPopover).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+        expect(layer.hasAttribute('popover')).toBe(false);
+        expect(popovers.hidePopover).toHaveBeenCalledTimes(1);
+      } finally {
+        popovers.restore();
+      }
+    });
+
+    it('should keep the open window under a consent dialog of the page', () => {
+      const popovers = mockPopovers();
+      const layer = document.createElement('div');
+      layer.style.cssText = 'position: fixed; z-index: 999999;';
+      layer.innerHTML = '<div role="alertdialog" aria-modal="true">Privacy settings</div>';
+      layer.firstElementChild!.getBoundingClientRect = () => ({
+        x: 20, y: 40, left: 20, top: 40, width: 280, height: 300, right: 300, bottom: 340, toJSON: () => ({}),
+      }) as DOMRect;
+      document.body.appendChild(layer);
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(document.querySelector('.cl-window-layer')!.hasAttribute('popover')).toBe(false);
+        expect(document.querySelector('.cl-widget-root')).toHaveStyle({ zIndex: '999998' });
+      } finally {
+        popovers.restore();
+        layer.remove();
+      }
     });
 
     it.each([

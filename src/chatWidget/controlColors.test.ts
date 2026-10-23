@@ -1,7 +1,7 @@
 import { contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex } from './colorContrast';
 import {
-  BOUNDARY_MIN, guardControlColors, guardFilled, guardOutline, guardOwnText, ICON_MIN, TEXT_MIN, THEME_COLORS,
-  ThemeName,
+  BOUNDARY_MIN, guardControlColors, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN, TEXT_MIN,
+  THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -78,8 +78,12 @@ describe('guardFilled', () => {
 });
 
 describe('guardOwnText and guardOutline', () => {
-  it('keeps a site link colour from 3:1 and moves one below it to 4.5:1', () => {
-    expect(toHex(guardOwnText(rgb('#dd4a97'), rgb('#ffffff'), null))).toBe('#dd4a97');
+  it('keeps a site link colour from 4.5:1 and moves one below it just enough', () => {
+    expect(toHex(guardOwnText(rgb('#075985'), rgb('#ffffff'), null))).toBe('#075985');
+    // Link text needs 4.5:1, also between 3:1 and 4.5:1 (pink on white, 3.8:1).
+    const pink = guardOwnText(rgb('#dd4a97'), rgb('#ffffff'), null);
+    expect(contrastRatio(pink, rgb('#ffffff'))).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(contrastRatio(pink, rgb('#ffffff'))).toBeLessThan(5.5);
     const gold = guardOwnText(rgb('#c69300'), rgb('#ffffff'), rgb('#2a2a2a'));
     expect(contrastRatio(gold, rgb('#ffffff'))).toBeGreaterThanOrEqual(TEXT_MIN);
     expect(toHex(gold)).not.toBe('#2a2a2a');
@@ -116,6 +120,58 @@ describe('guardControlColors', () => {
       theme: 'default', bot_message_color: '#791f0d', bot_message_text_color: '#ffffff',
     });
     expect(colors).toMatchObject({ linksTakeTextColor: true, linkButtonFill: '#ffffff', linkButtonLabel: '#791f0d' });
+  });
+
+  it('gives links a shade of the bubble where the answer text fails too', () => {
+    // White text on a mid green reads at 3:1 only. The site's text stays.
+    const { colors, pairs } = guardControlColors({
+      theme: 'default', bot_message_color: '#3aaa35', bot_message_text_color: '#ffffff',
+    });
+    expect(colors.linksTakeTextColor).toBe(true);
+    const link = rgb(colors.link!);
+    expect(contrastRatio(link, rgb('#3aaa35'))).toBeGreaterThanOrEqual(TEXT_MIN);
+    // A dark green: the green channel stays the highest.
+    expect(link[1]).toBeGreaterThan(Math.max(link[0], link[2]));
+    expect(pairs.find((pair) => pair.control === 'link')!.minimum).toBe(TEXT_MIN);
+  });
+
+  it('moves a site link colour between 3:1 and 4.5:1 to 4.5:1', () => {
+    const { colors } = guardControlColors({
+      theme: 'dark', bot_message_color: '#1F2937', bot_message_text_color: '#F9FAFB', link_color: '#3F9B47',
+    });
+    expect(contrastRatio(rgb('#3F9B47'), rgb('#1F2937'))).toBeLessThan(TEXT_MIN);
+    expect(contrastRatio(rgb(colors.link!), rgb('#1F2937'))).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('makes the AI notice readable on a site input bar', () => {
+    for (const background of ['#33a1e6', '#f1efee']) {
+      const { colors, pairs } = guardControlColors({ theme: 'default', background_color: background });
+      expect(contrastRatio(rgb(THEME_COLORS.default.muted), rgb(background))).toBeLessThan(TEXT_MIN);
+      expect(contrastRatio(rgb(colors.noticeInk!), rgb(background))).toBeGreaterThanOrEqual(TEXT_MIN);
+      expect(pairs.find((pair) => pair.control === 'AI notice')!.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    }
+    // input_container_style colours the bar when background_color is not set.
+    const { colors } = guardControlColors({ theme: 'default', input_container_style: { backgroundColor: '#33a1e6' } });
+    expect(colors.noticeInk).toBeDefined();
+    // A gradient on the bar: the notice stays as it is.
+    const gradient = guardControlColors({
+      theme: 'default', input_container_style: { background: 'linear-gradient(#33a1e6, #33a1e6)' },
+    });
+    expect(gradient.colors.noticeInk).toBeUndefined();
+  });
+
+  it('measures the AI notice on a translucent input bar over the theme window', () => {
+    // Half white over the dark window (#030712): the grey notice would read at 1.5:1.
+    const { colors, pairs } = guardControlColors({
+      theme: 'dark', input_container_style: { backgroundColor: 'rgba(255, 255, 255, 0.5)' },
+    });
+    expect(colors.noticeInk).toBeDefined();
+    expect(pairs.find((pair) => pair.control === 'AI notice')!.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    // The light Bookingkit window has no colour of its own: the page shows through.
+    const light = guardControlColors({
+      theme: 'punku-ai-bookingkit', input_container_style: { backgroundColor: 'rgba(255, 255, 255, 0.5)' },
+    });
+    expect(light.colors.noticeInk).toBeUndefined();
   });
 
   it('keeps every colour of a configuration that already reads', () => {
@@ -186,5 +242,44 @@ describe('guardControlColors', () => {
     const { colors, pairs } = guardControlColors({ theme: 'default', error_message_style: { color: '#ffffff' } });
     expect(colors.retryLabel).toBe('#000000');
     expect(pairs.find((pair) => pair.control === 'try again label')!.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+});
+
+describe('guardHintColors', () => {
+  it('keeps hint colours that read, and the stylesheet colours', () => {
+    expect(guardHintColors('#FFF7D6', '#4A4A4A')).toEqual({});
+    expect(guardHintColors('#111111', '#ffffff')).toEqual({});
+    expect(guardHintColors(undefined, '#2a3849')).toEqual({});
+    expect(guardHintColors()).toEqual({});
+  });
+
+  it('darkens a site background just enough for its white text', () => {
+    // White on #3F9B47 reads at 3.5:1.
+    const result = guardHintColors('#3F9B47', '#FFFFFF');
+    expect(result.text).toBeUndefined();
+    const background = rgb(result.background!);
+    expect(contrastRatio(rgb('#ffffff'), background)).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(contrastRatio(rgb('#ffffff'), background)).toBeLessThan(5.5);
+    expect(background[1]).toBeGreaterThan(Math.max(background[0], background[2]));
+  });
+
+  it('keeps a site colour and changes only the stylesheet colour', () => {
+    // A dark site background without a text colour: the dark default text turns white.
+    expect(guardHintColors('#123456')).toEqual({ text: '#ffffff' });
+    // A light site text colour without a background: the white hint turns dark.
+    expect(guardHintColors(undefined, '#abcdef')).toEqual({ background: '#111827' });
+    expect(guardHintColors(undefined, '#ffffff')).toEqual({ background: '#111827' });
+  });
+
+  it('gives the text white or black when the site background cannot keep it', () => {
+    // A grey text on a mid grey: no small move of the grey reaches 4.5:1.
+    expect(guardHintColors('#808080', '#888888')).toEqual({ text: '#000000' });
+    // A faint text colour reads on no background: it turns opaque.
+    expect(guardHintColors(undefined, 'rgba(255, 255, 255, 0.1)')).toEqual({ text: '#000000' });
+  });
+
+  it('leaves a transparent background or a colour name as it is', () => {
+    expect(guardHintColors('rgba(0, 0, 0, 0.5)', '#777777')).toEqual({});
+    expect(guardHintColors('green', '#ffffff')).toEqual({});
   });
 });

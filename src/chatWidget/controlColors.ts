@@ -3,12 +3,12 @@
  *
  * The widget draws controls on coloured surfaces: link buttons on the answer
  * bubble, suggestion chips on the message list, the send button in the input
- * field and "Try again" in the error message. A site's colours can make a
- * control vanish, for example a button in the same red as the bubble behind
- * it. For each control this module checks:
+ * field, the AI notice in the input bar and "Try again" in the error message.
+ * A site's colours can make a control vanish, for example a button in the
+ * same red as the bubble behind it. For each control this module checks:
  * - the fill, or the outline, against the surface: at least 3:1,
  * - the label on the fill: at least 4.5:1 for text, 3:1 for an icon,
- * - a site's link colour on the bubble: at least 3:1.
+ * - links on the bubble and the AI notice on the input bar: at least 4.5:1.
  * A colour that passes stays as it is. A colour that fails gets a fallback:
  * the site's link colour if it passes, else the site's own colour made just
  * dark or light enough while its label still reads, else white or black.
@@ -39,6 +39,8 @@ type ThemeColors = {
   field: string;
   /** The input bar behind a field that is not opaque. */
   fieldBackdrop: string;
+  /** The window behind an input bar that is not opaque. null: the window has no colour. */
+  window: string | null;
   accent: string;
   onAccent: string;
   link: string;
@@ -50,6 +52,8 @@ type ThemeColors = {
   chipBg: string | null;
   errorBg: string;
   errorInk: string;
+  /** The AI notice in the input bar (--cl-muted). */
+  muted: string;
 };
 
 const LIGHT_BASE: ThemeColors = {
@@ -58,6 +62,7 @@ const LIGHT_BASE: ThemeColors = {
   list: "#f9fafb",
   field: "#ffffff",
   fieldBackdrop: "#ffffff",
+  window: null,
   accent: "#2563eb",
   onAccent: "#ffffff",
   link: "#1d4ed8",
@@ -68,6 +73,7 @@ const LIGHT_BASE: ThemeColors = {
   chipBg: "#ffffff",
   errorBg: "#fef2f2",
   errorInk: "#991b1b",
+  muted: "#64748b",
 };
 
 export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
@@ -76,6 +82,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     bubble: "#ffffff",
     bubbleText: "#1e293b",
     list: "#f8fafc",
+    window: "#ffffff",
     accent: "#0969da",
     send: "#0969da",
   },
@@ -85,6 +92,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#030712",
     field: "#111a2e",
     fieldBackdrop: "#0f172a",
+    window: "#030712",
     accent: "#5558e8",
     onAccent: "#ffffff",
     link: "#a5b4fc",
@@ -95,6 +103,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     chipBg: null,
     errorBg: "rgba(127, 29, 29, 0.32)",
     errorInk: "#fecaca",
+    muted: "#94a3b8",
   },
   ocean: {
     bubble: "#1e293b",
@@ -102,6 +111,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#0f172a",
     field: "#111c30",
     fieldBackdrop: "#0f172a",
+    window: "#0f172a",
     accent: "#0369a1",
     onAccent: "#ffffff",
     link: "#7dd3fc",
@@ -112,6 +122,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     chipBg: null,
     errorBg: "rgba(127, 29, 29, 0.32)",
     errorInk: "#fecaca",
+    muted: "#94a3b8",
   },
   aurora: {
     bubble: "rgba(76, 29, 149, 0.5)",
@@ -119,6 +130,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     list: "#2e1065",
     field: "rgba(46, 16, 101, 0.55)",
     fieldBackdrop: "#1e1b4b",
+    window: "#2e1065",
     accent: "#7c3aed",
     onAccent: "#ffffff",
     link: "#f0abfc",
@@ -130,6 +142,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     chipBg: null,
     errorBg: "rgba(127, 29, 29, 0.35)",
     errorInk: "#fecaca",
+    muted: "#c4b5fd",
   },
   "punku-ai-bookingkit": LIGHT_BASE,
   swarovski: LIGHT_BASE,
@@ -165,6 +178,7 @@ export type GuardedColors = {
   sendFill?: string;
   sendIcon?: string;
   retryLabel?: string;
+  noticeInk?: string;
 };
 
 /** One measured pair: a control's colour and the colour behind it. */
@@ -253,9 +267,9 @@ export function guardFilled(options: {
   return withLabel(blackOrWhite(surface));
 }
 
-/** Text in a site colour on `surface`: kept from 3:1, else made readable (4.5:1). */
+/** Text in a site colour on `surface`: kept from 4.5:1, else moved just enough to read. */
 export function guardOwnText(color: Rgb, surface: Rgb, fallback: Rgb | null): Rgb {
-  if (contrast(color, surface) >= BOUNDARY_MIN) return color;
+  if (contrast(color, surface) >= TEXT_MIN) return color;
   const moved = nudge(color, surface, (candidate) => contrast(candidate, surface) >= TEXT_MIN);
   if (moved) return moved;
   if (fallback && contrast(fallback, surface) >= TEXT_MIN) return fallback;
@@ -306,15 +320,50 @@ function surfaces(props: ControlColorProps) {
   const bubble = bubbleStyle === IMAGE ? null : surface(props.bot_message_color || bubbleStyle || theme.bubble, list);
   const bubbleText = resolve(props.bot_message_text_color || props.bot_message_style?.color || theme.bubbleText, bubble);
   // The field sits on the input bar: background_color, else
-  // input_container_style, else the theme.
+  // input_container_style, else the theme. A bar that is not opaque shows
+  // the theme's window behind it.
   const bar = props.background_color
     ? resolve(props.background_color, null)
-    : surface(styleBackground(props.input_container_style) || theme.fieldBackdrop, null);
+    : surface(styleBackground(props.input_container_style) || theme.fieldBackdrop, resolve(theme.window, null));
   const field = resolve(props.input_style?.backgroundColor || theme.field, bar);
   const customError = !!props.error_message_style && Object.keys(props.error_message_style).length > 0;
   const errorBg = surface(styleBackground(props.error_message_style) || (customError ? "#f87171" : theme.errorBg), list);
   const errorInk = resolve(props.error_message_style?.color || (customError ? "#ffffff" : theme.errorInk), errorBg);
-  return { theme, list, bubble, bubbleText, field, errorBg, errorInk };
+  return { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk };
+}
+
+/** The colours of the closed hint in the stylesheet (.cl-closed-widget-hint). */
+const HINT_BACKGROUND = "#ffffff";
+const HINT_TEXT = "#111827";
+
+/**
+ * The closed hint: its text on its own background (4.5:1). A site's colour
+ * wins over the stylesheet colour: with only a site background, the text turns
+ * white or black; with only a site text colour, the background turns dark or
+ * white. With both, the site background is moved just enough while the site's
+ * text still reads on it, else the text turns white or black. Returns only the
+ * colours that change.
+ */
+export function guardHintColors(background?: string, text?: string): { background?: string; text?: string } {
+  const fill = resolve(background || HINT_BACKGROUND, null);
+  const label = parseColor(text || HINT_TEXT);
+  // A transparent background shows the page, which the widget cannot measure.
+  if (!fill || !label) return {};
+  const labelOn = (next: Rgb) => (label.alpha >= 0.999 ? label.rgb : paintOver(label.rgb, label.alpha, next));
+  if (contrast(labelOn(fill), fill) >= TEXT_MIN) return {};
+  if (text && !background) {
+    // The stylesheet's white gives way to its dark text colour, else white or black.
+    const dark = resolve(HINT_TEXT, null)!;
+    const next = contrast(labelOn(dark), dark) >= TEXT_MIN ? dark : blackOrWhite(label.rgb);
+    // A translucent text that reads on neither turns opaque black or white.
+    if (contrast(labelOn(next), next) < TEXT_MIN) return { text: toHex(blackOrWhite(fill)) };
+    return { background: toHex(next), ...(label.alpha < 0.999 ? { text: toHex(labelOn(next)) } : {}) };
+  }
+  if (background && text) {
+    const moved = nudge(fill, fill, (candidate) => contrast(labelOn(candidate), candidate) >= TEXT_MIN, 0.6);
+    if (moved) return { background: toHex(moved), ...(label.alpha < 0.999 ? { text: toHex(labelOn(moved)) } : {}) };
+  }
+  return { text: toHex(blackOrWhite(fill)) };
 }
 
 /**
@@ -322,7 +371,7 @@ function surfaces(props: ControlColorProps) {
  * the change (for tests and diagnostics).
  */
 export function guardControlColors(props: ControlColorProps): { colors: GuardedColors; pairs: ControlContrast[] } {
-  const { theme, list, bubble, bubbleText, field, errorBg, errorInk } = surfaces(props);
+  const { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk } = surfaces(props);
   const colors: GuardedColors = {};
   const pairs: ControlContrast[] = [];
   const measure = (control: string, foreground: Rgb, background: Rgb, minimum: number) => {
@@ -347,12 +396,16 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
       if (contrast(themeLink, bubble) >= TEXT_MIN) {
         link = themeLink;
       } else {
+        // Links take the answer text colour. Where that text fails too, they
+        // take a dark or light shade of the bubble colour that reads.
         colors.linksTakeTextColor = true;
-        link = bubbleText && contrast(bubbleText, bubble) >= BOUNDARY_MIN ? bubbleText : blackOrWhite(bubble);
+        link = bubbleText && contrast(bubbleText, bubble) >= TEXT_MIN
+          ? bubbleText
+          : nudge(bubble, bubble, (candidate) => contrast(candidate, bubble) >= TEXT_MIN) || blackOrWhite(bubble);
         if (!bubbleText || !same(link, bubbleText)) colors.link = toHex(link);
       }
     }
-    measure("link", link, bubble, BOUNDARY_MIN);
+    measure("link", link, bubble, TEXT_MIN);
     // Outlined link buttons draw their outline in the link colour.
     measure("outlined link button", link, bubble, BOUNDARY_MIN);
   } else {
@@ -420,6 +473,17 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     }
     measure("send button", guarded.fill, field, BOUNDARY_MIN);
     measure("send button icon", guarded.label, guarded.fill, ICON_MIN);
+  }
+
+  // The AI notice in the input bar, in the theme's muted grey. A gradient or
+  // an image on the bar leaves it as it is.
+  const muted = bar && resolve(theme.muted, bar);
+  if (bar && muted) {
+    const notice = contrast(muted, bar) >= TEXT_MIN
+      ? muted
+      : nudge(muted, bar, (candidate) => contrast(candidate, bar) >= TEXT_MIN) || blackOrWhite(bar);
+    if (!same(notice, muted)) colors.noticeInk = toHex(notice);
+    measure("AI notice", notice, bar, TEXT_MIN);
   }
 
   // "Try again" in the error message: its label and outline take the text colour.
