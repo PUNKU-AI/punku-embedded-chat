@@ -241,6 +241,50 @@ describe('ChatMessage', () => {
   });
 
   describe('Feedback System', () => {
+    it('should put the feedback buttons under the answer, not inside its bubble', () => {
+      render(<ChatMessage {...defaultProps} message_id="test-message-id" />);
+
+      const stack = document.querySelector('.cl-message-stack') as HTMLElement;
+      const bubble = stack.querySelector('.cl-bot_message') as HTMLElement;
+      const feedback = stack.querySelector('.feedback-container') as HTMLElement;
+      expect(bubble).toBeInTheDocument();
+      expect(feedback).toBeInTheDocument();
+      expect(bubble).not.toContainElement(feedback);
+    });
+
+    it('should size the answer stack with the width keys of bot_message_style', () => {
+      render(
+        <ChatMessage
+          {...defaultProps}
+          message_id="test-message-id"
+          bot_message_style={{ width: '80%', maxWidth: '100%', backgroundColor: '#eaf1ff' }}
+        />
+      );
+
+      const stack = document.querySelector<HTMLElement>('.cl-message-stack')!;
+      const bubble = document.querySelector<HTMLElement>('.cl-bot_message')!;
+      // The stack takes the site's width; the bubble fills the stack.
+      expect(stack.style.width).toBe('80%');
+      expect(stack.style.maxWidth).toBe('100%');
+      expect(bubble.style.width).toBe('100%');
+      expect(bubble.style.maxWidth).toBe('');
+      expect(bubble).toHaveStyle({ backgroundColor: '#eaf1ff' });
+    });
+
+    it('should leave the answer stack to the stylesheet without width keys', () => {
+      render(<ChatMessage {...defaultProps} message_id="test-message-id" bot_message_style={{ color: '#111827' }} />);
+
+      expect(document.querySelector<HTMLElement>('.cl-message-stack')!.getAttribute('style')).toBeNull();
+    });
+
+    it('should mark the newest answer, which keeps its feedback buttons visible', () => {
+      const { rerender } = render(<ChatMessage {...defaultProps} message_id="test-message-id" />);
+      expect(document.querySelector('.cl-chat-message')).not.toHaveClass('cl-latest');
+
+      rerender(<ChatMessage {...defaultProps} message_id="test-message-id" isLatest={true} />);
+      expect(document.querySelector('.cl-chat-message')).toHaveClass('cl-latest');
+    });
+
     it('should show feedback buttons for bot messages', () => {
       render(
         <ChatMessage

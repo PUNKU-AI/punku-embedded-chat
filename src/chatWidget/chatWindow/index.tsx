@@ -102,6 +102,7 @@ export default function ChatWindow({
   additional_headers,
   theme = "default",
   welcome_message,
+  suggestions,
   show_feedback = false,
   header_icon,
   onHeaderIconError,
@@ -173,6 +174,8 @@ export default function ChatWindow({
   additional_headers?: { [key: string]: string };
   theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
   welcome_message?: string;
+  /** Up to four questions under the welcome message; a tap sends one. */
+  suggestions?: string[];
   show_feedback?: boolean;
   header_icon?: string;
   onHeaderIconError?: () => void;
@@ -616,6 +619,24 @@ export default function ChatWindow({
     }
   }
 
+  // Suggested questions under the welcome message: up to four, never empty.
+  const suggestionList = Array.isArray(suggestions)
+    ? suggestions
+        .filter((suggestion): suggestion is string => typeof suggestion === "string" && suggestion.trim() !== "")
+        .map((suggestion) => suggestion.trim())
+        .slice(0, 4)
+    : [];
+
+  // The newest answer keeps its feedback buttons visible; older ones show
+  // them on hover, on focus or after a vote.
+  let latestAnswerIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (!messages[index].isSend && !messages[index].error) {
+      latestAnswerIndex = index;
+      break;
+    }
+  }
+
   // Try again: remove the error message and send the visitor's last message again.
   const lastMessageIsError = messages.length > 0 && !!messages[messages.length - 1].error;
   const lastUserText = lastMessageIsError
@@ -660,15 +681,64 @@ export default function ChatWindow({
   ]);
 
   /*
-   * Keep the newest message and streamed tokens in view. Scroll only the
-   * message list: scrollIntoView() also scrolls every scrollable ancestor,
-   * including the visual viewport. On a phone page wider than the screen that
-   * pans the visitor's view of the host page (#69).
+   * Keep the newest message and streamed tokens in view, but only while the
+   * visitor reads at the bottom. A visitor who scrolls up to read an earlier
+   * answer stays there, and a button leads back to the newest message.
+   * Scroll only the message list: scrollIntoView() also scrolls every
+   * scrollable ancestor, including the visual viewport. On a phone page wider
+   * than the screen that pans the visitor's view of the host page (#69).
    */
+  const followNewest = useRef(true);
+  const lastListScrollTop = useRef(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  useEffect(() => {
+    const list = messagesContainer.current;
+    if (!list) return;
+    const handleScroll = () => {
+      const distance = list.scrollHeight - list.clientHeight - list.scrollTop;
+      // Only the visitor moves the list up; the widget's own scrolls go down.
+      if (list.scrollTop < lastListScrollTop.current - 2 && distance > 8) {
+        followNewest.current = false;
+      }
+      if (distance <= 80) {
+        followNewest.current = true;
+      }
+      lastListScrollTop.current = list.scrollTop;
+      setShowJumpToLatest(!followNewest.current && distance > 120);
+    };
+    list.addEventListener("scroll", handleScroll, { passive: true });
+    return () => list.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useEffect(() => {
     const el = messagesContainer.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!el) return;
+    const last = messages[messages.length - 1];
+    // A scroll up counts even before its scroll event fires (one frame later):
+    // the next streamed word must not pull the visitor back down.
+    if (el.scrollTop < lastListScrollTop.current - 2 && el.scrollHeight - el.clientHeight - el.scrollTop > 8) {
+      followNewest.current = false;
+    }
+    // The visitor's own new message always shows, and the answer follows it.
+    if (last?.isSend) followNewest.current = true;
+    if (followNewest.current) {
+      // Pin a streamed answer at once. A smooth scroll per word keeps an
+      // animation running that can override the visitor's own scroll.
+      el.scrollTo({ top: el.scrollHeight, behavior: last?.streaming ? "auto" : "smooth" });
+    } else {
+      // The answer grows below a visitor who scrolled up. That fires no scroll
+      // event, so check here whether the newest text is now far enough away.
+      setShowJumpToLatest(el.scrollHeight - el.clientHeight - el.scrollTop > 120);
+    }
   }, [messages]);
+
+  const jumpToLatest = () => {
+    const el = messagesContainer.current;
+    followNewest.current = true;
+    setShowJumpToLatest(false);
+    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
 
   /*
    * Keep wheel/touch scrolling inside the message list instead of letting a
@@ -758,6 +828,9 @@ export default function ChatWindow({
     const distanceToBottom = list.scrollHeight - list.clientHeight - list.scrollTop;
     if (distanceToBottom <= delta + 2) {
       list.scrollTop = list.scrollHeight;
+    } else if (!followNewest.current) {
+      // A taller field makes the list shorter: the newest text moves away.
+      setShowJumpToLatest(distanceToBottom > 120);
     }
   }, []);
 
@@ -1283,6 +1356,30 @@ export default function ChatWindow({
             />
           )}
 
+          {/* Suggested questions before the conversation starts: a tap sends one. */}
+          {messages.length === 0 && suggestionList.length > 0 && (
+            <div
+              className="cl-suggestions"
+              role="group"
+              aria-label={t.suggestions}
+              // A site colour for the border only: as text, a light or dark
+              // button_color could be unreadable on the chip background.
+              style={button_color ? {"--cl-chip-line": button_color} as React.CSSProperties : undefined}
+            >
+              {suggestionList.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="cl-suggestion"
+                  disabled={sendingMessage}
+                  onClick={() => sendUserMessage(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+
           {messages.map((message, index) => (
             <ChatMessage
               bot_message_style={
@@ -1312,6 +1409,7 @@ export default function ChatWindow({
               host_url={hostUrl}
               onClientError={notifyClientError}
               onCheckout={onCheckout}
+              isLatest={index === latestAnswerIndex}
               onRetry={index === messages.length - 1 ? handleRetry : undefined}
               retryLabel={t.retry}
               helpfulLabel={t.helpful}
@@ -1332,6 +1430,24 @@ export default function ChatWindow({
               language={language}
               loading_messages={loading_messages}
             />
+          )}
+          {/* Back to the newest message, for a visitor who scrolled up. The
+              anchor has no height, so it never changes the scroll length. */}
+          {showJumpToLatest && (
+            <div className="cl-jump-latest-anchor">
+              <button
+                type="button"
+                className="cl-jump-latest"
+                onClick={jumpToLatest}
+                aria-label={t.jumpToLatest}
+                title={t.jumpToLatest}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 5v14" />
+                  <path d="m19 12-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
         <div className="cl-sr-only" role="status" aria-live="polite" aria-atomic="true">

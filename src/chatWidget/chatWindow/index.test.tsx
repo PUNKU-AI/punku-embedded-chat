@@ -32,14 +32,16 @@ jest.mock('./chatMessage', () => {
     isSend,
     onRetry,
     retryLabel,
+    isLatest,
   }: {
     message: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
+    isLatest?: boolean;
   }) {
     return (
-      <div data-testid={isSend ? 'user-message' : 'bot-message'}>
+      <div data-testid={isSend ? 'user-message' : 'bot-message'} data-latest={isLatest ? 'true' : undefined}>
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
       </div>
@@ -465,7 +467,180 @@ describe('ChatWindow', () => {
 
       expect(scrollTo).toHaveBeenCalledTimes(1);
       expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+      // A streamed answer is pinned at once, without a running smooth scroll.
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
+    });
+
+    // jsdom has no scrolling: set the list's position and report a scroll.
+    const scrollListTo = (list: HTMLElement, top: number) => {
+      Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: top });
+      fireEvent.scroll(list);
+    };
+
+    const streamedAnswer = (text: string): ChatMessageType[] => [
+      { message: 'Question', isSend: true },
+      { message: text, isSend: false, message_id: 'stream', streaming: true },
+    ];
+
+    it('should stop following the stream when the visitor scrolls up, and lead back', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      // At the end (640 - 200 = 440), then the visitor scrolls up to read.
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+      expect(scrollTo).not.toHaveBeenCalled();
+
+      const jump = screen.getByRole('button', { name: 'Jump to the newest message' });
+      fireEvent.click(jump);
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+    });
+
+    it('should offer the way back once the stream grows far below a visitor who scrolled up a little', () => {
+      const height = jest.spyOn(Element.prototype, 'scrollHeight', 'get');
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      // 100px above the end (440): the list stops following, no button yet.
+      scrollListTo(list, 440);
+      scrollListTo(list, 340);
+      expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+
+      // The answer grows by 200px. No scroll event fires, the visitor stays.
+      height.mockReturnValue(840);
+      scrollTo.mockClear();
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now much longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+    });
+
+    it('should follow again when the visitor scrolls back to the end', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollListTo(list, 400);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
+    });
+
+    it('should stop following when the next word comes before the scroll event of the visitor', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      scrollListTo(list, 440);
+      scrollTo.mockClear();
+
+      // The visitor scrolls up; the browser fires the scroll event one frame later.
+      Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 100 });
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+    });
+
+    it('should show the visitor their own new message, even after scrolling up', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const answered: ChatMessageType[] = [
+        { message: 'Question', isSend: true },
+        { message: 'Answer', isSend: false },
+      ];
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={answered} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={[...answered, { message: 'Next question', isSend: true }]} />);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+    });
+  });
+
+  describe('Suggested questions and the newest answer', () => {
+    it('should show up to four suggested questions before the conversation starts', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          suggestions={['Opening hours', '  ', 'Tickets for families', 'Wheelchair access', 'Parking', 'Groups']}
+        />
+      );
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'Opening hours', 'Tickets for families', 'Wheelchair access', 'Parking',
+      ]);
+    });
+
+    it('should name the suggestions in German', () => {
+      render(<ChatWindow {...defaultProps} language="de" suggestions={['Öffnungszeiten']} />);
+
+      expect(screen.getByRole('group', { name: 'Vorgeschlagene Fragen' })).toBeInTheDocument();
+    });
+
+    it('should use button_color for the chip border only, so the text stays readable', () => {
+      render(<ChatWindow {...defaultProps} button_color="#fde68a" suggestions={['Opening hours']} />);
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#fde68a');
+      expect(group.style.getPropertyValue('--cl-chip-ink')).toBe('');
+    });
+
+    it('should send a suggested question when the visitor taps it', async () => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(
+        <ChatWindow {...defaultProps} enable_streaming={true} addMessage={addMessage} suggestions={['Opening hours']} />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Opening hours' }));
+
+      expect(addMessage).toHaveBeenCalledWith({ message: 'Opening hours', isSend: true });
+      expect(mockedStreamMessage.mock.calls[0][2]).toBe('Opening hours');
+      // While the answer is on its way, the questions cannot send again.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Opening hours' })).toBeDisabled());
+    });
+
+    it('should hide the suggestions once the conversation has started', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          messages={[{ message: 'Hello', isSend: true }]}
+          suggestions={['Opening hours']}
+        />
+      );
+
+      expect(screen.queryByRole('group', { name: 'Suggested questions' })).not.toBeInTheDocument();
+    });
+
+    it('should mark only the newest answer, not errors or questions', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          messages={[
+            { message: 'First question', isSend: true },
+            { message: 'First answer', isSend: false },
+            { message: 'Second question', isSend: true },
+            { message: 'Second answer', isSend: false },
+            { message: 'Third question', isSend: true },
+            { message: 'The assistant could not be reached.', isSend: false, error: true },
+          ]}
+        />
+      );
+
+      const latest = Array.from(document.querySelectorAll('[data-latest="true"]'));
+      expect(latest.map((element) => element.textContent)).toEqual(['Second answer']);
     });
   });
 

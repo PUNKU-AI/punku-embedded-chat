@@ -123,6 +123,7 @@ export default function ChatMessage({
   onFeedbackUpdate,
   onClientError,
   onCheckout,
+  isLatest = false,
   onRetry,
   retryLabel = "Try again",
   helpfulLabel = "Helpful",
@@ -133,6 +134,8 @@ export default function ChatMessage({
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
+  /** The newest answer keeps its feedback buttons visible. */
+  isLatest?: boolean;
   onClientError?: (
     error: unknown,
     phase: PunkuChatErrorPhase,
@@ -176,6 +179,25 @@ export default function ChatMessage({
     null
   );
 
+  // The width keys of bot_message_style size the stack around the bubble, so
+  // the stack's default width limit never caps a site's wider answers. The
+  // bubble then fills the stack; percentages still refer to the message row.
+  const {
+    width: answerWidth,
+    minWidth: answerMinWidth,
+    maxWidth: answerMaxWidth,
+    ...answerStyleRest
+  } = bot_message_style || {};
+  const answerStackStyle: React.CSSProperties | undefined =
+    answerWidth === undefined && answerMinWidth === undefined && answerMaxWidth === undefined
+      ? undefined
+      : { width: answerWidth, minWidth: answerMinWidth, maxWidth: answerMaxWidth };
+  const answerBubbleStyle: React.CSSProperties = {
+    ...answerStyleRest,
+    ...(answerWidth !== undefined ? { width: "100%" } : {}),
+    ...(answerMinWidth !== undefined ? { minWidth: "100%" } : {}),
+  };
+
   const handleFeedback = async (type: 'thumbsUp' | 'thumbsDown') => {
     setSelectedFeedback(type);
     const feedbackValue = type === 'thumbsUp' ? 'positive' : 'negative';
@@ -215,7 +237,7 @@ export default function ChatMessage({
   return (
     <div
       className={
-        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start")
+        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start") + (isLatest ? " cl-latest" : "")
       }
     >
       {isSend ? (
@@ -252,21 +274,24 @@ export default function ChatMessage({
           )}
         </div>
       ) : (
-        <div 
-          style={{
-            ...DEFAULT_MESSAGE_TEXT_STYLE,
-            ...(bot_message_style || {}),
-          }} 
-          className={"cl-bot_message"}
-        >
-          <Markdown
-            className={"markdown-body prose flex flex-col word-break-break-word"}
-            remarkPlugins={[remarkGfm]}
-            components={markdownComponents}
+        // The answer bubble, with the feedback buttons under it (not inside it).
+        <div className="cl-message-stack" style={answerStackStyle}>
+          <div
+            style={{
+              ...DEFAULT_MESSAGE_TEXT_STYLE,
+              ...answerBubbleStyle,
+            }}
+            className={"cl-bot_message"}
           >
-            {parsedMessage}
-          </Markdown>
-          
+            <Markdown
+              className={"markdown-body prose flex flex-col word-break-break-word"}
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+              {parsedMessage}
+            </Markdown>
+          </div>
+
           {/* Simple thumbs up/down feedback - hide for welcome message */}
           {!isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">
