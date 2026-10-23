@@ -10,8 +10,9 @@ name: Publish widget bundle to CDN (S3 + CloudFront)
 # (no red/failed runs). See SELF_HOSTING.md for the one-time setup.
 #
 # The validate job calls widget-checks.yml, as CI does: one bundle build, one
-# browser job per profile, then one real Gemini review. A manual run with
-# dry_run checks the selected branch's commit and never starts the publish job.
+# browser job per profile, then one real Gemini review. A manual run must start
+# from the tag it publishes. A manual run with dry_run checks the selected
+# branch's commit and never starts the publish job.
 
 on:
   push:
@@ -19,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to (re)publish, e.g. v1.0.7"
+        description: "Tag to (re)publish, e.g. v1.0.7. Run the workflow from this tag."
         required: true
       dry_run:
         description: "Dry run: check the selected branch's commit as this tag. Nothing is published."
@@ -36,17 +37,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      ref: ${{ steps.ref.outputs.ref }}
       tag: ${{ steps.ref.outputs.tag }}
       publish: ${{ steps.ref.outputs.publish }}
     steps:
+      # The checks always test the commit of this run. A publishing run must
+      # therefore start from the tag itself: a tag push, or a manual run from it.
       - name: Validate version tag
         id: ref
         shell: bash
         env:
           RELEASE_REF: ${{ github.event.inputs.tag || github.ref }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
-          DRY_RUN_SHA: ${{ github.sha }}
+          RUN_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
         run: |
           TAG="${RELEASE_REF#refs/tags/}"
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*([+][0-9A-Za-z.-]+)?$ ]]; then
@@ -55,19 +58,19 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           if [[ "$DRY_RUN" == "true" ]]; then
-            echo "ref=$DRY_RUN_SHA" >> "$GITHUB_OUTPUT"
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "Dry run: checking $DRY_RUN_SHA as $TAG. The publish job does not run."
-          else
-            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+            echo "Dry run: checking $RUN_SHA as $TAG. The publish job does not run."
+          elif [[ "$RUN_REF" == "refs/tags/$TAG" ]]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Run the release from its tag: gh workflow run publish-cdn.yml --ref $TAG -f tag=$TAG"
+            exit 1
           fi
 
   validate:
     needs: tag
     uses: ./.github/workflows/widget-checks.yml
     with:
-      ref: ${{ needs.tag.outputs.ref }}
       real_gemini: true
       check_committed_bundle: true
       bundle_artifact_name: widget-tested-release-bundle

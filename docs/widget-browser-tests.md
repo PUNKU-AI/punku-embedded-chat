@@ -194,6 +194,9 @@ Wait for CI on that commit to pass before pushing the tag.
 Tag-based fallback CDNs can serve a pushed tag before the publish workflow finishes.
 Old tags without these gate files cannot pass the new release workflow.
 
+Every job checks out the commit of its own run, never a ref from an input.
+A manual publication must therefore start from its tag: `gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7`.
+
 To rehearse a release before you create the tag, run the release workflow by hand with `dry_run` on.
 The dry run checks the latest commit of the selected branch as that tag.
 It builds the bundle, compares it with the committed bundle, and runs the browser and Gemini checks.

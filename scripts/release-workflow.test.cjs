@@ -56,7 +56,7 @@ function runTagStep(env) {
   const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-tag-')), 'output');
   fs.writeFileSync(outputFile, '');
   const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', tagStep.run], {
-    env: { PATH: process.env.PATH, GITHUB_OUTPUT: outputFile, DRY_RUN: '', DRY_RUN_SHA: '', ...env },
+    env: { PATH: process.env.PATH, GITHUB_OUTPUT: outputFile, DRY_RUN: '', RUN_REF: '', RUN_SHA: '', ...env },
     encoding: 'utf8',
   });
   const outputs = Object.fromEntries(fs.readFileSync(outputFile, 'utf8').trim().split('\n').filter(Boolean)
@@ -90,6 +90,7 @@ test('CI and releases call the same widget checks', () => {
     "github.actor != 'dependabot[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)");
   assert.equal(widget.with.check_committed_bundle, undefined, 'PRs need not commit a rebuilt bundle');
   const call = checks.on.workflow_call;
+  assert.deepEqual(Object.keys(call.inputs).sort(), ['bundle_artifact_name', 'check_committed_bundle', 'real_gemini']);
   assert.equal(call.inputs.real_gemini.type, 'boolean');
   assert.equal(call.inputs.check_committed_bundle.default, false);
   assert.equal(call.secrets.GEMINI_API_KEY.required, false);
@@ -136,7 +137,6 @@ test('the build job audits, checks types, builds once, and saves the built bundl
   const identity = uniqueStep(steps, (step) => step.id === 'identity', 'bundle identity');
   const artifact = uniqueStep(steps, (step) => step.uses?.startsWith('actions/upload-artifact@'), 'built bundle artifact');
   assertOrdered(steps, [checkout, audit, types, bundle, committed, contracts, identity, artifact]);
-  assert.equal(checkout.with.ref, '${{ inputs.ref }}');
   assert.match(types.run, /npx eslint src --ext \.ts,\.tsx/);
   assert.match(contracts.run, /npm run test:visual-contract/);
   assert.equal(condition(committed.if), 'inputs.check_committed_bundle');
@@ -170,7 +170,6 @@ test('every browser profile tests the downloaded bundle in its own job', () => {
   assert.equal(playwrightProjects.length, 8);
   assert.deepEqual(browser.strategy.matrix.project, playwrightProjects, 'Each Playwright project needs its own job');
   assert.equal(browser.strategy['fail-fast'], false);
-  assert.equal(checkout.with.ref, '${{ needs.build.outputs.commit_sha }}');
   assert.equal(download.with.name, builtArtifact.with.name);
   assert.equal(download.with.path, '.');
   assert.match(bytes.run, /^node scripts\/release-bundle\.cjs verify$/m);
@@ -216,6 +215,22 @@ test('the report job merges every profile, then runs Gemini, verifies identity, 
   assert.ok(paths(evidence.with.path).includes(`${blobs.with.path}/resources`), 'Evidence must keep the merged screenshots');
 });
 
+test('every check job tests the commit of its own run, never a ref from an input', () => {
+  // A ref from a manual run's input would execute that revision in the default branch cache scope.
+  for (const job of [build, browser, report]) {
+    const checkout = uniqueStep(job.steps, (step) => step.uses?.startsWith('actions/checkout@'), 'check checkout');
+    assert.equal(checkout.with, undefined, 'Checks must use the default checkout of the run commit');
+  }
+  for (const job of [browser, report]) {
+    assert.ok(job.steps.some((step) => /node scripts\/release-bundle\.cjs (?:verify|outputs)\b/.test(step.run || '')),
+      'Downloaded bundles must match the checked-out commit');
+  }
+  assert.equal(validate.with.ref, undefined);
+  assert.deepEqual(Object.values(release.jobs).filter((job) => job.steps)
+    .flatMap((job) => job.steps.filter((step) => step.uses?.startsWith('actions/checkout@') && step.with?.ref))
+    .map((step) => step.with.ref), ['${{ needs.validate.outputs.commit_sha }}']);
+});
+
 test('only the live Gemini step receives the key and only the publisher has OIDC permission', () => {
   const gemini = uniqueStep(report.steps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
   assert.equal(gemini.env.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
@@ -236,26 +251,29 @@ test('only the live Gemini step receives the key and only the publisher has OIDC
   assert.equal(publish.permissions['id-token'], 'write');
 });
 
-test('release tags enter through an environment variable and resolve to a canonical tag ref', () => {
+test('release tags enter through an environment variable and publish only from the tag ref', () => {
   assert.equal(condition(tagJob.if), "vars.CDN_DEPLOY_ROLE_ARN != ''");
   assert.equal(tagStep.env.RELEASE_REF, '${{ github.event.inputs.tag || github.ref }}');
   assert.match(tagStep.run, /TAG="\$\{RELEASE_REF#refs\/tags\/\}"/);
   assert.match(tagStep.run, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/);
   assert.match(tagStep.run, /exit 1/);
-  assert.match(tagStep.run, /echo "ref=refs\/tags\/\$TAG" >> "\$GITHUB_OUTPUT"/);
   assert.doesNotMatch(tagStep.run, /\$\{\{/);
+  assert.equal(tagStep.env.RUN_REF, '${{ github.ref }}');
   assert.equal(tagStep.if, undefined);
-  assert.equal(validate.with.ref, '${{ needs.tag.outputs.ref }}');
   assert.deepEqual(tagJob.outputs, {
-    ref: '${{ steps.ref.outputs.ref }}',
     tag: '${{ steps.ref.outputs.tag }}',
     publish: '${{ steps.ref.outputs.publish }}',
   });
-  for (const env of [{ RELEASE_REF: 'refs/tags/v1.0.22' }, { RELEASE_REF: 'v1.0.22', DRY_RUN: 'false' }]) {
-    assert.deepEqual(runTagStep(env), { status: 0, outputs: { tag: 'v1.0.22', ref: 'refs/tags/v1.0.22', publish: 'true' } });
+  const published = { status: 0, outputs: { tag: 'v1.0.22', publish: 'true' } };
+  assert.deepEqual(runTagStep({ RELEASE_REF: 'refs/tags/v1.0.22', RUN_REF: 'refs/tags/v1.0.22' }), published);
+  assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', RUN_REF: 'refs/tags/v1.0.22', DRY_RUN: 'false' }), published);
+  for (const RUN_REF of ['refs/heads/main', 'refs/tags/v1.0.21', '']) {
+    const run = runTagStep({ RELEASE_REF: 'v1.0.22', RUN_REF, DRY_RUN: 'false' });
+    assert.equal(run.status, 1, `A manual run from ${RUN_REF || 'no ref'} must not publish v1.0.22`);
+    assert.equal(run.outputs.publish, undefined);
   }
   for (const RELEASE_REF of ['refs/heads/main', 'v1.0', 'v1.0.22;id', '']) {
-    assert.deepEqual(runTagStep({ RELEASE_REF }), { status: 1, outputs: {} });
+    assert.deepEqual(runTagStep({ RELEASE_REF, RUN_REF: RELEASE_REF }), { status: 1, outputs: {} });
   }
 });
 
@@ -264,10 +282,13 @@ test('a dry run checks the dispatched commit and never reaches the publish job',
   assert.equal(input.type, 'boolean');
   assert.equal(input.default, false);
   assert.equal(tagStep.env.DRY_RUN, '${{ github.event.inputs.dry_run }}');
-  assert.equal(tagStep.env.DRY_RUN_SHA, '${{ github.sha }}');
+  assert.equal(tagStep.env.RUN_SHA, '${{ github.sha }}');
   const sha = 'd6e1b9e71413b6d872ce013f4936067919a2d93e';
-  assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', DRY_RUN: 'true', DRY_RUN_SHA: sha }),
-    { status: 0, outputs: { tag: 'v1.0.22', ref: sha, publish: 'false' } });
-  assert.deepEqual(runTagStep({ RELEASE_REF: 'main', DRY_RUN: 'true', DRY_RUN_SHA: sha }), { status: 1, outputs: {} });
+  for (const RUN_REF of ['refs/heads/ci/parallel-browser-tests', 'refs/tags/v1.0.22']) {
+    assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', DRY_RUN: 'true', RUN_REF, RUN_SHA: sha }),
+      { status: 0, outputs: { tag: 'v1.0.22', publish: 'false' } });
+  }
+  assert.deepEqual(runTagStep({ RELEASE_REF: 'main', DRY_RUN: 'true', RUN_REF: 'refs/heads/main', RUN_SHA: sha }),
+    { status: 1, outputs: {} });
   assert.match(condition(publish.if), /&& needs\.tag\.outputs\.publish == 'true'$/);
 });

@@ -121,7 +121,15 @@ gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
 
 GitHub tags remain available to fallback CDNs.
 Manual publication requires an existing version tag with the release gate files and matching committed bundle.
-Old tags that lack those files fail validation and cannot use this new workflow.
+Start a manual publication from the tag itself, so that the checks test the tagged commit:
+
+```sh
+gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7
+```
+
+A run from any other branch or tag fails, unless `dry_run` is on.
+A manual run uses the workflow file of the selected tag.
+Old tags that lack the gate files fail validation.
 
 ### Header icons (`header_icon_name`)
 

@@ -3,14 +3,13 @@ name: Widget checks
 # Build the release bundle once, test that exact file in one job per browser
 # profile, merge the profile reports, and run the real Gemini review once.
 # CI and the release workflow both call this workflow.
+#
+# Every job checks out the commit of the run itself, never a ref from an input.
+# The browser and report jobs also require the bundle manifest's commit.
 
 on:
   workflow_call:
     inputs:
-      ref:
-        description: Commit or tag to check. Empty uses the caller's commit.
-        type: string
-        default: ""
       real_gemini:
         description: Require real Gemini calls. False only when PR secrets are unavailable.
         type: boolean
@@ -55,8 +54,6 @@ jobs:
       bundle_sha: ${{ steps.identity.outputs.bundle_sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -120,8 +117,6 @@ jobs:
           - tablet
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.build.outputs.commit_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -166,8 +161,6 @@ jobs:
       bundle_sha: ${{ steps.identity.outputs.bundle_sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.build.outputs.commit_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
