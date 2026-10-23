@@ -132,7 +132,15 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - A link alone in a paragraph is a filled button in the accent colour. With `button_color`, the button uses `button_color` and `button_text_color`.
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
-- With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency. Filled link buttons keep the accent colour.
+- With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency.
+
+**Readable controls on your colours:** your colours can make a control vanish, for example a filled link button in the same colour as the answer bubble. The widget checks every control on the surface behind it (WCAG 1.4.11 and 1.4.3) and keeps every colour that reads:
+- A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
+- If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
+- The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
+- Your `link_color` stays from 3:1 on the answer bubble. Below that, the widget makes it just dark or light enough to reach 4.5:1.
+- "Try again" in an error message takes white or black if the error text colour falls below 4.5:1.
+- Gradients and colour names cannot be measured: those controls stay as they are.
 
 **Color recommendations:**
 - Ensure sufficient contrast with the background for accessibility
@@ -624,6 +632,10 @@ Use the widget API to customize your widget:
 ## Header and input bar
 
 The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
+
+In the default and dark themes, the avatar is a light circle with the icon in the theme's blue. A `header_icon` image shows without a circle.
+
+The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button, the header icon and the link buttons.
 
 The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 

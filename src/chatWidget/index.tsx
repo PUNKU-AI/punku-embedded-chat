@@ -1791,7 +1791,9 @@ video {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
-  color: inherit;
+  /* --cl-retry-ink is set only where the error text colour would not reach
+     4.5:1 on the error box (controlColors.ts). */
+  color: var(--cl-retry-ink, inherit);
   background: transparent;
   border: 1px solid currentColor;
   border-radius: 9px;
@@ -1916,11 +1918,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: #334155;
 }
 
+/* The default theme uses one blue, #0969da (5.2:1 with white text), for the
+   visitor bubbles, the launcher, the send button and the accent (--cl-accent).
+   The hover is #085cc0. */
 .theme-default .cl-input-element:focus-visible {
-  border-color: #3b82f6;
+  border-color: #0969da;
   background-color: #ffffff;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.12);
 }
 
 .theme-default .cl-input-element::placeholder {
@@ -1928,7 +1933,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .theme-default .cl-user_message {
-  background: #3b82f6;
+  background: #0969da;
   color: #ffffff;
 }
 
@@ -1940,14 +1945,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-default.cl-trigger,
 .theme-default .cl-trigger,
 .theme-default .cl-send-button {
-  background: #3b82f6;
+  background: #0969da;
   transition: background-color 0.2s;
 }
 
 .theme-default.cl-trigger:hover,
 .theme-default .cl-trigger:hover,
 .theme-default .cl-send-button:hover {
-  background: #2563eb;
+  background: #085cc0;
 }
 
 /* Theme: Ocean (Deep & Vibrant) */
@@ -2179,10 +2184,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 /* ---------- Suggested questions, feedback and scrolling ----------
    Chip colours per theme (a site's button_color replaces the chip line),
-   and the colours of the button back to the newest message. */
+   and the colours of the button back to the newest message. The chip line
+   reaches 3:1 on the list (WCAG 1.4.11); keep THEME_COLORS in
+   controlColors.ts in step with these values. */
 .cl-window {
   --cl-chip-ink: #1d4ed8;
-  --cl-chip-line: #bfd3fb;
+  --cl-chip-line: #1d4ed8;
   --cl-chip-bg: #ffffff;
   --cl-chip-hover: #eff4ff;
   --cl-jump-bg: #ffffff;
@@ -2192,7 +2199,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window.theme-dark {
   --cl-chip-ink: #c7d2fe;
-  --cl-chip-line: rgba(129, 140, 248, 0.45);
+  --cl-chip-line: #818cf8;
   --cl-chip-bg: transparent;
   --cl-chip-hover: rgba(129, 140, 248, 0.12);
   --cl-jump-bg: #1e293b;
@@ -2202,7 +2209,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window.theme-ocean {
   --cl-chip-ink: #bae6fd;
-  --cl-chip-line: rgba(56, 189, 248, 0.45);
+  --cl-chip-line: #38bdf8;
   --cl-chip-bg: transparent;
   --cl-chip-hover: rgba(56, 189, 248, 0.12);
   --cl-jump-bg: #1e293b;
@@ -2212,7 +2219,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window.theme-aurora {
   --cl-chip-ink: #f5d0fe;
-  --cl-chip-line: rgba(232, 121, 249, 0.45);
+  --cl-chip-line: #e879f9;
   --cl-chip-bg: transparent;
   --cl-chip-hover: rgba(232, 121, 249, 0.12);
   --cl-jump-bg: #3b0764;
@@ -2437,7 +2444,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* ---------- Header and composer colours, per theme ----------
    --cl-line separates the header and the composer from the list, --cl-field
    and --cl-field-line draw the composer field, --cl-ring is its focus ring,
-   --cl-muted colours the AI notice, --cl-accent fills the avatar. */
+   --cl-muted colours the AI notice, --cl-accent colours the avatar icon. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-line: #e6ebf1;
@@ -2517,10 +2524,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
-/* The default and dark headers are neutral: the avatar carries the accent. */
-.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar,
+/* The default and dark headers are neutral: a light circle carries the icon,
+   which takes the circle's colour (currentColor). */
+.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar {
+  background: #e1edfb; /* #0969da at 12% on white */
+  color: var(--cl-accent);
+}
+
 .cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: var(--cl-accent);
+  background: #202758; /* #5558e8 at 24% on the dark header */
+  color: #a5b4fc;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo {
@@ -2794,6 +2807,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-default {
+  --cl-accent: #0969da;
+  --cl-accent-hover: #085cc0;
+  --cl-ring: rgba(9, 105, 218, 0.18);
   --cl-bot-line: #e2e8f0;
 }
 
@@ -2887,22 +2903,25 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
+/* --cl-link-button-fill and --cl-link-button-label are set only where the
+   accent would vanish on the answer bubble (controlColors.ts). */
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover,
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:visited {
-  background: var(--cl-accent);
-  color: var(--cl-on-accent) !important;
+  background: var(--cl-link-button-fill, var(--cl-accent));
+  color: var(--cl-link-button-label, var(--cl-on-accent)) !important;
 }
 
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover {
-  background: var(--cl-accent-hover);
+  background: var(--cl-link-button-fill, var(--cl-accent-hover));
   opacity: 1 !important;
 }
 
+/* The outline takes the full link colour: a lighter outline would not reach
+   3:1 against the bubble (WCAG 1.4.11). */
 .cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
 .cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
-  border: 1px solid rgba(127, 127, 127, 0.45);
-  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border: 1px solid currentColor;
 }
 
 .cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover,
