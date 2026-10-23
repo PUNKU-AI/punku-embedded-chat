@@ -166,6 +166,7 @@ jobs:
       # reach those sites sooner. The bundle is already on cdn.punku.ai here,
       # so a failed purge only logs a warning and never fails the release.
       - name: Purge jsDelivr aliases (best effort)
+        id: jsdelivr-purge
         continue-on-error: true
         env:
           MAJOR: ${{ steps.v.outputs.major }}

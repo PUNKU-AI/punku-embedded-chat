@@ -51,7 +51,7 @@ function paths(value) {
 }
 
 const tagStep = uniqueStep(tagJob.steps, (step) => step.id === 'ref', 'release tag validation');
-const purgeStep = uniqueStep(publish.steps, (step) => step.run?.includes('purge.jsdelivr.net'), 'jsDelivr purge');
+const purgeStep = uniqueStep(publish.steps, (step) => step.id === 'jsdelivr-purge', 'jsDelivr purge');
 
 function runTagStep(env) {
   const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-tag-')), 'output');
