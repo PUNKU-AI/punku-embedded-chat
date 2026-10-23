@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ChatTrigger from "./chatTrigger";
 import ChatWindow from "./chatWindow";
-import { ChatMessageType } from "../types/chatWidget";
+import { ChatMessageType, LoadingMessages } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language, toLanguage, translations } from "../translations";
@@ -230,7 +230,7 @@ export default function ChatWidget({
   error_message_style?: React.CSSProperties;
   send_button_style?: React.CSSProperties;
   placeholder_sending?: string;
-  loading_messages?: string[];
+  loading_messages?: LoadingMessages;
   /** Replaces the AI notice under the input (EU AI Act, Article 50). */
   ai_notice_text?: string;
   /** false hides the AI notice, for sites that show it elsewhere. */
@@ -1586,52 +1586,44 @@ video {
   margin-top: 12px;
 }
 
-/* Typing indicator: three dots and a thinking phrase in the assistant's bubble. */
-.cl-typing {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cl-typing-dots {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-}
-
-.cl-typing-dots span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.35;
-  animation: cl-typing 1.2s ease-in-out infinite;
-}
-
-.cl-typing-dots span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.cl-typing-dots span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-.cl-typing-text {
+/* Typing indicator: a thinking phrase in the assistant's bubble, with dots
+   that grow after it: . then .. then ... (400 ms each). A hidden dot keeps its
+   width, so the bubble and the phrase never move. */
+.cl-typing > span {
   font-size: 15px;
   opacity: 0.85;
 }
 
-@keyframes cl-typing {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
-  30% { transform: translateY(-3px); opacity: 0.85; }
+.cl-typing-dots {
+  white-space: nowrap;
 }
 
+.cl-typing-dots span:nth-child(2) {
+  animation: cl-typing-dot-2 1.2s step-end infinite;
+}
+
+.cl-typing-dots span:nth-child(3) {
+  animation: cl-typing-dot-3 1.2s step-end infinite;
+}
+
+@keyframes cl-typing-dot-2 {
+  0% { opacity: 0; }
+  33.333% { opacity: 1; }
+}
+
+@keyframes cl-typing-dot-3 {
+  0% { opacity: 0; }
+  66.667% { opacity: 1; }
+}
+
+/* Reduced motion: a still ellipsis. */
 @media (prefers-reduced-motion: reduce) {
   .cl-typing-dots span {
-    animation: none;
-    opacity: 0.6;
+    display: none;
+  }
+
+  .cl-typing-dots::after {
+    content: "\\2026";
   }
 }
 

@@ -3,7 +3,7 @@ import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVis
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChatMessageType } from "../../types/chatWidget";
+import { ChatMessageType, LoadingMessages } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
@@ -192,7 +192,7 @@ export default function ChatWindow({
   language?: Language;
   link_color?: string;
   show_close_button_on_desktop?: boolean;
-  loading_messages?: string[];
+  loading_messages?: LoadingMessages;
   bottom_offset?: number;
   top_offset?: number;
   left_offset?: number;

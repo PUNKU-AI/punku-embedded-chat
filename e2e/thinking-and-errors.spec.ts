@@ -1,11 +1,15 @@
 import { expect, Page, test } from '@playwright/test';
-import { thinkingMessages } from '../src/translations';
+import { splitThinkingText } from '../src/chatPlaceholder/phrases';
+import { Language, thinkingMessages } from '../src/translations';
 import { activate, loadWidget } from './widget-helpers';
 
 // Thinking and error states. While the assistant prepares an answer, its bubble
-// shows three dots and a thinking phrase in the chat's language, and the field
-// stays enabled. A failed answer shows a plain sentence and a Try again button,
-// which sends the visitor's question again.
+// shows a thinking phrase in the chat's language with dots that grow after it,
+// and the field stays enabled. A failed answer shows a plain sentence and a
+// Try again button, which sends the visitor's question again.
+
+// The built-in phrases as the bubble shows them: without their own "…".
+const shownPhrases = (language: Language) => thinkingMessages[language].map((text) => splitThinkingText(text)[0]);
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -104,7 +108,7 @@ function chatState(page: Page) {
   });
 }
 
-test('the thinking bubble shows dots and an English phrase, and the field stays enabled', async ({ page }) => {
+test('the thinking bubble shows an English phrase and dots, and the field stays enabled', async ({ page }) => {
   const assistant = await mockAssistant(page, ['answer'], { hold: [0] });
   await openChat(page);
   await page.keyboard.type(question);
@@ -112,7 +116,7 @@ test('the thinking bubble shows dots and an English phrase, and the field stays 
 
   await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
   const thinking = await chatState(page);
-  expect(thinkingMessages.en).toContain(thinking.typingText);
+  expect(shownPhrases('en')).toContain(thinking.typingText);
   expect(thinking.status).toBe('The assistant is writing');
   expect(thinking.fieldDisabled).toBe(false);
   expect(thinking.placeholder).toBe('Type your message...');
@@ -147,7 +151,7 @@ test('a flow error shows a plain German sentence, and Try again keeps focus and 
 
   await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
   const thinking = await chatState(page);
-  expect(thinkingMessages.de).toContain(thinking.typingText);
+  expect(shownPhrases('de')).toContain(thinking.typingText);
   expect(thinking.status).toBe('Der Assistent schreibt');
   expect(thinking.placeholder).toBe('Nachricht eingeben...');
 
@@ -194,6 +198,102 @@ test('a network failure in the dark theme shows a readable English sentence', as
   expect(failed.errorInsideList).toBe(true);
   // Light red text on a dark red tint, readable on the dark window.
   expect(failed.errorColors?.color).toBe('rgb(254, 202, 202)');
+});
+
+// The dots grow after the phrase: . then .. then ... every 400 ms. The hidden
+// dots keep their width, so the phrase and the bubble do not move.
+test('the dots grow after the phrase, and the phrase does not move', async ({ page }) => {
+  await mockAssistant(page, ['answer'], { hold: [0] });
+  await openChat(page, { loading_messages: JSON.stringify(['Checking the timetable…']) });
+  await page.keyboard.type(question);
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
+  expect((await chatState(page)).typingText).toBe('Checking the timetable');
+
+  const samples = await page.evaluate(async () => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const bubble = root.querySelector<HTMLElement>('.cl-typing')!;
+    const text = bubble.querySelector<HTMLElement>('.cl-typing-text')!;
+    const dots = Array.from(bubble.querySelectorAll<HTMLElement>('.cl-typing-dots span'));
+    // The message fades in for 180 ms.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const result = [];
+    for (let step = 0; step < 50; step += 1) {
+      const textBox = text.getBoundingClientRect();
+      const firstDot = dots[0].getBoundingClientRect();
+      result.push({
+        visible: dots.filter((dot) => getComputedStyle(dot).opacity === '1').length,
+        bubbleText: bubble.textContent,
+        textRight: textBox.right,
+        bubbleWidth: bubble.getBoundingClientRect().width,
+        dotsAfterText: firstDot.left >= textBox.right - 0.5 && Math.abs(firstDot.bottom - textBox.bottom) < 2,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    return result;
+  });
+
+  // Each step adds a dot; after three dots it starts again with one.
+  const steps = samples.map((sample) => sample.visible).filter((visible, index, all) => visible !== all[index - 1]);
+  expect(new Set(steps)).toEqual(new Set([1, 2, 3]));
+  steps.slice(1).forEach((visible, index) => expect(visible).toBe((steps[index] % 3) + 1));
+  for (const sample of samples) {
+    expect(sample.bubbleText).toBe('Checking the timetable...');
+    expect(sample.textRight).toBeCloseTo(samples[0].textRight, 1);
+    expect(sample.bubbleWidth).toBeCloseTo(samples[0].bubbleWidth, 1);
+    expect(sample.dotsAfterText).toBe(true);
+  }
+});
+
+test.describe('reduced motion', () => {
+  test.use({ reducedMotion: 'reduce' });
+
+  test('the thinking bubble shows a still ellipsis', async ({ page }) => {
+    await mockAssistant(page, ['answer'], { hold: [0] });
+    await openChat(page);
+    await page.keyboard.type(question);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
+
+    const dots = await page.evaluate(() => {
+      const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+      const group = root.querySelector<HTMLElement>('.cl-typing-dots')!;
+      return {
+        shown: Array.from(group.children).map((dot) => getComputedStyle(dot).display),
+        after: getComputedStyle(group, '::after').content,
+        animations: group.getAnimations({ subtree: true }).length,
+      };
+    });
+    expect(dots).toEqual({ shown: ['none', 'none', 'none'], after: '"…"', animations: 0 });
+  });
+});
+
+// A site's loading_messages in one language give way to the built-in phrases
+// when they are clearly in another language than the chat. Texts per language
+// pick the chat's language.
+test('English thinking texts in an Italian chat give way to the Italian phrases', async ({ page }) => {
+  await mockAssistant(page, ['answer'], { hold: [0] });
+  await openChat(page, {
+    default_language: 'it',
+    loading_messages: JSON.stringify(['Finding the best options…', 'Checking availability and prices…', 'Preparing your booking…']),
+  });
+  await page.keyboard.type(question);
+  await page.keyboard.press('Enter');
+
+  await expect.poll(async () => (await chatState(page)).typingDots).toBe(3);
+  expect(shownPhrases('it')).toContain((await chatState(page)).typingText);
+});
+
+test('thinking texts per language show the chat language', async ({ page }) => {
+  await mockAssistant(page, ['answer'], { hold: [0] });
+  await openChat(page, {
+    default_language: 'pl',
+    loading_messages: JSON.stringify({ pl: ['Szukam najlepszych opcji…'], default: ['Finding the best options…'] }),
+  });
+  await page.keyboard.type(question);
+  await page.keyboard.press('Enter');
+
+  await expect.poll(async () => (await chatState(page)).typingText).toBe('Szukam najlepszych opcji');
 });
 
 // A site's error_message_style can set only some colours. The box then starts
