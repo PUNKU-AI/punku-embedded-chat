@@ -143,6 +143,7 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - The AI notice under the input field needs 4.5:1 on the input bar (`background_color` or `input_container_style`). Below that, its grey becomes just dark or light enough.
 - The closed hint text needs 4.5:1 on the hint. Your own colours win over the widget's: with only `closed_widget_hint_background_color`, the text turns white or black; with only `closed_widget_hint_text_color`, the hint turns dark. With both, the widget makes your background just dark or light enough for your text, else the text takes white or black.
 - "Try again" in an error message takes white or black if the error text colour falls below 4.5:1.
+- The header icon needs 3:1 on the header. Below that, it sits on a plate in a shade of the header colour (see [Header and input bar](#header-and-input-bar)).
 - Gradients and colour names cannot be measured: those controls stay as they are.
 
 **Color recommendations:**
@@ -640,11 +641,11 @@ Use the widget API to customize your widget:
 
 ## Header and input bar
 
-The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
+The header is one row: the header icon, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
 
-In the default and dark themes, the avatar is a light circle with the icon in the theme's blue. A `header_icon` image shows without a circle.
+The header icon sits directly on the header, in the colour of the title: the theme's header text colour, or `button_text_color` with `button_color`. Only where that colour would vanish on the header (below 3:1, WCAG 1.4.11), for example a white icon on a white `button_color`, the icon sits on a round plate. The plate is a darker or lighter shade of the header colour, just enough for 3:1. A `header_icon` image never gets a plate.
 
-The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button, the header icon and the link buttons.
+The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button and the link buttons.
 
 The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 

@@ -14,7 +14,8 @@ const props = {
 const icons = ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'];
 
 type Rgb = [number, number, number];
-// backdrop: the colour behind the icon. The header icon sits on its avatar.
+// backdrop: the colour behind the icon: the header, or the plate that carries
+// the header icon where its colour would vanish on the header.
 type Icon = { stroke: string; visible: boolean; backdrop: string };
 type Header = { background: string; icons: Record<string, Icon | null> };
 
@@ -44,10 +45,11 @@ async function headerColours(page: Page): Promise<Header | null> {
       const rect = icon.getBoundingClientRect();
       const style = getComputedStyle(icon);
       const avatar = icon.closest('.cl-header-avatar');
+      const plate = avatar ? getComputedStyle(avatar).backgroundColor : null;
       result[selector] = {
         stroke: style.stroke,
         visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility === 'visible',
-        backdrop: getComputedStyle(avatar || header).backgroundColor,
+        backdrop: plate && plate !== 'rgba(0, 0, 0, 0)' ? plate : getComputedStyle(header).backgroundColor,
       };
     }
     return { background: getComputedStyle(header).backgroundColor, icons: result };
@@ -82,10 +84,9 @@ async function expectVisibleHeaderIcons(page: Page, extraProps: Record<string, s
 
   const header = (await headerColours(page))!;
   expect(header.background).toBe('rgb(255, 255, 255)');
-  // The header icon is blue on its light circle; the actions are dark on the white header.
+  // The header icon and the actions are dark on the white header, without a plate.
   const expected: Record<string, { stroke: string; backdrop: string }> = {
-    // The default blue #0969da on its light circle (#0969da at 12% on white).
-    '.cl-header-logo': { stroke: 'rgb(9, 105, 218)', backdrop: 'rgb(225, 237, 251)' },
+    '.cl-header-logo': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
     '.cl-new-session-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
     '.cl-close-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
   };
@@ -114,4 +115,18 @@ test.describe('phone 390x844', () => {
     // The phone layout always shows the close X, as on the live embeds.
     await expectVisibleHeaderIcons(page);
   });
+});
+
+// The header icon gets a plate only where its colour would vanish on the
+// header, here white on a white button_color.
+test('the header icon sits on a plate where it would vanish on the header', async ({ page }) => {
+  await loadWidget(page, { ...props, button_color: '#ffffff' });
+  await expect.poll(async () => (await headerColours(page))?.icons['.cl-header-logo']?.visible).toBe(true);
+
+  const header = (await headerColours(page))!;
+  const icon = header.icons['.cl-header-logo']!;
+  expect(header.background).toBe('rgb(255, 255, 255)');
+  expect(icon.stroke).toBe('rgb(255, 255, 255)');
+  expect(icon.backdrop).not.toBe(header.background);
+  expect(contrast(rgb(icon.stroke), rgb(icon.backdrop))).toBeGreaterThanOrEqual(3);
 });

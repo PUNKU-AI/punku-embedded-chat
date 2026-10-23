@@ -15,6 +15,10 @@
  * A theme colour falls back to the theme's link colour, else white or black.
  * The label then gets a colour that reaches 4.5:1 on the new fill: its own
  * colour, the surface colour, or white or black.
+ *
+ * The header icon sits on the header without a plate. Only where its colour
+ * would vanish on the header (below 3:1), it gets a plate: a shade of the
+ * header colour on which the icon reaches 3:1.
  */
 import { BLACK, WHITE, Rgb, contrastRatio, mix, paintOver, parseColor, toHex } from "./colorContrast";
 
@@ -54,6 +58,10 @@ type ThemeColors = {
   errorInk: string;
   /** The AI notice in the input bar (--cl-muted). */
   muted: string;
+  /** The header background: one colour, or each stop of a gradient. */
+  header: string[];
+  /** The header icons and title without button_color. */
+  headerInk: string;
 };
 
 const LIGHT_BASE: ThemeColors = {
@@ -74,6 +82,9 @@ const LIGHT_BASE: ThemeColors = {
   errorBg: "#fef2f2",
   errorInk: "#991b1b",
   muted: "#64748b",
+  // The base header of the stylesheet. Only the default theme makes it white.
+  header: ["#1a1a1a"],
+  headerInk: "#ffffff",
 };
 
 export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
@@ -85,6 +96,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     window: "#ffffff",
     accent: "#0969da",
     send: "#0969da",
+    header: ["#ffffff"],
+    headerInk: "#0f172a",
   },
   dark: {
     bubble: "#1e293b",
@@ -104,6 +117,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     errorBg: "rgba(127, 29, 29, 0.32)",
     errorInk: "#fecaca",
     muted: "#94a3b8",
+    header: ["#0f172a"],
+    headerInk: "#ffffff",
   },
   ocean: {
     bubble: "#1e293b",
@@ -123,6 +138,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     errorBg: "rgba(127, 29, 29, 0.32)",
     errorInk: "#fecaca",
     muted: "#94a3b8",
+    header: ["#0c4a6e", "#075985"],
+    headerInk: "#ffffff",
   },
   aurora: {
     bubble: "rgba(76, 29, 149, 0.5)",
@@ -143,6 +160,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     errorBg: "rgba(127, 29, 29, 0.35)",
     errorInk: "#fecaca",
     muted: "#c4b5fd",
+    header: ["#4c1d95", "#7c3aed", "#db2777"],
+    headerInk: "#ffffff",
   },
   "punku-ai-bookingkit": LIGHT_BASE,
   swarovski: LIGHT_BASE,
@@ -179,6 +198,8 @@ export type GuardedColors = {
   sendIcon?: string;
   retryLabel?: string;
   noticeInk?: string;
+  /** A plate behind the header icon, only where the icon would vanish on the header. */
+  headerIconPlate?: string;
 };
 
 /** One measured pair: a control's colour and the colour behind it. */
@@ -491,6 +512,28 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     const retry = contrast(errorInk, errorBg) >= TEXT_MIN ? errorInk : pickLabel(errorBg, TEXT_MIN, null, null);
     if (!same(retry, errorInk)) colors.retryLabel = toHex(retry);
     measure("try again label", retry, errorBg, TEXT_MIN);
+  }
+
+  // The header icon. button_text_color colours it only together with
+  // button_color, as the title. A colour the widget cannot read (a colour
+  // name, a translucent header) leaves it as it is.
+  const headerInk = parseColor(props.button_color ? props.button_text_color || "#ffffff" : theme.headerInk);
+  const headers = (props.button_color ? [props.button_color] : theme.header).map((color) => resolve(color, null));
+  if (headerInk && headers.every((header): header is Rgb => !!header)) {
+    // On a gradient, the stop where the icon reads worst.
+    const inkOn = (surface: Rgb) => paintOver(headerInk.rgb, headerInk.alpha, surface);
+    const worst = headers.reduce((a, b) => (contrast(inkOn(b), b) < contrast(inkOn(a), a) ? b : a));
+    let backdrop = worst;
+    if (contrast(inkOn(worst), worst) < ICON_MIN) {
+      // The smallest darker or lighter shade of the header that carries the
+      // icon, up to black or white. None helps a nearly transparent icon.
+      const plate = nudge(worst, inkOn(worst), (candidate) => contrast(inkOn(candidate), candidate) >= ICON_MIN);
+      if (plate) {
+        backdrop = plate;
+        colors.headerIconPlate = toHex(plate);
+      }
+    }
+    measure("header icon", inkOn(backdrop), backdrop, ICON_MIN);
   }
 
   return { colors, pairs };

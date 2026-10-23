@@ -2456,7 +2456,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* ---------- Header and composer colours, per theme ----------
    --cl-line separates the header and the composer from the list, --cl-field
    and --cl-field-line draw the composer field, --cl-ring is its focus ring,
-   --cl-muted colours the AI notice, --cl-accent colours the avatar icon. */
+   --cl-muted colours the AI notice, --cl-accent marks the focused field. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-line: #e6ebf1;
@@ -2524,34 +2524,31 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   font-weight: 600;
 }
 
+/* The header icon sits on the header, in the colour of the title. */
 .cl-window .cl-header-avatar {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.16);
-  background: color-mix(in srgb, currentColor 16%, transparent);
-}
-
-/* The default and dark headers are neutral: a light circle carries the icon,
-   which takes the circle's colour (currentColor). */
-.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: #e1edfb; /* #0969da at 12% on white */
-  color: var(--cl-accent);
-}
-
-.cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: #202758; /* #5558e8 at 24% on the dark header */
-  color: #a5b4fc;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
+/* A plate only where the icon colour would vanish on the header, for example
+   white on a white header (controlColors.ts sets its colour). */
+.cl-window .cl-header-avatar--plate {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.cl-window .cl-header-avatar--plate .cl-header-logo {
   width: 20px;
   height: 20px;
-  margin: 0;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo path,

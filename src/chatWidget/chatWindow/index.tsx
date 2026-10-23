@@ -848,11 +848,6 @@ export default function ChatWindow({
   const headerIconColor = button_color
     ? button_text_color || '#FFFFFF'
     : theme === "default" ? "#0f172a" : "white";
-  // The default and dark themes put the header icon on a light accent circle.
-  // The icon takes the circle's colour (currentColor, set in the stylesheet).
-  // Elsewhere it follows the header colour.
-  const avatarOnAccent = !button_color && (theme === "default" || theme === "dark");
-  const avatarIconColor = avatarOnAccent ? "currentColor" : headerIconColor;
 
   // The bar under the messages holds the field and the AI notice. A fixed
   // height from input_container_style sizes the field, so the text never
@@ -1283,12 +1278,18 @@ export default function ChatWindow({
                 height="38"
               />
             ) : (
-              <div className="cl-default-header-icon cl-header-avatar" aria-hidden="true">
+              // The icon sits on the header. A plate carries it only where its
+              // colour would vanish on the header (controlColors.ts).
+              <div
+                className={"cl-default-header-icon cl-header-avatar" + (guarded.headerIconPlate ? " cl-header-avatar--plate" : "")}
+                style={guarded.headerIconPlate ? {backgroundColor: guarded.headerIconPlate} : undefined}
+                aria-hidden="true"
+              >
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={avatarIconColor}
-                  size={20}
+                  color={headerIconColor}
+                  size={24}
                 />
               </div>
             )}
