@@ -1804,42 +1804,45 @@ describe('ChatWindow', () => {
         <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} {...props} />
       );
 
+    // The header icon, then the new-chat and close icons.
     const headerIconStrokes = () =>
       ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'].map((selector) =>
         document.querySelector(selector)?.getAttribute('stroke')
       );
 
-    // Header text colour of each theme without button_color.
+    // Header text colour of each theme without button_color, and the header
+    // icon colour: white on the accent avatar of the default and dark themes.
     const themeHeaderColors = [
-      ['default', '#0f172a'],
-      ['dark', 'white'],
-      ['ocean', 'white'],
-      ['aurora', 'white'],
-      ['punku-ai-bookingkit', 'white'],
-      ['swarovski', 'white'],
+      ['default', '#0f172a', '#FFFFFF'],
+      ['dark', 'white', '#FFFFFF'],
+      ['ocean', 'white', 'white'],
+      ['aurora', 'white', 'white'],
+      ['punku-ai-bookingkit', 'white', 'white'],
+      ['swarovski', 'white', 'white'],
     ] as const;
 
-    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color, logo) => {
       renderHeader({ theme });
 
-      expect(headerIconStrokes()).toEqual([color, color, color]);
+      expect(headerIconStrokes()).toEqual([logo, color, color]);
     });
 
     it.each(themeHeaderColors)(
       'ignores button_text_color without button_color in the %s theme',
-      (theme, color) => {
+      (theme, color, logo) => {
         renderHeader({ theme, button_text_color: '#FFEE00' });
 
-        expect(headerIconStrokes()).toEqual([color, color, color]);
+        expect(headerIconStrokes()).toEqual([logo, color, color]);
       }
     );
 
-    it('keeps the default header icons dark when button_text_color is white', () => {
+    it('keeps the default header actions dark when button_text_color is white', () => {
       renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
 
       const header = document.querySelector('.cl-header') as HTMLElement;
       expect(header.getAttribute('style')).toBeNull();
-      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+      // The header icon is white on its accent avatar; the actions sit on the white header.
+      expect(headerIconStrokes()).toEqual(['#FFFFFF', '#0f172a', '#0f172a']);
     });
 
     it.each(themeHeaderColors.map(([theme]) => theme))(
@@ -1862,6 +1865,147 @@ describe('ChatWindow', () => {
 
       const sendIcon = document.querySelector('.cl-send-icon') as SVGElement;
       expect(sendIcon.getAttribute('style')).toContain('stroke: #FFEE00');
+    });
+  });
+
+  describe('Header, composer and AI notice', () => {
+    it('should label the header actions in the chat language', () => {
+      const { rerender } = render(
+        <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} />
+      );
+      expect(screen.getByRole('button', { name: 'New conversation' })).toHaveClass('cl-header-btn');
+      // Desktop hides the close button by default, so check its label directly.
+      expect(document.querySelector('.cl-close-btn')).toHaveAttribute('aria-label', 'Close chat');
+
+      rerender(<ChatWindow {...defaultProps} language="de" onStartNewSession={jest.fn()} onClose={jest.fn()} />);
+      expect(screen.getByRole('button', { name: 'Neues Gespräch' })).toBeInTheDocument();
+      expect(document.querySelector('.cl-close-btn')).toHaveAttribute('aria-label', 'Chat schließen');
+    });
+
+    it('should put the title and the status in one header row', () => {
+      render(<ChatWindow {...defaultProps} window_title="Museum information" />);
+
+      const content = document.querySelector('.cl-header-content') as HTMLElement;
+      expect(content.querySelector('.cl-header-title')).toHaveTextContent('Museum information');
+      expect(content.querySelector('.cl-header-subtitle')).toHaveTextContent('Powered by PUNKU.AI & bookingkit');
+      expect(content.querySelector('.cl-header-actions')).toBeInTheDocument();
+    });
+
+    it('should mark a header that a site colours', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} />);
+      expect(document.querySelector('.cl-header')).not.toHaveClass('cl-header--colored');
+
+      rerender(<ChatWindow {...defaultProps} button_color="#7c2d12" />);
+      expect(document.querySelector('.cl-header')).toHaveClass('cl-header--colored');
+    });
+
+    it.each([
+      ['en', 'You are chatting with an AI assistant. Answers can contain mistakes.'],
+      ['de', 'Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten.'],
+    ] as const)('should show the AI notice in %s by default', (language, notice) => {
+      render(<ChatWindow {...defaultProps} language={language} />);
+
+      expect(document.querySelector('.cl-ai-notice')).toHaveTextContent(notice);
+    });
+
+    it('should show the site text as the AI notice', () => {
+      render(<ChatWindow {...defaultProps} ai_notice_text="Our assistant is an AI. Please check important details." />);
+
+      expect(document.querySelector('.cl-ai-notice')).toHaveTextContent('Our assistant is an AI. Please check important details.');
+    });
+
+    it('should hide the AI notice with show_ai_notice false', () => {
+      render(<ChatWindow {...defaultProps} show_ai_notice={false} />);
+
+      expect(document.querySelector('.cl-ai-notice')).not.toBeInTheDocument();
+    });
+
+    it('should name the send button and enable it only when there is text', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const sendButton = screen.getByRole('button', { name: 'Send message' });
+      expect(sendButton).toHaveAttribute('type', 'button');
+      expect(sendButton).toBeDisabled();
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: '   ' } });
+      expect(sendButton).toBeDisabled();
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      expect(sendButton).not.toBeDisabled();
+    });
+
+    it('should mark the message list busy while an answer is on its way', async () => {
+      mockedSendMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      expect(list).toHaveAttribute('aria-busy', 'false');
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      await waitFor(() => expect(list).toHaveAttribute('aria-busy', 'true'));
+    });
+
+    it('should clear the typed text when a new conversation starts', () => {
+      const onStartNewSession = jest.fn();
+      render(<ChatWindow {...defaultProps} onStartNewSession={onStartNewSession} />);
+
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: 'A draft for the old conversation' } });
+      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+      fireEvent.click(screen.getByText('Confirm'));
+
+      expect(onStartNewSession).toHaveBeenCalledTimes(1);
+      expect(input.value).toBe('');
+    });
+
+    it('should keep the typed text when the new conversation is cancelled', () => {
+      render(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} />);
+
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: 'Keep me' } });
+      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+      fireEvent.click(screen.getByText('Cancel'));
+
+      expect(input.value).toBe('Keep me');
+    });
+
+    it('should keep the input_container_style background when button_color is set', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          button_color="#7c2d12"
+          input_container_style={{ backgroundColor: '#fafaf9' }}
+        />
+      );
+
+      expect(document.querySelector('.cl-input_container')).toHaveStyle({ backgroundColor: 'rgb(250, 250, 249)' });
+    });
+
+    it('should give the field the input_style background, because the textarea is transparent', () => {
+      render(<ChatWindow {...defaultProps} input_style={{ backgroundColor: '#fef3c7' }} />);
+
+      expect(document.querySelector('.cl-composer-field')).toHaveStyle({ backgroundColor: 'rgb(254, 243, 199)' });
+    });
+
+    it('should size the field, not the bar, with the height keys of input_container_style', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          input_container_style={{ height: '56px', minHeight: '48px', maxHeight: '80px', borderTop: '2px solid #e7e5e4' }}
+        />
+      );
+
+      const bar = document.querySelector<HTMLElement>('.cl-input_container')!;
+      const field = document.querySelector<HTMLElement>('.cl-composer-field')!;
+      expect(field.style.height).toBe('56px');
+      expect(field.style.minHeight).toBe('48px');
+      expect(field.style.maxHeight).toBe('80px');
+      expect(bar.style.height).toBe('');
+      expect(bar.style.minHeight).toBe('');
+      expect(bar.style.maxHeight).toBe('');
+      expect(bar).toHaveStyle({ borderTop: '2px solid #e7e5e4' });
     });
   });
 

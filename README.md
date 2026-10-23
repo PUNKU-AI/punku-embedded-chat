@@ -261,11 +261,24 @@ Use the widget API to customize your widget:
 | left_offset           | number    | No       |
 | right_offset          | number    | No       |
 | additional_headers    | json      | No       |
+| ai_notice_text        | string    | No       |
+| show_ai_notice        | boolean   | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
 | z_index               | number    | No       |
+
+- **ai_notice_text:**
+  - Type: String
+  - Required: No
+  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant. Answers can contain mistakes." In German: "Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten."
+
+- **show_ai_notice:**
+  - Type: Boolean
+  - Required: No
+  - Default: `true`
+  - Description: `false` hides the AI notice under the input. Use it only when your page tells visitors in another way that they chat with an AI system.
 
 - **api_key:**
   - Type: String
@@ -378,12 +391,12 @@ Use the widget API to customize your widget:
 - **input_container_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the input container where chat messages are typed. A fixed `height` keeps the growing input inside the bar; the input then scrolls inside itself.
+  - Description: Styling options for the bar under the messages. It holds the input field (a bordered field with the send button inside) and the AI notice. `height`, `minHeight` and `maxHeight` size the input field, not the whole bar. With a fixed `height`, the text stays inside the field and scrolls there. The other keys, for example `backgroundColor` and `borderTop`, style the bar. `backgroundColor` applies also when `button_color` is set.
 
 - **input_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the chat input field. The field is a textarea that grows with the text up to six lines and then scrolls inside itself. Enter sends the message and Shift+Enter inserts a line break; the visitor's bubble keeps those line breaks. `fontSize`, `lineHeight`, `padding` and `maxHeight` are honoured. A fixed `height` is ignored, because the widget sets the height from the text.
+  - Description: Styling options for the chat input field. The field is a textarea that grows with the text up to six lines and then scrolls inside itself. Enter sends the message and Shift+Enter inserts a line break; the visitor's bubble keeps those line breaks. `fontSize`, `lineHeight`, `padding` and `maxHeight` are honoured. A fixed `height` is ignored, because the widget sets the height from the text. `backgroundColor` colours the whole field around the text and the send button.
 
 - **loading_messages:**
   - Type: JSON
@@ -425,12 +438,12 @@ Use the widget API to customize your widget:
 - **send_button_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the send button in the chat window.
+  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message".
 
 - **send_icon_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the send icon in the chat window.
+  - Description: Styling options for the arrow-up send icon.
 
 - **theme:**
   - Type: String
@@ -601,6 +614,12 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Header and input bar
+
+The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
+
+The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 
 ## Thinking and error states
 

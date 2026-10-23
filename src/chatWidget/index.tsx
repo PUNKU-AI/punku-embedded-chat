@@ -157,6 +157,8 @@ export default function ChatWidget({
   input_style,
   placeholder_sending,
   loading_messages,
+  ai_notice_text,
+  show_ai_notice,
   input_container_style,
   additional_headers,
   session_id,
@@ -219,6 +221,10 @@ export default function ChatWidget({
   send_button_style?: React.CSSProperties;
   placeholder_sending?: string;
   loading_messages?: string[];
+  /** Replaces the AI notice under the input (EU AI Act, Article 50). */
+  ai_notice_text?: string;
+  /** false hides the AI notice, for sites that show it elsewhere. */
+  show_ai_notice?: boolean;
   placeholder?: string;
   input_style?: React.CSSProperties;
   input_container_style?: React.CSSProperties;
@@ -1619,7 +1625,7 @@ video {
 
 /* The composer is a textarea. Its height comes from the text (chatInput.tsx):
    one line at first, at most six lines, then it scrolls inside itself. A fixed
-   row height (input_container_style) caps it, so it never leaves the row. */
+   height (input_container_style) caps it, so it never leaves the field. */
 .cl-input-element {
   display: block;
   width: 100%;
@@ -2180,6 +2186,272 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-aurora .cl-header {
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
+}
+
+/* ---------- Header and composer colours, per theme ----------
+   --cl-line separates the header and the composer from the list, --cl-field
+   and --cl-field-line draw the composer field, --cl-ring is its focus ring,
+   --cl-muted colours the AI notice, --cl-accent fills the avatar. */
+.cl-window {
+  --cl-accent: #2563eb;
+  --cl-line: #e6ebf1;
+  --cl-muted: #64748b;
+  --cl-field: #ffffff;
+  --cl-field-line: #d5dde7;
+  --cl-ring: rgba(37, 99, 235, 0.18);
+}
+
+.cl-window.theme-dark {
+  --cl-accent: #5558e8;
+  --cl-line: #1e293b;
+  --cl-muted: #94a3b8;
+  --cl-field: #111a2e;
+  --cl-field-line: #2b3850;
+  --cl-ring: rgba(129, 140, 248, 0.28);
+}
+
+.cl-window.theme-ocean {
+  --cl-accent: #0369a1;
+  --cl-line: #1e293b;
+  --cl-muted: #94a3b8;
+  --cl-field: #111c30;
+  --cl-field-line: #2a3a52;
+  --cl-ring: rgba(56, 189, 248, 0.25);
+}
+
+.cl-window.theme-aurora {
+  --cl-accent: #7c3aed;
+  --cl-line: rgba(139, 92, 246, 0.35);
+  --cl-muted: #c4b5fd;
+  --cl-field: rgba(46, 16, 101, 0.55);
+  --cl-field-line: rgba(167, 139, 250, 0.4);
+  --cl-ring: rgba(216, 180, 254, 0.25);
+}
+
+/* ---------- Header: one row. The avatar, the title with the status or
+   "Powered by" under it, and the actions on the right. ---------- */
+.cl-window .cl-header {
+  display: block;
+  padding: max(12px, 0.75rem) max(10px, 0.625rem) max(12px, 0.75rem) max(14px, 0.875rem);
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--cl-line);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+/* Coloured headers need no line under them. */
+.cl-window.theme-ocean .cl-header,
+.cl-window.theme-aurora .cl-header,
+.cl-window.theme-punku-ai-bookingkit .cl-header,
+.cl-window.theme-swarovski .cl-header,
+.cl-window .cl-header.cl-header--colored {
+  border-bottom-color: transparent;
+}
+
+.cl-window .cl-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cl-window .cl-header-avatar {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* The default and dark headers are neutral: the avatar carries the accent. */
+.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar,
+.cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
+  background: var(--cl-accent);
+}
+
+.cl-window .cl-header-avatar .cl-header-logo {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.cl-window .cl-header-avatar .cl-header-logo path,
+.cl-window .cl-header-avatar .cl-header-logo rect,
+.cl-window .cl-header-avatar .cl-header-logo circle {
+  fill: none;
+}
+
+.cl-window img.cl-header-logo-image {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.cl-window .cl-header-titles {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cl-window .cl-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cl-window .cl-header-subtitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/* "Powered by PUNKU.AI & bookingkit", or the site's online_message, wraps
+   to a second line on a narrow phone instead of losing its end. A host page
+   can set hyphens: auto, and it inherits into the widget: brand names must
+   never break ("booking-kit"). */
+.cl-window .cl-header-status {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}
+
+.cl-window .cl-header-status a {
+  white-space: nowrap;
+}
+
+/* The status dot stays centred on the first line. */
+.cl-window .cl-online-message,
+.cl-window .cl-offline-message {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: calc((1.3em - 7px) / 2) 0 0;
+}
+
+.cl-window .cl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.cl-window .cl-header-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cl-window .cl-header-btn:hover {
+  background: rgba(127, 127, 127, 0.14);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.cl-window .cl-header-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 0;
+}
+
+/* ---------- Composer: a bordered field with the send button inside, and
+   the AI notice under it. ---------- */
+.cl-window .cl-input_container {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  /* Fixed side padding: a larger host root font must not narrow the field. */
+  padding: max(10px, 0.625rem) 12px max(8px, 0.5rem);
+  border-top: 1px solid var(--cl-line);
+}
+
+.cl-window .cl-composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  border: 1px solid var(--cl-field-line);
+  border-radius: 22px;
+  background: var(--cl-field);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cl-window .cl-composer-field:focus-within {
+  border-color: var(--cl-accent);
+  box-shadow: 0 0 0 3px var(--cl-ring);
+}
+
+.cl-window .cl-composer-field .cl-input-element {
+  flex: 1 1 auto;
+  padding: max(8px, 0.5rem) max(6px, 0.375rem) max(8px, 0.5rem) max(12px, 0.75rem);
+  border: 0;
+  background: transparent;
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.cl-window .cl-composer-field .cl-input-element:focus,
+.cl-window .cl-composer-field .cl-input-element:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.cl-window .cl-send-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cl-window .cl-send-button:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
+}
+
+/* EU AI Act, Article 50: visitors see that an AI system answers. */
+.cl-window .cl-ai-notice {
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--cl-muted);
+  padding: 0 6px;
 }
 
 /* Message styles */
@@ -3917,6 +4189,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           error_message_style={error_message_style}
           placeholder_sending={placeholder_sending}
           loading_messages={loading_messages}
+          ai_notice_text={ai_notice_text}
+          show_ai_notice={show_ai_notice}
           send_button_style={send_button_style}
           online={online}
           online_message={online_message}

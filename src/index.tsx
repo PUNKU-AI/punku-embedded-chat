@@ -31,6 +31,8 @@ function createChatElement() {
             placeholder:"string",
             placeholder_sending:"string",
             loading_messages:"json",
+            ai_notice_text: "string",
+            show_ai_notice: "boolean",
             input_style:"json",
             input_container_style:"json",
             chat_position:"string",

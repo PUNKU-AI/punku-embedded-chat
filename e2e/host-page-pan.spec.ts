@@ -90,13 +90,13 @@ async function settle(page: Page) {
 }
 
 async function waitForAnswerDone(page: Page) {
-  // The send button is disabled while an answer streams. The input gets focus
-  // 100 ms after the answer is complete, so wait until the button is enabled,
-  // then let that focus timer run.
+  // The message list is aria-busy while an answer streams. The input gets
+  // focus 100 ms after the answer is complete, so wait until the list is no
+  // longer busy, then let that focus timer run.
   await expect.poll(() => page.evaluate(() => {
     const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)?.querySelector<HTMLButtonElement>('.cl-send-button')?.disabled;
-  })).toBe(false);
+    return window.__widgetRoots.get(host)?.querySelector('.cl-messages_container')?.getAttribute('aria-busy');
+  })).toBe('false');
   await settle(page);
 }
 
