@@ -1157,9 +1157,13 @@ export default function ChatWindow({
               max-height: var(--cl-anchored-window-height, min(${vh(70)}, var(--cl-window-room))) !important;
             }
 
+            /* The inline minWidth (the width prop, 450 px by default) would
+               win over the 420 px box: the window covered the trigger on a
+               phone in landscape and ran off an iPad in portrait. */
             .cl-window {
               width: 100% !important;
               height: 100% !important;
+              min-width: unset !important;
             }
 
             /* Show close button on tablet */
