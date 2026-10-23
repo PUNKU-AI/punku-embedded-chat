@@ -1,4 +1,4 @@
-import { belowBlockingDialog, blockingDialogZIndex, pageLayerZIndex } from './pageDialogs';
+import { belowBlockingDialog, blockingDialogZIndex, pageLayerZIndex, TOP_LAYER_Z_INDEX } from './pageDialogs';
 
 // jsdom has no layout: give an element a box on the screen (a 1024 x 768 window).
 function place(element: Element, left = 20, top = 40, width = 280, height = 300) {
@@ -14,6 +14,14 @@ function addToPage(html: string) {
 }
 
 const byId = (id: string) => document.getElementById(id)!;
+
+// jsdom does not know :modal and :popover-open. A browser sets them for a
+// dialog opened with showModal() and for an open popover.
+function markTopLayer(element: Element, selector: ':modal' | ':popover-open') {
+  const matches = element.matches.bind(element);
+  element.matches = (query: string) => query === selector
+    || (query !== ':modal' && query !== ':popover-open' && matches(query));
+}
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -157,6 +165,27 @@ describe('blockingDialogZIndex', () => {
     place(byId('d'));
     expect(blockingDialogZIndex()).toBeNull();
   });
+
+  it('finds a native dialog opened with showModal(), without role or aria-modal', () => {
+    addToPage('<dialog id="d" open>Choose your language.</dialog>');
+    place(byId('d'));
+    markTopLayer(byId('d'), ':modal');
+    expect(blockingDialogZIndex()).toBe(TOP_LAYER_Z_INDEX);
+  });
+
+  it('ignores a native dialog opened with show(): it is not modal', () => {
+    addToPage('<dialog id="d" open>Opening hours</dialog>');
+    place(byId('d'));
+    expect(blockingDialogZIndex()).toBeNull();
+  });
+
+  it('takes the top layer for a dialog in an open popover, not the z-index of its layer', () => {
+    addToPage('<div id="p" popover="manual" style="position:fixed;z-index:5">'
+      + '<div id="d" role="alertdialog" aria-modal="true">Privacy settings</div></div>');
+    place(byId('d'));
+    markTopLayer(byId('p'), ':popover-open');
+    expect(blockingDialogZIndex()).toBe(TOP_LAYER_Z_INDEX);
+  });
 });
 
 describe('belowBlockingDialog', () => {
@@ -168,7 +197,12 @@ describe('belowBlockingDialog', () => {
     // A dialog above the widget already: Usercentrics on Swarovski, Borlabs Cookie.
     [9998, 2147483646, 9998],
     [9998, 999999, 9998],
-    [9998, 0, 0],
+    // A modal dialog or an open popover in the top layer.
+    [9998, TOP_LAYER_Z_INDEX, 9998],
+    // A dialog in a layer at 0 or below: the widget goes below it. An equal
+    // z-index would let the page order decide.
+    [9998, 0, -1],
+    [9998, -10, -11],
   ])('gives the widget z-index %p with a dialog layer at %p the value %p', (zIndex, dialog, expected) => {
     expect(belowBlockingDialog(zIndex, dialog)).toBe(expected);
   });

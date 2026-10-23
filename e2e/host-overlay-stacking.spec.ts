@@ -30,6 +30,20 @@ const usercentrics = `
       '<div id="uc-main-dialog" role="dialog" class="cmp first bottom mobile ltr gdpr" style="height:100%">We use cookies.</div></div>';
   </script>`;
 
+// A native <dialog> opened with showModal(), without role or aria-modal. It is
+// in the top layer, and a popover that opens later would go above it.
+const nativeModalDialog = `
+  <dialog id="native-dialog" style="width:90vw;height:80vh;max-width:none;max-height:none;padding:16px">Choose your language.</dialog>
+  <script>document.getElementById('native-dialog').showModal();</script>`;
+// A consent backdrop without a z-index (layer 0), before the widget in the
+// page. With an equal z-index, the widget would come later and be on top.
+const zeroLayerDialog = `
+  <div id="zero-layer" style="position:fixed;inset:0;background:rgba(0,0,0,0.4)">
+    <div id="zero-dialog" role="alertdialog" aria-modal="true" aria-label="Privacy settings"
+         style="margin:40px auto;width:260px;padding:16px;background:#fff">We use cookies.</div>
+  </div>
+  <script>document.body.prepend(document.getElementById('zero-layer'));</script>`;
+
 const errors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
   const pageErrors: string[] = [];
@@ -179,6 +193,30 @@ test('a consent banner in an open shadow root still covers the open window (User
   expect(shared.height).toBeGreaterThan(0);
   expect(await windowPopover(page)).toBeNull();
   expect(await topmostAt(page, center(shared))).toBe('usercentrics-cmp-ui');
+});
+
+test('a native modal dialog still covers the open window', async ({ page }) => {
+  await loadWidget(page, nativeModalDialog + eyeable);
+  await openWindow(page);
+  const chatWindow = await settledWindow(page);
+  const shared = overlap(chatWindow, await hostBox(page, 'native-dialog'));
+  expect(shared.height).toBeGreaterThan(0);
+  expect(await windowPopover(page)).toBeNull();
+  expect(await topmostAt(page, center(shared))).toBe('native-dialog');
+
+  // The visitor closes the dialog. The widget checks once a second.
+  await page.evaluate(() => (document.getElementById('native-dialog') as HTMLDialogElement).close());
+  const covered = overlap(chatWindow, await hostBox(page, 'eyeable-trigger'));
+  await expect.poll(() => topmostAt(page, center(covered))).toBe('punku-chat');
+  expect(await windowPopover(page)).toBe('manual');
+});
+
+test('a consent dialog in a layer at 0 still covers the open window', async ({ page }) => {
+  await loadWidget(page, zeroLayerDialog);
+  await openWindow(page);
+  const chatWindow = await settledWindow(page);
+  expect(await windowPopover(page)).toBeNull();
+  expect(['zero-layer', 'zero-dialog']).toContain(await topmostAt(page, center(chatWindow)));
 });
 
 test('the open window goes to the top layer when the consent dialog closes', async ({ page }) => {

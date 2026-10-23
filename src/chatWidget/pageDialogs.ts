@@ -12,7 +12,10 @@
  * - a dialog (role="dialog") whose name, id or class says cookie, consent,
  *   privacy or Datenschutz (CookieScript: "Cookie consent dialog");
  * - a fixed backdrop over the whole screen with such a word in its id or
- *   class (the Contao privacy opt-in, div.privacy_overlay, has no marks).
+ *   class (the Contao privacy opt-in, div.privacy_overlay, has no marks);
+ * - a native <dialog> opened with showModal(), also without these marks.
+ *   It is in the browser's top layer. A popover that opens later goes above
+ *   it, so the window must stay out of the top layer.
  * The search also covers the open shadow roots of the body's children:
  * Usercentrics draws its dialog in the shadow root of
  * aside#usercentrics-cmp-ui (Swarovski). A floating WhatsApp button or a
@@ -33,6 +36,23 @@ const CONSENT_NAMED = CONSENT_WORDS
 
 /** How often the widget looks for a dialog: consent tools add theirs after the page loads. */
 export const PAGE_DIALOG_CHECK_MS = 1000;
+
+/** The layer of an element in the top layer: above every z-index of the page. */
+export const TOP_LAYER_Z_INDEX = Number.MAX_SAFE_INTEGER;
+
+/**
+ * element.matches(selector). False for a selector that the browser does not
+ * know: :modal needs Safari 15.6 and Firefox 103, :popover-open needs Safari
+ * 17 and Firefox 125. Such a browser has no popover, so the window stays in
+ * the page there anyway.
+ */
+function matchesSelector(element: Element, selector: string): boolean {
+  try {
+    return element.matches(selector);
+  } catch {
+    return false;
+  }
+}
 
 /** A computed value that is set and not the initial value (jsdom leaves many empty). */
 const isSet = (value: string | undefined, initial: string) => !!value && value !== initial;
@@ -79,6 +99,14 @@ export function pageLayerZIndex(element: Element): number | null {
     if (level !== null) zIndex = level;
   }
   return zIndex;
+}
+
+/** True when `element` or an ancestor is in the top layer: a modal dialog or an open popover. */
+function inTopLayer(element: Element): boolean {
+  for (let node: Element | null = element; node; node = parentOf(node)) {
+    if (matchesSelector(node, ":modal") || matchesSelector(node, ":popover-open")) return true;
+  }
+  return false;
 }
 
 /** True when `element` shows on the screen: a box in the viewport, not hidden, not transparent. */
@@ -136,7 +164,10 @@ function blockingElements(): Element[] {
     const consentDialogs = Array.from(root.querySelectorAll('[role="dialog"]'))
       .filter((dialog) => CONSENT_PATTERN.test(names(dialog)));
     const consentBackdrops = Array.from(root.querySelectorAll(CONSENT_NAMED)).filter(coversScreen);
-    elements.push(...Array.from(root.querySelectorAll(BLOCKING_DIALOGS)), ...consentDialogs, ...consentBackdrops);
+    const modalDialogs = Array.from(root.querySelectorAll("dialog[open]"))
+      .filter((dialog) => matchesSelector(dialog, ":modal"));
+    elements.push(...Array.from(root.querySelectorAll(BLOCKING_DIALOGS)), ...consentDialogs, ...consentBackdrops,
+      ...modalDialogs);
   }
   return elements;
 }
@@ -152,15 +183,21 @@ export function blockingDialogZIndex(): number | null {
     // The widget's own dialogs stack inside the widget root. The closed
     // shadow root hides them, but not in a page without it.
     if (dialog.closest(".cl-widget-root") || !isShown(dialog)) continue;
-    const zIndex = pageLayerZIndex(dialog);
+    const zIndex = inTopLayer(dialog) ? TOP_LAYER_Z_INDEX : pageLayerZIndex(dialog);
     if (zIndex !== null && (lowest === null || zIndex < lowest)) lowest = zIndex;
   }
   return lowest;
 }
 
-/** The widget's z-index: just below a blocking dialog that it would cover. */
+/**
+ * The widget's z-index: just below a blocking dialog that it would cover.
+ * A dialog in a layer at 0 or lower puts the widget below 0. An equal
+ * z-index lets the page order decide, and the widget can come after the
+ * dialog. Below 0, the page content also covers the widget until the visitor
+ * answers the dialog.
+ */
 export function belowBlockingDialog(zIndex: number, dialogZIndex: number | null): number {
-  return dialogZIndex !== null && dialogZIndex <= zIndex ? Math.max(dialogZIndex - 1, 0) : zIndex;
+  return dialogZIndex !== null && dialogZIndex <= zIndex ? dialogZIndex - 1 : zIndex;
 }
 
 /** The layer z-index of a visible blocking dialog, checked once a second. */
