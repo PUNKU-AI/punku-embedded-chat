@@ -146,6 +146,7 @@ export type ControlColorProps = {
   bot_message_style?: React.CSSProperties;
   background_color?: string;
   input_style?: React.CSSProperties;
+  input_container_style?: React.CSSProperties;
   send_button_style?: React.CSSProperties;
   send_icon_style?: React.CSSProperties;
   error_message_style?: React.CSSProperties;
@@ -223,24 +224,29 @@ type Filled = { fill: Rgb; label: Rgb };
 export function guardFilled(options: {
   fill: Rgb;
   label: Rgb;
+  /** A translucent label shows the fill through: it is measured on each fill. */
+  labelAlpha?: number;
   surface: Rgb;
   labelMin: number;
   own: boolean;
   linkColor?: Rgb | null;
   themeFallback?: Rgb | null;
 }): Filled {
-  const { fill, label, surface, labelMin, own, linkColor, themeFallback } = options;
+  const { fill, label, labelAlpha = 1, surface, labelMin, own, linkColor, themeFallback } = options;
+  // The label as the browser paints it on a fill. The result is always opaque.
+  const labelOn = (next: Rgb) => (labelAlpha >= 0.999 ? label : paintOver(label, labelAlpha, next));
   if (contrast(fill, surface) >= BOUNDARY_MIN) {
-    return { fill, label: contrast(label, fill) >= labelMin ? label : pickLabel(fill, labelMin, label, surface) };
+    const shown = labelOn(fill);
+    return { fill, label: contrast(shown, fill) >= labelMin ? shown : pickLabel(fill, labelMin, shown, surface) };
   }
-  const withLabel = (next: Rgb): Filled => ({ fill: next, label: pickLabel(next, labelMin, label, surface) });
+  const withLabel = (next: Rgb): Filled => ({ fill: next, label: pickLabel(next, labelMin, labelOn(next), surface) });
   if (linkColor && contrast(linkColor, surface) >= BOUNDARY_MIN) return withLabel(linkColor);
   if (own) {
     // A small move of the site colour, if its label then still reads. A
     // larger move gives a dull in-between colour: white or black looks better.
     const keepsLabel = nudge(fill, surface, (candidate) =>
-      contrast(candidate, surface) >= BOUNDARY_MIN && contrast(label, candidate) >= labelMin, 0.6);
-    if (keepsLabel) return { fill: keepsLabel, label };
+      contrast(candidate, surface) >= BOUNDARY_MIN && contrast(labelOn(candidate), candidate) >= labelMin, 0.6);
+    if (keepsLabel) return { fill: keepsLabel, label: labelOn(keepsLabel) };
   } else if (themeFallback && contrast(themeFallback, surface) >= BOUNDARY_MIN) {
     return withLabel(themeFallback);
   }
@@ -272,25 +278,41 @@ export function guardOutline(line: Rgb, surface: Rgb, linkColor: Rgb | null, lab
 
 const same = (a: Rgb, b: Rgb) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 
+const IMAGE = "image";
+
+/**
+ * The background colour that a style sets, IMAGE for a gradient or an image
+ * (the visible surface, which the widget cannot measure), or undefined.
+ */
+function styleBackground(style: React.CSSProperties | undefined): string | undefined {
+  const background = style?.background;
+  if (typeof background === "string" && background.trim() && !parseColor(background)) return IMAGE;
+  const color = style?.backgroundColor || background;
+  return typeof color === "string" && color.trim() ? color : undefined;
+}
+
+/** A surface colour: null for an image or a colour that cannot be read. */
+const surface = (value: string | undefined, backdrop: Rgb | null) =>
+  value === IMAGE ? null : resolve(value, backdrop);
+
 /** The surfaces and colours that a site's props and the theme give. */
 function surfaces(props: ControlColorProps) {
   const theme = THEME_COLORS[(props.theme as ThemeName) in THEME_COLORS ? (props.theme as ThemeName) : "default"];
-  const list = resolve(props.background_color, null) || resolve(theme.list, null)!;
-  // bot_message_color wins over bot_message_style (!important in the stylesheet).
-  const bubbleValue = props.bot_message_color
-    || props.bot_message_style?.backgroundColor
-    || props.bot_message_style?.background
-    || theme.bubble;
-  const bubble = resolve(bubbleValue, list);
+  // background_color paints the list and the input bar (!important in the stylesheet).
+  const list = props.background_color ? resolve(props.background_color, null) : resolve(theme.list, null);
+  // bot_message_color wins over a background colour in bot_message_style
+  // (!important), but a gradient or an image in bot_message_style shows on top.
+  const bubbleStyle = styleBackground(props.bot_message_style);
+  const bubble = bubbleStyle === IMAGE ? null : surface(props.bot_message_color || bubbleStyle || theme.bubble, list);
   const bubbleText = resolve(props.bot_message_text_color || props.bot_message_style?.color || theme.bubbleText, bubble);
-  const fieldBackdrop = resolve(theme.fieldBackdrop, null)!;
-  const field = resolve(props.input_style?.backgroundColor || theme.field, fieldBackdrop);
+  // The field sits on the input bar: background_color, else
+  // input_container_style, else the theme.
+  const bar = props.background_color
+    ? resolve(props.background_color, null)
+    : surface(styleBackground(props.input_container_style) || theme.fieldBackdrop, null);
+  const field = resolve(props.input_style?.backgroundColor || theme.field, bar);
   const customError = !!props.error_message_style && Object.keys(props.error_message_style).length > 0;
-  const errorBg = resolve(
-    props.error_message_style?.backgroundColor || props.error_message_style?.background
-      || (customError ? "#f87171" : theme.errorBg),
-    list,
-  );
+  const errorBg = surface(styleBackground(props.error_message_style) || (customError ? "#f87171" : theme.errorBg), list);
   const errorInk = resolve(props.error_message_style?.color || (customError ? "#ffffff" : theme.errorInk), errorBg);
   return { theme, list, bubble, bubbleText, field, errorBg, errorInk };
 }
@@ -338,55 +360,64 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     colors.linksTakeTextColor = !ownLink;
   }
 
-  // Filled link buttons on the answer bubble. A button_color that the widget
-  // cannot read (a gradient, a colour name) stays as it is.
+  // Filled link buttons on the answer bubble. A colour that the widget cannot
+  // read (a gradient, a colour name) leaves the button as it is.
   const ownAccent = resolve(props.button_color, bubble);
   const accent = ownAccent || resolve(theme.accent, null)!;
-  const accentLabel = (props.button_color && resolve(props.button_text_color || "#ffffff", accent))
-    || resolve(theme.onAccent, null)!;
-  if (bubble && (!props.button_color || ownAccent)) {
+  const accentLabel = parseColor(props.button_color ? props.button_text_color || "#ffffff" : theme.onAccent);
+  if (bubble && accentLabel && (!props.button_color || ownAccent)) {
     const guarded = guardFilled({
-      fill: accent, label: accentLabel, surface: bubble, labelMin: TEXT_MIN,
+      fill: accent, label: accentLabel.rgb, labelAlpha: accentLabel.alpha, surface: bubble, labelMin: TEXT_MIN,
       own: !!props.button_color, linkColor: link && ownLink ? link : null,
       themeFallback: resolve(theme.link, bubble),
     });
-    if (!same(guarded.fill, accent)) colors.linkButtonFill = toHex(guarded.fill);
-    if (!same(guarded.label, accentLabel)) colors.linkButtonLabel = toHex(guarded.label);
+    const fillChanged = !same(guarded.fill, accent);
+    if (fillChanged) colors.linkButtonFill = toHex(guarded.fill);
+    // A translucent label is set too when the fill changes: the stylesheet
+    // would paint it on the new fill without a check.
+    if (!same(guarded.label, paintOver(accentLabel.rgb, accentLabel.alpha, accent))
+      || (fillChanged && accentLabel.alpha < 0.999)) {
+      colors.linkButtonLabel = toHex(guarded.label);
+    }
     measure("filled link button", guarded.fill, bubble, BOUNDARY_MIN);
     measure("filled link button label", guarded.label, guarded.fill, TEXT_MIN);
   }
 
   // Suggestion chips on the message list. button_color draws their outline.
-  const chipBg = theme.chipBg ? resolve(theme.chipBg, list)! : list;
-  const chipInkTheme = resolve(theme.chipInk, chipBg)!;
-  const chipInk = contrast(chipInkTheme, chipBg) >= TEXT_MIN ? chipInkTheme : pickLabel(chipBg, TEXT_MIN, null, null);
-  if (!same(chipInk, chipInkTheme)) colors.chipInk = toHex(chipInk);
-  const ownChipLine = resolve(props.button_color, list);
-  if (!props.button_color || ownChipLine) {
-    const chipLineValue = ownChipLine || resolve(theme.chipLine, list)!;
-    const boundary = Math.max(contrast(chipBg, list), contrast(chipLineValue, list));
-    const chipLine = boundary >= BOUNDARY_MIN
-      ? chipLineValue
-      : guardOutline(chipLineValue, list, ownLink, chipInk, !!ownChipLine);
-    if (!same(chipLine, chipLineValue)) colors.chipLine = toHex(chipLine);
-    measure("suggestion chip", contrast(chipBg, list) >= contrast(chipLine, list) ? chipBg : chipLine, list, BOUNDARY_MIN);
+  if (list) {
+    const chipBg = theme.chipBg ? resolve(theme.chipBg, list)! : list;
+    const chipInkTheme = resolve(theme.chipInk, chipBg)!;
+    const chipInk = contrast(chipInkTheme, chipBg) >= TEXT_MIN ? chipInkTheme : pickLabel(chipBg, TEXT_MIN, null, null);
+    if (!same(chipInk, chipInkTheme)) colors.chipInk = toHex(chipInk);
+    const ownChipLine = resolve(props.button_color, list);
+    if (!props.button_color || ownChipLine) {
+      const chipLineValue = ownChipLine || resolve(theme.chipLine, list)!;
+      const boundary = Math.max(contrast(chipBg, list), contrast(chipLineValue, list));
+      const chipLine = boundary >= BOUNDARY_MIN
+        ? chipLineValue
+        : guardOutline(chipLineValue, list, ownLink, chipInk, !!ownChipLine);
+      if (!same(chipLine, chipLineValue)) colors.chipLine = toHex(chipLine);
+      measure("suggestion chip", contrast(chipBg, list) >= contrast(chipLine, list) ? chipBg : chipLine, list, BOUNDARY_MIN);
+    }
+    measure("suggestion chip label", chipInk, chipBg, TEXT_MIN);
   }
-  measure("suggestion chip label", chipInk, chipBg, TEXT_MIN);
 
-  // The send button in the input field. send_button_style wins (spread last).
-  const sendValue = props.send_button_style?.backgroundColor || props.send_button_style?.background
-    || props.button_color || theme.send;
-  const sendFill = resolve(sendValue, field);
-  const sendIconValue = props.send_icon_style?.stroke || props.button_text_color || theme.sendIcon;
-  const sendIcon = sendFill ? resolve(sendIconValue, sendFill) : null;
+  // The send button in the input field. send_button_style wins (spread
+  // last); a gradient or an image in it leaves the button as it is.
+  const sendStyle = styleBackground(props.send_button_style);
+  const sendFill = sendStyle === IMAGE ? null : resolve(sendStyle || props.button_color || theme.send || undefined, field);
+  const sendIcon = parseColor(props.send_icon_style?.stroke || props.button_text_color || theme.sendIcon);
   if (field && sendFill && sendIcon) {
     const guarded = guardFilled({
-      fill: sendFill, label: sendIcon, surface: field, labelMin: ICON_MIN,
-      own: !!(props.send_button_style?.backgroundColor || props.send_button_style?.background || props.button_color),
+      fill: sendFill, label: sendIcon.rgb, labelAlpha: sendIcon.alpha, surface: field, labelMin: ICON_MIN,
+      own: !!(sendStyle || props.button_color),
       linkColor: ownLink && resolve(props.link_color, field), themeFallback: resolve(theme.link, field),
     });
-    if (!same(guarded.fill, sendFill)) colors.sendFill = toHex(guarded.fill);
-    if (!same(guarded.label, sendIcon)) colors.sendIcon = toHex(guarded.label);
+    const fillChanged = !same(guarded.fill, sendFill);
+    if (fillChanged) colors.sendFill = toHex(guarded.fill);
+    if (!same(guarded.label, paintOver(sendIcon.rgb, sendIcon.alpha, sendFill)) || (fillChanged && sendIcon.alpha < 0.999)) {
+      colors.sendIcon = toHex(guarded.label);
+    }
     measure("send button", guarded.fill, field, BOUNDARY_MIN);
     measure("send button icon", guarded.label, guarded.fill, ICON_MIN);
   }

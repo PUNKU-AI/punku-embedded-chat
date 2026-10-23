@@ -144,6 +144,44 @@ describe('guardControlColors', () => {
     expect(send.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
   });
 
+  it('measures a translucent label on the new fill and sets it opaque', () => {
+    const { colors, pairs } = guardControlColors({
+      theme: 'default', button_color: '#9e183b', button_text_color: 'rgba(0, 0, 0, 0.2)',
+      bot_message_color: '#9e183b', bot_message_text_color: '#ffffff', link_color: '#FFD700',
+    });
+    expect(colors.linkButtonFill).toBe('#ffd700');
+    // 20% black on gold would read at about 1.6:1: the label is set explicitly.
+    expect(colors.linkButtonLabel).toBeDefined();
+    expect(pairs.find((pair) => pair.control === 'filled link button label')!.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('measures a translucent input field on the input bar that background_color paints', () => {
+    const { colors, pairs } = guardControlColors({
+      theme: 'default', background_color: '#000000', input_style: { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+      send_button_style: { backgroundColor: '#000000' },
+    });
+    // The field is near #1a1a1a, not white: the black send button would vanish.
+    expect(colors.sendFill).toBeDefined();
+    expect(pairs.find((pair) => pair.control === 'send button')!.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+  });
+
+  it('leaves the bubble unmeasured under a background image, even with a background colour', () => {
+    const { colors, pairs } = guardControlColors({
+      theme: 'default', button_color: '#9e183b', link_color: '#FFD700', bot_message_color: '#9e183b',
+      bot_message_style: { background: 'linear-gradient(#ffffff, #ffffff)', backgroundColor: '#9e183b' },
+    });
+    expect(colors.linkButtonFill).toBeUndefined();
+    expect(pairs.some((pair) => pair.control.startsWith('filled link button'))).toBe(false);
+  });
+
+  it('leaves a send button with a background image as it is, even with a background colour', () => {
+    const { colors } = guardControlColors({
+      theme: 'default',
+      send_button_style: { background: 'linear-gradient(#dddddd, #dddddd)', backgroundColor: '#dddddd' },
+    });
+    expect(colors.sendFill).toBeUndefined();
+  });
+
   it('gives "Try again" a readable label on the classic red error box', () => {
     const { colors, pairs } = guardControlColors({ theme: 'default', error_message_style: { color: '#ffffff' } });
     expect(colors.retryLabel).toBe('#000000');
