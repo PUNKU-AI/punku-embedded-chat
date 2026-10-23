@@ -760,6 +760,40 @@ describe('ChatWidget', () => {
 
       expect(screen.getByTestId('language').textContent).toBe('en');
     });
+
+    describe('from the page language', () => {
+      afterEach(() => document.documentElement.removeAttribute('lang'));
+
+      it('should use the page language without default_language', () => {
+        document.documentElement.setAttribute('lang', 'it-IT');
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+
+        expect(screen.getByTestId('language').textContent).toBe('it');
+      });
+
+      it('should follow a page that changes <html lang> later', async () => {
+        document.documentElement.setAttribute('lang', 'it');
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(screen.getByTestId('language').textContent).toBe('it');
+
+        act(() => document.documentElement.setAttribute('lang', 'pl-PL'));
+        await waitFor(() => expect(screen.getByTestId('language').textContent).toBe('pl'));
+
+        // A page language the widget does not have: the browser language (en-US in jsdom).
+        act(() => document.documentElement.setAttribute('lang', 'nl'));
+        await waitFor(() => expect(screen.getByTestId('language').textContent).toBe('en'));
+      });
+
+      it('should keep an explicit default_language when the page language changes', async () => {
+        document.documentElement.setAttribute('lang', 'it');
+        render(<ChatWidget {...defaultProps} start_open={true} default_language="en" />);
+        expect(screen.getByTestId('language').textContent).toBe('en');
+
+        act(() => document.documentElement.setAttribute('lang', 'fr'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(screen.getByTestId('language').textContent).toBe('en');
+      });
+    });
   });
 
   describe('Global API', () => {

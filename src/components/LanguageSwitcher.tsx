@@ -1,5 +1,16 @@
 import React from 'react';
-import { Language } from '../translations';
+import { Language, LANGUAGES } from '../translations';
+
+// Each language in its own name.
+const LANGUAGE_NAMES: Record<Language, string> = {
+  en: 'English',
+  de: 'Deutsch',
+  it: 'Italiano',
+  es: 'Español',
+  pt: 'Português',
+  fr: 'Français',
+  pl: 'Polski',
+};
 
 interface LanguageSwitcherProps {
   language: Language;
@@ -14,8 +25,9 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ language, onLanguag
         onChange={(e) => onLanguageChange(e.target.value as Language)}
         className="cl-language-select"
       >
-        <option value="en">English</option>
-        <option value="de">Deutsch</option>
+        {LANGUAGES.map((code) => (
+          <option key={code} value={code}>{LANGUAGE_NAMES[code]}</option>
+        ))}
       </select>
     </div>
   );

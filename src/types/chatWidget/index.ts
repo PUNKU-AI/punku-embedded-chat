@@ -1,3 +1,5 @@
+import type { Language } from "../../translations";
+
 export type ChatMessageType = {
     message: string;
     isSend: boolean;
@@ -14,6 +16,6 @@ export type ChatMessageType = {
   export type ChatMessagePlaceholderType = {
     bot_message_style?: React.CSSProperties;
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
-    language?: "en" | "de";
+    language?: Language;
     loading_messages?: string[];
   };

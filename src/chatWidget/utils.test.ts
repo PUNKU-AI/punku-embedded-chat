@@ -2,7 +2,9 @@ import {
   getChatPosition,
   getAnimationOrigin,
   extractMessageFromOutput,
+  chooseLanguage,
   detectBrowserLanguage,
+  detectPageLanguage,
   revealInScrollContainer,
   getPageScale,
   subscribeVisualViewport,
@@ -223,6 +225,79 @@ describe('detectBrowserLanguage', () => {
       configurable: true
     });
     expect(detectBrowserLanguage()).toBe('en');
+  });
+});
+
+// The language of the built-in texts when the snippet sets no default_language.
+describe('detectPageLanguage and chooseLanguage', () => {
+  const originalNavigator = global.navigator;
+  const setBrowser = (...languages: string[]) => {
+    Object.defineProperty(global, 'navigator', {
+      value: { languages, language: languages[0] },
+      configurable: true,
+    });
+  };
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('lang');
+    Object.defineProperty(global, 'navigator', { value: originalNavigator, configurable: true });
+  });
+
+  it('reads the page language from <html lang>', () => {
+    document.documentElement.setAttribute('lang', 'it-IT');
+    expect(detectPageLanguage()).toBe('it');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(detectPageLanguage()).toBeNull();
+    document.documentElement.removeAttribute('lang');
+    expect(detectPageLanguage()).toBeNull();
+  });
+
+  it.each([
+    ['it-IT', 'it'],
+    ['es', 'es'],
+    ['pt-PT', 'pt'],
+    ['fr', 'fr'],
+    ['pl-PL', 'pl'],
+    ['de', 'de'],
+  ])('takes the page language %s over an English browser', (pageLang, language) => {
+    setBrowser('en-US', 'en');
+    document.documentElement.setAttribute('lang', pageLang);
+    expect(chooseLanguage()).toBe(language);
+  });
+
+  it('takes the browser language on a page without a language the widget has', () => {
+    setBrowser('pl-PL', 'en');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(chooseLanguage()).toBe('pl');
+    document.documentElement.removeAttribute('lang');
+    expect(chooseLanguage()).toBe('pl');
+  });
+
+  it('falls back to English when neither the page nor the browser language is known', () => {
+    setBrowser('nl-NL', 'ja');
+    document.documentElement.setAttribute('lang', 'nl');
+    expect(chooseLanguage()).toBe('en');
+  });
+
+  it('keeps an explicit default_language over the page and the browser', () => {
+    setBrowser('it-IT');
+    document.documentElement.setAttribute('lang', 'it');
+    expect(chooseLanguage('en')).toBe('en');
+    expect(chooseLanguage('de')).toBe('de');
+    expect(chooseLanguage('FR-ca')).toBe('fr');
+  });
+
+  it('detects the language when default_language is one the widget does not have', () => {
+    setBrowser('en-US');
+    document.documentElement.setAttribute('lang', 'es-ES');
+    expect(chooseLanguage('nl')).toBe('es');
+  });
+
+  it('keeps German on the swarovski theme unless default_language is set', () => {
+    setBrowser('it-IT');
+    document.documentElement.setAttribute('lang', 'it');
+    expect(chooseLanguage(undefined, 'swarovski')).toBe('de');
+    expect(chooseLanguage('en', 'swarovski')).toBe('en');
   });
 });
 

@@ -284,7 +284,7 @@ Use the widget API to customize your widget:
 - **ai_notice_text:**
   - Type: String
   - Required: No
-  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant." In German: "Sie chatten mit einem KI-Assistenten."
+  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: the built-in notice in the chat's language, for example "You are chatting with an AI assistant." or, in German, "Sie chatten mit einem KI-Assistenten."
 
 - **show_ai_notice:**
   - Type: Boolean
@@ -360,7 +360,13 @@ Use the widget API to customize your widget:
 - **default_language:**
   - Type: String
   - Required: No
-  - Description: Sets the default language for the chat interface. Supported values are "en" (English) and "de" (German). If not specified, the widget automatically detects the browser's language preference. This affects all UI text including welcome messages, placeholders, and system messages.
+  - Description: Sets the language of the built-in texts: the default welcome message and placeholder, the AI notice, error messages, "Try again", the thinking phrases and the screen-reader labels. Supported values: `en` (English), `de` (German), `it` (Italian), `es` (Spanish), `pt` (Portuguese), `fr` (French) and `pl` (Polish). A region tag such as `it-IT` also works. Your own texts (`welcome_message`, `placeholder`, `loading_messages`, `ai_notice_text`) always show as you wrote them.
+  - Without `default_language`, the widget takes:
+    1. the page language (`<html lang>`), if the widget has that language,
+    2. else the first browser language that the widget has,
+    3. else English.
+
+    The `swarovski` theme is German unless `default_language` is set. If the page changes `<html lang>` later, for example with a language switch, the chat follows.
 
 - **error_message_style:**
   - Type: JSON
@@ -413,7 +419,7 @@ Use the widget API to customize your widget:
 - **loading_messages:**
   - Type: JSON
   - Required: No
-  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme shows its crystal phrases.
+  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme shows its crystal phrases.
 
 - **Online:**
   - Type: Boolean
@@ -644,7 +650,7 @@ The input bar holds a bordered input field with the arrow-up send button inside,
 
 ## Thinking and error states
 
-While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (English or German). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
+While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
 
 The input field stays enabled while the assistant answers, so the visitor can write the next message. Enter and the send button send it after the reply is complete.
 
@@ -654,9 +660,9 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 
 ## Accessibility and motion
 
-- The launcher button says what it does ("Open chat" or "Close chat", in German "Chat öffnen" or "Chat schließen") and tells screen readers whether the chat is open.
-- The message list is a log named "Conversation" ("Unterhaltung"). New answers are read once from a status region, so the log itself does not announce changes.
-- The feedback buttons are "Helpful" and "Not helpful" ("Hilfreich", "Nicht hilfreich") and report the vote.
+- The launcher button says what it does ("Open chat" or "Close chat", in the chat's language) and tells screen readers whether the chat is open.
+- The message list is a log named "Conversation", in the chat's language. New answers are read once from a status region, so the log itself does not announce changes.
+- The feedback buttons are "Helpful" and "Not helpful", in the chat's language, and report the vote.
 - When the chat closes with the close button or Escape, the keyboard focus returns to the launcher. A closed chat window is out of the tab order.
 - The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
 - The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.

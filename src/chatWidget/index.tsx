@@ -4,8 +4,8 @@ import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
-import { Language, translations } from "../translations";
-import { detectBrowserLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
+import { Language, toLanguage, translations } from "../translations";
+import { chooseLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -322,23 +322,18 @@ export default function ChatWidget({
   const [programmaticMessage, setProgrammaticMessage] = useState<ProgrammaticMessage | null>(null);
   const [triggerPositionOverride, setTriggerPositionOverride] = useState<TriggerPosition | null>(null);
 
-  // Initialize language based on browser detection or default_language prop
-  const getInitialLanguage = (): Language => {
-    // If default_language prop is provided and valid, use it
-    if (default_language && (default_language === 'en' || default_language === 'de')) {
-      return default_language as Language;
-    }
-
-    // Swarovski theme defaults to German
-    if (theme === 'swarovski') {
-      return 'de';
-    }
-
-    // Otherwise, detect browser language
-    return detectBrowserLanguage(['en', 'de']) as Language;
-  };
-
-  const [currentLanguage, setCurrentLanguage] = useState<Language>(getInitialLanguage());
+  // default_language, else the page or browser language (utils.ts).
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(() => chooseLanguage(default_language, theme));
+  // Follow a page that sets or changes <html lang> after the widget starts,
+  // such as a language switch in a single-page app.
+  useEffect(() => {
+    const update = () => setCurrentLanguage(chooseLanguage(default_language, theme));
+    update();
+    if (toLanguage(default_language)) return;
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [default_language, theme]);
   const sessionId = useRef(sessionData.sessionId);
   const programmaticMessageId = useRef(0);
   const widgetRootRef = useRef<HTMLDivElement>(null);
