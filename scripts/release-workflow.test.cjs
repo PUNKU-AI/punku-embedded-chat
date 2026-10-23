@@ -51,6 +51,7 @@ function paths(value) {
 }
 
 const tagStep = uniqueStep(tagJob.steps, (step) => step.id === 'ref', 'release tag validation');
+const purgeStep = uniqueStep(publish.steps, (step) => step.id === 'jsdelivr-purge', 'jsDelivr purge');
 
 function runTagStep(env) {
   const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-tag-')), 'output');
@@ -77,9 +78,53 @@ test('publication requires successful validation with real Gemini and committed 
   for (const workflow of [release, checks]) {
     for (const job of Object.values(workflow.jobs)) {
       assert.equal(job['continue-on-error'], undefined);
-      for (const step of job.steps || []) assert.equal(step['continue-on-error'], undefined);
+      for (const step of job.steps || []) {
+        if (step !== purgeStep) assert.equal(step['continue-on-error'], undefined);
+      }
     }
   }
+});
+
+function runPurgeStep(curlScript) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-purge-'));
+  const log = path.join(dir, 'urls');
+  fs.writeFileSync(path.join(dir, 'curl'), `#!/bin/bash\nfor a; do URL="$a"; done\necho "$URL" >> "${log}"\n${curlScript}\n`,
+    { mode: 0o755 });
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', purgeStep.run], {
+    cwd: dir,
+    env: { PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: 'PUNKU-AI/punku-embedded-chat', MAJOR: 'v1' },
+    encoding: 'utf8',
+  });
+  const urls = fs.readFileSync(log, 'utf8').trim().split('\n');
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { status: result.status, stdout: result.stdout, urls };
+}
+
+test('the jsDelivr purge runs last, after the CloudFront invalidation, and never fails a release', () => {
+  const invalidation = uniqueStep(publish.steps, (step) => /aws\s+cloudfront\s+create-invalidation/.test(step.run || ''),
+    'CloudFront invalidation');
+  assert.equal(publish.steps.at(-1), purgeStep, 'The purge must be the last publish step');
+  assertOrdered(publish.steps, [invalidation, purgeStep]);
+  assert.equal(purgeStep['continue-on-error'], true);
+  assert.equal(purgeStep.if, undefined);
+  assert.equal(purgeStep.env.MAJOR, '${{ steps.v.outputs.major }}');
+  assert.doesNotMatch(purgeStep.run, /\$\{\{|\baws\s/);
+  const prefix = 'https://purge.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat';
+  const file = 'dist/build/static/js/bundle.min.js';
+  const expected = [`${prefix}@v1/${file}`, `${prefix}/${file}`, `${prefix}@latest/${file}`];
+  const purged = runPurgeStep(`echo '{"status":"finished"}' > purge-response.json; printf 200`);
+  assert.equal(purged.status, 0);
+  assert.deepEqual(purged.urls, expected);
+  assert.equal(purged.stdout.match(/"status":"finished"/g).length, 3, 'Each response must reach the log');
+  assert.doesNotMatch(purged.stdout, /::warning::/);
+  const refused = runPurgeStep('printf 403');
+  assert.equal(refused.status, 0);
+  assert.deepEqual(refused.urls, expected, 'A refused purge must not stop the other aliases');
+  assert.match(refused.stdout, /::warning::jsDelivr purge of '@v1' answered HTTP 403/);
+  const offline = runPurgeStep('printf 000; exit 28');
+  assert.equal(offline.status, 0);
+  assert.deepEqual(offline.urls, expected);
+  assert.match(offline.stdout, /::warning::jsDelivr purge of 'no version' answered HTTP 000/);
 });
 
 test('CI and releases call the same widget checks', () => {
