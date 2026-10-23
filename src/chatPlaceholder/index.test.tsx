@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, screen, act } from '@testing-library/react';
-import ChatMessagePlaceholder from './index';
-import { crystallineThinkingMessages, thinkingMessages } from '../translations';
+import ChatMessagePlaceholder, { PHRASE_INTERVAL_MS } from './index';
+import { splitThinkingText } from './phrases';
+import { crystallineThinkingMessages, Language, thinkingMessages } from '../translations';
 
 // Some tests below replace global.Math; give every test the real one back.
 const realMath = global.Math;
@@ -17,6 +18,9 @@ describe('ChatMessagePlaceholder', () => {
   });
 
   const phrase = () => document.querySelector('.cl-typing-text')?.textContent;
+  // The built-in phrases as the bubble shows them: without their own "…".
+  const shownPhrases = (language: Language) => thinkingMessages[language].map((text) => splitThinkingText(text)[0]);
+  const bubbleText = () => document.querySelector('.cl-typing')?.textContent;
 
   describe('Default Theme Rendering', () => {
     it('should render with default theme', () => {
@@ -34,13 +38,64 @@ describe('ChatMessagePlaceholder', () => {
       expect(botMessage).toBeInTheDocument();
     });
 
-    it('should show three typing dots and a thinking phrase for the default theme', () => {
+    it('should show a thinking phrase and three dots after it for the default theme', () => {
       render(<ChatMessagePlaceholder />);
 
       const typing = document.querySelector('.cl-bot_message.cl-typing');
       expect(typing).toBeInTheDocument();
-      expect(typing?.querySelectorAll('.cl-typing-dots span')).toHaveLength(3);
+      expect(Array.from(typing!.children).map((child) => child.className)).toEqual(['cl-typing-text', 'cl-typing-dots']);
+      expect(Array.from(typing!.querySelectorAll('.cl-typing-dots span')).map((dot) => dot.textContent)).toEqual(['.', '.', '.']);
       expect(phrase()).toBeTruthy();
+    });
+
+    it.each([
+      ['…', 'Checking prices…', 'Checking prices'],
+      ['...', 'Sta digitando...', 'Sta digitando'],
+      [' ...', 'Agent antwortet ...', 'Agent antwortet'],
+      ['..', 'Tankstelle wird angesteuert..', 'Tankstelle wird angesteuert'],
+      ['.', 'Einen Moment – ich schaue nach.', 'Einen Moment – ich schaue nach'],
+      ['no dots', 'Lass mich mal schauen', 'Lass mich mal schauen'],
+    ])('should replace a trailing %j with the three dots', (_ending, text, shown) => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={[text]} />);
+
+      expect(phrase()).toBe(shown);
+      expect(bubbleText()).toBe(`${shown}...`);
+    });
+
+    it('should put the dots before a trailing emoji', () => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={['Die Karten werden sortiert… 🛶']} />);
+
+      const typing = document.querySelector('.cl-typing')!;
+      expect(Array.from(typing.children).map((child) => child.className)).toEqual(['cl-typing-text', 'cl-typing-dots', 'cl-typing-tail']);
+      expect(bubbleText()).toBe('Die Karten werden sortiert... 🛶');
+    });
+
+    it('should show built-in phrases without their own ellipsis', () => {
+      render(<ChatMessagePlaceholder language="de" />);
+
+      expect(shownPhrases('de')).toContain(phrase());
+      expect(bubbleText()).not.toContain('…');
+      expect(bubbleText()).toMatch(/[^.]\.\.\.$/);
+    });
+
+    it('should restart the dots with each new phrase', () => {
+      const mockMath = Object.create(global.Math);
+      mockMath.random = jest.fn().mockReturnValue(0.5);
+      global.Math = mockMath;
+      render(<ChatMessagePlaceholder language="en" />);
+      const firstDots = document.querySelector('.cl-typing-dots');
+
+      act(() => {
+        jest.advanceTimersByTime(PHRASE_INTERVAL_MS);
+      });
+      const secondDots = document.querySelector('.cl-typing-dots');
+      expect(secondDots).not.toBe(firstDots);
+
+      // The same phrase again keeps the running dots.
+      act(() => {
+        jest.advanceTimersByTime(PHRASE_INTERVAL_MS);
+      });
+      expect(document.querySelector('.cl-typing-dots')).toBe(secondDots);
     });
 
     it('should hide the decorative dots from screen readers', () => {
@@ -59,7 +114,7 @@ describe('ChatMessagePlaceholder', () => {
 
     it('should render custom loading messages when provided', () => {
       render(<ChatMessagePlaceholder loading_messages={['Custom loading 1', 'Custom loading 2']} />);
-      expect(screen.getByText('Custom loading 1')).toBeInTheDocument();
+      expect(phrase()).toBe('Custom loading 1');
     });
   });
 
@@ -111,9 +166,8 @@ describe('ChatMessagePlaceholder', () => {
 
       render(<ChatMessagePlaceholder />);
 
-      // Advance timer by 2.5 seconds
       act(() => {
-        jest.advanceTimersByTime(2500);
+        jest.advanceTimersByTime(PHRASE_INTERVAL_MS);
       });
 
       // The component should have called setInterval
@@ -128,7 +182,7 @@ describe('ChatMessagePlaceholder', () => {
       render(<ChatMessagePlaceholder theme="swarovski" language="en" />);
 
       act(() => {
-        jest.advanceTimersByTime(2500);
+        jest.advanceTimersByTime(PHRASE_INTERVAL_MS);
       });
 
       expect(mockMath.random).toHaveBeenCalled();
@@ -183,13 +237,13 @@ describe('ChatMessagePlaceholder', () => {
     it('should show an English thinking phrase by default', () => {
       render(<ChatMessagePlaceholder />);
 
-      expect(thinkingMessages.en).toContain(phrase());
+      expect(shownPhrases('en')).toContain(phrase());
     });
 
     it('should show a German thinking phrase for language="de"', () => {
       render(<ChatMessagePlaceholder language="de" />);
 
-      expect(thinkingMessages.de).toContain(phrase());
+      expect(shownPhrases('de')).toContain(phrase());
     });
 
     it('should keep every phrase in the chat language as the phrase rotates', () => {
@@ -197,9 +251,9 @@ describe('ChatMessagePlaceholder', () => {
 
       for (let step = 0; step < 10; step += 1) {
         act(() => {
-          jest.advanceTimersByTime(2500);
+          jest.advanceTimersByTime(PHRASE_INTERVAL_MS);
         });
-        expect(thinkingMessages.en).toContain(phrase());
+        expect(shownPhrases('en')).toContain(phrase());
       }
     });
 
@@ -211,10 +265,38 @@ describe('ChatMessagePlaceholder', () => {
   });
 
   describe('Phrase Sources', () => {
-    it('should prefer loading_messages over the built-in phrases', () => {
-      render(<ChatMessagePlaceholder language="de" loading_messages={['  Checking the timetable…  ']} />);
+    it('should prefer loading_messages in the chat language over the built-in phrases', () => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={['  Ich prüfe den Fahrplan…  ']} />);
 
-      expect(phrase()).toBe('Checking the timetable…');
+      expect(phrase()).toBe('Ich prüfe den Fahrplan');
+    });
+
+    it('should show the built-in phrases when loading_messages are clearly in another language', () => {
+      render(<ChatMessagePlaceholder language="it" loading_messages={['Finding the best options…', 'Checking availability and prices…']} />);
+
+      expect(shownPhrases('it')).toContain(phrase());
+    });
+
+    it('should keep a short text in an unclear language', () => {
+      render(<ChatMessagePlaceholder language="de" loading_messages={['Agent responding ...']} />);
+
+      expect(phrase()).toBe('Agent responding');
+    });
+
+    it.each([
+      ['it', 'Cerco le migliori opzioni'],
+      ['fr', 'Finding the best options'],
+    ] as const)('should show the texts per language for a %s chat', (language, shown) => {
+      const loadingMessages = { it: ['Cerco le migliori opzioni…'], default: ['Finding the best options…'] };
+      render(<ChatMessagePlaceholder language={language} loading_messages={loadingMessages} />);
+
+      expect(phrase()).toBe(shown);
+    });
+
+    it('should use the built-in phrases without texts for the chat language or "default"', () => {
+      render(<ChatMessagePlaceholder language="pl" loading_messages={{ it: ['Cerco le migliori opzioni…'] }} />);
+
+      expect(shownPhrases('pl')).toContain(phrase());
     });
 
     it.each([
@@ -223,7 +305,7 @@ describe('ChatMessagePlaceholder', () => {
     ])('should use the built-in phrases when loading_messages is %s', (_case, loadingMessages) => {
       render(<ChatMessagePlaceholder language="de" loading_messages={loadingMessages} />);
 
-      expect(thinkingMessages.de).toContain(phrase());
+      expect(shownPhrases('de')).toContain(phrase());
     });
   });
 
@@ -244,6 +326,7 @@ describe('ChatMessagePlaceholder', () => {
 
         expect(botMessage).toHaveClass('cl-typing');
         expect(botMessage?.querySelectorAll('.cl-typing-dots span')).toHaveLength(3);
+        expect(botMessage?.textContent).toMatch(/[^.]\.\.\.$/);
       });
     });
 
@@ -277,9 +360,11 @@ describe('ChatMessagePlaceholder', () => {
 
       render(<ChatMessagePlaceholder />);
 
+      // Two cycles of the growing dots (3 × 400 ms) per phrase.
+      expect(PHRASE_INTERVAL_MS).toBe(2400);
       expect(setIntervalSpy).toHaveBeenCalledWith(
         expect.any(Function),
-        2500
+        PHRASE_INTERVAL_MS
       );
 
       setIntervalSpy.mockRestore();

@@ -1,6 +1,10 @@
 import { ChatMessagePlaceholderType } from "../types/chatWidget";
 import { useState, useEffect } from "react";
 import { crystallineThinkingMessages, thinkingMessages, Language } from "../translations";
+import { chooseLoadingMessages, splitThinkingText } from "./phrases";
+
+// A new phrase every two cycles of the growing dots (3 × 400 ms).
+export const PHRASE_INTERVAL_MS = 2400;
 
 export default function ChatMessagePlaceholder({
   bot_message_style,
@@ -8,17 +12,14 @@ export default function ChatMessagePlaceholder({
   language = "en" as Language,
   loading_messages,
 }: ChatMessagePlaceholderType) {
-  const normalizedCustomMessages = (loading_messages || [])
-    .map((m) => (typeof m === "string" ? m.trim() : ""))
-    .filter(Boolean);
-  // The site's loading_messages, else the built-in phrases for the chat's
-  // language (crystal phrases on the swarovski theme).
+  // The site's loading_messages for the chat's language, else the built-in
+  // phrases in that language (crystal phrases on the swarovski theme).
   const isCrystalline = theme === "swarovski";
   const fallbackMessages = isCrystalline
     ? crystallineThinkingMessages.map((msg) => (language === "de" ? msg.de : msg.en))
     : thinkingMessages[language] || thinkingMessages.en;
 
-  const messages = (normalizedCustomMessages.length > 0 ? normalizedCustomMessages : fallbackMessages) as string[];
+  const messages = chooseLoadingMessages(loading_messages, language) || fallbackMessages;
 
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
@@ -26,7 +27,7 @@ export default function ChatMessagePlaceholder({
     if (messages.length === 0) return;
     const interval = setInterval(() => {
       setCurrentMessageIndex(Math.floor(Math.random() * messages.length));
-    }, 2500);
+    }, PHRASE_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [messages.length]);
@@ -50,17 +51,21 @@ export default function ChatMessagePlaceholder({
     );
   }
 
-  // Typing indicator: three dots and the thinking phrase in the assistant's
-  // bubble. The chat window tells screen readers that the assistant writes.
+  // Typing indicator: the thinking phrase in the assistant's bubble, with
+  // dots that grow after it. The phrase's own trailing dots give way to them.
+  // A new phrase restarts the dots. The chat window tells screen readers that
+  // the assistant writes.
+  const [text, tail] = splitThinkingText(phrase);
   return (
     <div className="cl-chat-message cl-justify-start">
       <div style={bot_message_style} className="cl-bot_message cl-typing">
-        <span className="cl-typing-dots" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
+        <span className="cl-typing-text">{text}</span>
+        <span key={phrase} className="cl-typing-dots" aria-hidden="true">
+          <span>.</span>
+          <span>.</span>
+          <span>.</span>
         </span>
-        <span className="cl-typing-text">{phrase}</span>
+        {tail && <span className="cl-typing-tail">{tail}</span>}
       </div>
     </div>
   );

@@ -13,9 +13,15 @@ export type ChatMessageType = {
   };
 
 
+  /**
+   * Thinking texts: one list, or lists per language ("en", "it-IT", ...) with
+   * "default" for the other languages.
+   */
+  export type LoadingMessages = string[] | { [language: string]: string[] | undefined };
+
   export type ChatMessagePlaceholderType = {
     bot_message_style?: React.CSSProperties;
     theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
     language?: Language;
-    loading_messages?: string[];
+    loading_messages?: LoadingMessages;
   };

@@ -361,7 +361,7 @@ Use the widget API to customize your widget:
 - **default_language:**
   - Type: String
   - Required: No
-  - Description: Sets the language of the built-in texts: the default welcome message and placeholder, the AI notice, error messages, "Try again", the thinking phrases and the screen-reader labels. Supported values: `en` (English), `de` (German), `it` (Italian), `es` (Spanish), `pt` (Portuguese), `fr` (French) and `pl` (Polish). A region tag such as `it-IT` also works. Your own texts (`welcome_message`, `placeholder`, `loading_messages`, `ai_notice_text`) always show as you wrote them.
+  - Description: Sets the language of the built-in texts: the default welcome message and placeholder, the AI notice, error messages, "Try again", the thinking phrases and the screen-reader labels. Supported values: `en` (English), `de` (German), `it` (Italian), `es` (Spanish), `pt` (Portuguese), `fr` (French) and `pl` (Polish). A region tag such as `it-IT` also works. Your own texts (`welcome_message`, `placeholder`, `ai_notice_text`) always show as you wrote them. `loading_messages` can give texts per language; see there.
   - Without `default_language`, the widget takes:
     1. the page language (`<html lang>`), if the widget has that language,
     2. else the first browser language that the widget has,
@@ -420,7 +420,10 @@ Use the widget API to customize your widget:
 - **loading_messages:**
   - Type: JSON
   - Required: No
-  - Description: Array of strings that the widget shows in turn next to the typing dots while it waits for a reply, for example `'["One moment…","Checking the details…"]'`. Empty strings are ignored. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme shows its crystal phrases.
+  - Description: Thinking texts that the widget shows in turn, with growing dots after them, while it waits for a reply. Empty strings are ignored. A text's own trailing `...` or `…` gives way to the growing dots. Two forms:
+    - **One list**, for example `'["One moment…","Checking the details…"]'`. The texts show as written in a chat of their language. If they are clearly in another language than the chat, the visitor sees the built-in phrases in the chat's language instead. Example: English texts on an Italian page show the Italian built-in phrases. The widget recognises `en`, `de`, `it`, `es`, `pt`, `fr` and `pl` from common words and letters. If it cannot tell the language (for example one short text such as `"Sta digitando..."`), it keeps your texts.
+    - **Texts per language**, for example `'{"it":["Un attimo…"],"en":["One moment…"],"default":["One moment…"]}'`. The chat shows the list for its language (`it-IT` also matches `it`), else `default`, else the built-in phrases. These lists always show as written.
+  - The chat's language comes from `default_language` or the page; see `default_language`. If the array is empty or omitted, the widget shows its built-in phrases in the chat's language. The `swarovski` theme shows its crystal phrases.
 
 - **Online:**
   - Type: Boolean
@@ -651,7 +654,7 @@ The input bar holds a bordered input field with the arrow-up send button inside,
 
 ## Thinking and error states
 
-While the assistant prepares a reply, its bubble shows three animated dots and a short thinking phrase. The phrases come from `loading_messages`. Without it, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the dots do not move.
+While the assistant prepares a reply, its bubble shows a short thinking phrase with dots that grow after it: `.`, then `..`, then `...` (400 ms each). The space for three dots stays reserved, so the phrase does not move. A new phrase comes every 2.4 seconds and starts again with one dot. The phrases come from `loading_messages` in the chat's language (see there). Without them, the widget shows its built-in phrases in the chat's language (see `default_language`). The `swarovski` theme keeps its crystal loader and crystal phrases. If the visitor's system asks for reduced motion, the phrase ends in a still `…`.
 
 The input field stays enabled while the assistant answers, so the visitor can write the next message. Enter and the send button send it after the reply is complete.
 
