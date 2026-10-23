@@ -419,6 +419,38 @@ describe('ChatWidget', () => {
       expect(screen.getByTestId('chat-window')).toBeInTheDocument();
     });
 
+    it.each(['data-punku-chat-toggle', 'data-punku-handler'])(
+      'should let a page toggle button marked %s close the open widget',
+      (attribute) => {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+
+        // The page's own button toggles the widget through the global API (Swarovski).
+        const toggle = document.createElement('button');
+        toggle.setAttribute(attribute, 'true');
+        const icon = document.createElement('span');
+        toggle.appendChild(icon);
+        toggle.addEventListener('click', () => {
+          const api = (window as any)['punku-chat-widget_api'];
+          if (api.isOpen()) {
+            api.close();
+          } else {
+            api.open();
+          }
+        });
+        document.body.appendChild(toggle);
+
+        try {
+          fireEvent.pointerDown(icon);
+          expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+
+          fireEvent.click(icon);
+          expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+        } finally {
+          toggle.remove();
+        }
+      },
+    );
+
     it('should close chat window when Escape is pressed', () => {
       render(<ChatWidget {...defaultProps} start_open={true} />);
 

@@ -48,6 +48,10 @@ export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // the widget step below it while it is visible (pageDialogs.ts).
 export const DEFAULT_Z_INDEX = 2147483000;
 export const MAX_Z_INDEX = 2147483647;
+// A page button that opens and closes the widget through the global API.
+// A press on it is not a click outside: the button closes the widget itself.
+// data-punku-handler is the mark of the Swarovski page script.
+export const HOST_TOGGLE_SELECTOR = "[data-punku-chat-toggle], [data-punku-handler]";
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
@@ -540,7 +544,12 @@ export default function ChatWidget({
         path.includes(root) ||
         (shadowHost !== null && path.includes(shadowHost));
 
-      if (!clickedInside) {
+      // Else the press closes the widget, and the click that follows opens it again.
+      const clickedHostToggle = path.some(
+        (node) => node instanceof Element && node.matches(HOST_TOGGLE_SELECTOR),
+      );
+
+      if (!clickedInside && !clickedHostToggle) {
         closeWidget();
       }
     };
