@@ -13,6 +13,7 @@ import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { guardHintColors } from "./controlColors";
+import { belowBlockingDialog, useBlockingDialogZIndex } from "./pageDialogs";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
 import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
@@ -42,7 +43,9 @@ const CORNER_TOP_OFFSET = 20;
 export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // Above floating WhatsApp buttons (99999999 and lower). Below the banners of
 // large cookie consent tools (Cookiebot 2147483631, Usercentrics 2147483640,
-// OneTrust 2147483645), so the trigger cannot cover their buttons.
+// OneTrust 2147483645), so the trigger cannot cover their buttons. A modal or
+// consent dialog with a lower value, such as Borlabs Cookie (999999), makes
+// the widget step below it while it is visible (pageDialogs.ts).
 export const DEFAULT_Z_INDEX = 2147483000;
 export const MAX_Z_INDEX = 2147483647;
 
@@ -4266,6 +4269,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     [closed_widget_hint_background_color, closed_widget_hint_text_color]);
   const hintBackground = hintColors.background || closed_widget_hint_background_color;
   const hintText = hintColors.text || closed_widget_hint_text_color;
+  // A consent dialog or another modal dialog of the page stays above the
+  // widget, so a visitor can answer it (pageDialogs.ts).
+  const blockingDialogZIndex = useBlockingDialogZIndex();
   const isRelocated = Boolean(activeTriggerPosition);
 
   /*
@@ -4427,7 +4433,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           : { position: "fixed", ...triggerStyle, transform: "none" }),
         // The root is a stacking context. This one value places the whole
         // widget against the host page. Inner layers stack only inside it.
-        zIndex: activeTriggerPosition?.zIndex ?? getZIndex(z_index)
+        zIndex: belowBlockingDialog(activeTriggerPosition?.zIndex ?? getZIndex(z_index), blockingDialogZIndex)
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>

@@ -665,6 +665,13 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 
 The widget uses one z-index for the trigger, the hint and the chat window. The default is 2147483000. It puts the widget above most other elements of the host page.
 
+A dialog that the visitor must answer first stays above the widget. While the page shows one of these, the widget takes a z-index just below the layer of that dialog:
+- a dialog with `aria-modal="true"` or `role="alertdialog"`, for example Borlabs Cookie;
+- a dialog (`role="dialog"`) whose name, id or class contains cookie, consent, privacy, Datenschutz, GDPR or DSGVO, for example CookieScript ("Cookie consent dialog");
+- a fixed backdrop over the whole screen with one of these words in its id or class, for example the Contao privacy opt-in (`privacy_overlay`).
+
+When the dialog closes, the widget returns to its own z-index within a second. A floating WhatsApp button or a greeting bubble is none of these, so the widget stays above it.
+
 ### Known values
 
 These values come from the published code of each product (October 2026). A product can change its value in a new version.
@@ -684,12 +691,14 @@ These values come from the published code of each product (October 2026). A prod
 | Intercom launcher | 2147483001 | Yes |
 | HubSpot chat | 2147483647 | Yes |
 
+The last column compares the z-index values only. While a consent dialog is visible, the widget steps below it (see the start of this section). This was checked on the real pages of Borlabs Cookie, CookieScript and the Contao privacy opt-in.
+
 Menus, lightboxes, popups and newsletter dialogs of the site itself often use values from 9999 to 999999. The widget now paints above them too. Before this default, the widget used 9998 and stayed below most of them.
 
 ### When the widget covers a consent banner or a site element
 
 - Closed widget: the trigger and the hint can cover a button of a banner or menu in the same corner.
-- Open widget on a phone: the chat window fills the screen above the trigger. It covers a centered consent dialog of every tool with a value below 2147483000, for example Borlabs Cookie, Complianz, CookieYes or Iubenda. This happens with `start_open="true"`, or when a visitor opens the chat before they answer the consent dialog.
+- Open widget on a phone: the chat window fills the screen above the trigger. It covers a centered consent dialog with a value below 2147483000 that the widget does not recognise (see the start of this section). This happens with `start_open="true"`, or when a visitor opens the chat before they answer the consent dialog.
 - Open widget on a tablet: the chat window fills a large part of the screen and can cover a part of a centered dialog.
 - Open widget on a desktop: the chat window stays in its corner. It normally does not reach a centered dialog.
 

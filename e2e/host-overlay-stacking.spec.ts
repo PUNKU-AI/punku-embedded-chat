@@ -14,6 +14,31 @@ const whatsApp = `
 const consentBanner = `
   <div id="consent-banner"
        style="position:fixed;left:0;right:0;bottom:0;height:120px;background:#222;color:#fff;z-index:2147483631">We use cookies.</div>`;
+// Consent tools with a layer below the widget's default. While their dialog
+// is visible, the widget goes below it. Borlabs Cookie marks its dialog as
+// modal, CookieScript names it "Cookie consent dialog", and the Contao privacy
+// opt-in shows a backdrop over the whole screen without marks.
+const consentDialogs = [
+  {
+    tool: 'Borlabs Cookie', layer: 999999, html: `
+  <div id="consent-layer" style="position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.4)">
+    <div role="alertdialog" aria-modal="true" aria-label="Privacy settings"
+         style="margin:40px auto;width:260px;padding:16px;background:#fff">We use cookies.</div>
+  </div>`,
+  },
+  {
+    tool: 'CookieScript', layer: 999997, html: `
+  <div id="consent-layer" role="dialog" aria-label="Cookie consent dialog"
+       style="position:fixed;left:0;right:0;bottom:0;height:70%;z-index:999997;background:#fff">We use cookies.</div>`,
+  },
+  {
+    tool: 'the Contao privacy opt-in', layer: 10000000, html: `
+  <div class="mod_privacy_optin open">
+    <div id="consent-layer" class="privacy_overlay"
+         style="position:fixed;inset:0;z-index:10000000;background:rgba(0,0,0,0.5)"></div>
+  </div>`,
+  },
+];
 
 const errors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -120,6 +145,32 @@ test('a Cookiebot-level consent banner still covers the widget', async ({ page }
 
   const trigger = await settledBox(page, '.cl-trigger');
   expect(await topmostAt(page, center(trigger))).toBe('consent-banner');
+});
+
+for (const { tool, layer, html } of consentDialogs) {
+  test(`the consent dialog of ${tool} stays above the widget until the visitor answers it`, async ({ page }) => {
+    await injectHostElements(page, html);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+    const trigger = await settledBox(page, '.cl-trigger');
+    await expect.poll(() => widgetZIndex(page)).toBe(String(layer - 1));
+    expect(await topmostAt(page, center(trigger))).toBe('consent-layer');
+
+    // The visitor answers the dialog, and the consent tool removes it.
+    await page.evaluate(() => document.getElementById('consent-layer')!.remove());
+    await expect.poll(() => widgetZIndex(page)).toBe('2147483000');
+    expect(await topmostAt(page, center(trigger))).toBe('punku-chat');
+  });
+}
+
+test('a consent dialog that opens after the widget also stays above it', async ({ page }) => {
+  await loadWidget(page, { show_closed_widget_hint: 'false' });
+  const trigger = await settledBox(page, '.cl-trigger');
+  expect(await widgetZIndex(page)).toBe('2147483000');
+
+  await page.evaluate((html) => document.body.insertAdjacentHTML('beforeend', html), consentDialogs[0].html);
+  await expect.poll(() => widgetZIndex(page)).toBe('999998');
+  expect(await topmostAt(page, center(trigger))).toBe('consent-layer');
 });
 
 // The widget rounds and clamps z_index. 1e21 is invalid CSS (1e+21), and the
