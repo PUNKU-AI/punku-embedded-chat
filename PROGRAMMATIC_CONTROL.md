@@ -66,6 +66,8 @@ A press outside the open widget closes it. If your page opens and closes the wid
 
 The widget also accepts `data-punku-handler`, which existing page scripts set.
 
+If your button replaces the trigger (`chat_trigger_style='{"display":"none"}'`), the phone window still keeps 80 px free above the bottom of the screen for the trigger. Use `mobile_chat_window_style` to place it on phones, for example above a bottom bar of your page. See the README.
+
 ### 3. Trigger Relocation API
 
 Trigger relocation APIs are enabled by default. To hide them for an embed, set

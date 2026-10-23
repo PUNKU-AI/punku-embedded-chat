@@ -152,6 +152,7 @@ export default function ChatWidget({
   bot_message_style,
   user_message_style,
   chat_window_style,
+  mobile_chat_window_style,
   height,
   width,
   error_message_style,
@@ -220,6 +221,8 @@ export default function ChatWidget({
   bot_message_style?: React.CSSProperties;
   user_message_style?: React.CSSProperties;
   chat_window_style?: React.CSSProperties;
+  /** The place and size of the open window on phones (640 px wide or less). */
+  mobile_chat_window_style?: React.CSSProperties;
   online?: boolean;
   online_message?: string;
   branding?: "punku-ai" | "punku-ai-bookingkit";
@@ -4530,6 +4533,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           bot_message_style={botMessageStyleFromProps}
           user_message_style={userMessageStyleFromProps}
           chat_window_style={chatWindowStyleFromProps}
+          mobile_chat_window_style={mobile_chat_window_style}
           send_icon_style={send_icon_style}
           error_message_style={error_message_style}
           placeholder_sending={placeholder_sending}

@@ -231,6 +231,7 @@ Use the widget API to customize your widget:
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
+| mobile_chat_window_style | json   | No       |
 | client_error_report_url | string  | No       |
 | default_language      | string    | No       |
 | enable_client_error_reporting | boolean | No |
@@ -356,7 +357,20 @@ Use the widget API to customize your widget:
 - **chat_window_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the overall chat window.
+  - Description: Styling options for the overall chat window. On phones (640 px wide or less), the phone layout sets the window size, so size keys such as `maxHeight` do not apply there. Use `mobile_chat_window_style` to place and size the window on phones.
+
+- **mobile_chat_window_style:**
+  - Type: JSON
+  - Required: No
+  - Description: The place and size of the open window on phones (screens 640 px wide or less). Keys: `top`, `right`, `bottom`, `left`, `width`, `height` and `maxHeight`. The widget ignores other keys. Use `chat_window_style` for colours, borders and other styles.
+  - Each key replaces the phone default. By default, the window fills the width of the screen. It starts `top_offset` px below the top and ends 80 px above the bottom, which leaves room for the trigger.
+  - `top`, `right`, `bottom` and `left` are gaps to the edges of the visible part of the screen. With `bottom` and no `top`, the window sits on the bottom gap. With `right` and no `left`, it sits on the right gap.
+  - Without `height` or `width`, the window fills the room between the two gaps. `maxHeight` defaults to `height`.
+  - `vh` and `vw` measure the visible part of the screen. The browser toolbars and the on-screen keyboard make it smaller, so the window gets shorter.
+  - The window never leaves the visible part of the screen. A negative gap counts as 0.
+  - Values are CSS lengths, for example `65px`, `5%`, `calc(98vh - 120px)` or `min(600px, 80vh)`. A number is px. The widget ignores keywords such as `auto` and values that are not valid.
+  - Larger screens ignore this prop: tablets, desktops and phones in landscape.
+  - Example: `mobile_chat_window_style='{"bottom":"65px","height":"calc(98vh - 120px)"}'` keeps 65 px free under the window, for example for a bottom bar of your page.
 
 - **default_language:**
   - Type: String

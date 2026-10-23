@@ -39,7 +39,8 @@ jest.mock('./chatWindow', () => {
     positionOverrideStyle,
     programmaticMessage,
     onProgrammaticMessageHandled,
-    hostUrl
+    hostUrl,
+    mobile_chat_window_style
   }: {
     open: boolean;
     messages: any[];
@@ -52,6 +53,7 @@ jest.mock('./chatWindow', () => {
     programmaticMessage?: { id: number; message: string } | null;
     onProgrammaticMessageHandled?: (id: number) => void;
     hostUrl?: string;
+    mobile_chat_window_style?: React.CSSProperties;
   }) {
     mockReact.useEffect(() => {
       if (!open || !programmaticMessage) return;
@@ -67,6 +69,7 @@ jest.mock('./chatWindow', () => {
         <span data-testid="language">{language || 'en'}</span>
         <span data-testid="host-url">{hostUrl}</span>
         <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
+        <span data-testid="mobile-chat-window-style">{JSON.stringify(mobile_chat_window_style ?? null)}</span>
         <button data-testid="add-message" onClick={() => addMessage({ message: 'Test', isSend: true })}>
           Add Message
         </button>
@@ -245,6 +248,13 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} start_open={true} show_close_button_on_desktop={true} />);
 
       expect(screen.getByTestId('show-close-button-on-desktop')).toHaveTextContent('true');
+    });
+
+    it('should pass the phone window style to the chat window', () => {
+      const style = { bottom: '65px', height: 'calc(98vh - 120px)' };
+      render(<ChatWidget {...defaultProps} start_open={true} mobile_chat_window_style={style} />);
+
+      expect(screen.getByTestId('mobile-chat-window-style')).toHaveTextContent(JSON.stringify(style));
     });
 
     it('should apply custom left offset for left-side launcher placement', () => {
