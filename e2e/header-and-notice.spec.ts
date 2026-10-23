@@ -128,7 +128,7 @@ test('brand names in the status never break, also on a host page with hyphenatio
 test('the AI notice sits under the field in the chat language', async ({ page }) => {
   await openChat(page, { default_language: 'de' });
   const result = (await parts(page))!;
-  expect(result.notice).toBe('Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten.');
+  expect(result.notice).toBe('Sie chatten mit einem KI-Assistenten.');
   expect(result.noticeBox!.top).toBeGreaterThanOrEqual(result.field!.bottom);
   expect(result.noticeBox!.bottom).toBeLessThanOrEqual(result.window!.bottom + 1);
   // A muted colour that still reads on the white composer: #64748b.

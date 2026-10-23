@@ -2295,8 +2295,8 @@ describe('ChatWindow', () => {
     });
 
     it.each([
-      ['en', 'You are chatting with an AI assistant. Answers can contain mistakes.'],
-      ['de', 'Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten.'],
+      ['en', 'You are chatting with an AI assistant.'],
+      ['de', 'Sie chatten mit einem KI-Assistenten.'],
     ] as const)('should show the AI notice in %s by default', (language, notice) => {
       render(<ChatWindow {...defaultProps} language={language} />);
 
