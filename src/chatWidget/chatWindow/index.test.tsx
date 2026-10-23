@@ -2179,10 +2179,11 @@ describe('ChatWindow', () => {
       );
 
     // Header text colour of each theme without button_color, and the header
-    // icon colour: white on the accent avatar of the default and dark themes.
+    // icon colour: the light accent circle's colour (currentColor) in the
+    // default and dark themes.
     const themeHeaderColors = [
-      ['default', '#0f172a', '#FFFFFF'],
-      ['dark', 'white', '#FFFFFF'],
+      ['default', '#0f172a', 'currentColor'],
+      ['dark', 'white', 'currentColor'],
       ['ocean', 'white', 'white'],
       ['aurora', 'white', 'white'],
       ['punku-ai-bookingkit', 'white', 'white'],
@@ -2209,8 +2210,8 @@ describe('ChatWindow', () => {
 
       const header = document.querySelector('.cl-header') as HTMLElement;
       expect(header.getAttribute('style')).toBeNull();
-      // The header icon is white on its accent avatar; the actions sit on the white header.
-      expect(headerIconStrokes()).toEqual(['#FFFFFF', '#0f172a', '#0f172a']);
+      // The header icon takes its circle's colour; the actions sit on the white header.
+      expect(headerIconStrokes()).toEqual(['currentColor', '#0f172a', '#0f172a']);
     });
 
     it.each(themeHeaderColors.map(([theme]) => theme))(

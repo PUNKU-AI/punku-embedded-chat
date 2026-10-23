@@ -852,10 +852,11 @@ export default function ChatWindow({
   const headerIconColor = button_color
     ? button_text_color || '#FFFFFF'
     : theme === "default" ? "#0f172a" : "white";
-  // The default and dark themes put the header icon on an accent-coloured
-  // avatar, so it is white there. Elsewhere it follows the header colour.
+  // The default and dark themes put the header icon on a light accent circle.
+  // The icon takes the circle's colour (currentColor, set in the stylesheet).
+  // Elsewhere it follows the header colour.
   const avatarOnAccent = !button_color && (theme === "default" || theme === "dark");
-  const avatarIconColor = avatarOnAccent ? "#FFFFFF" : headerIconColor;
+  const avatarIconColor = avatarOnAccent ? "currentColor" : headerIconColor;
 
   // The bar under the messages holds the field and the AI notice. A fixed
   // height from input_container_style sizes the field, so the text never
@@ -1573,7 +1574,7 @@ export default function ChatWindow({
             width: 16px;
             height: 16px;
             border: 2px solid #e5e7eb;
-            border-top: 2px solid #3b82f6;
+            border-top: 2px solid var(--cl-accent, #0969da);
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }

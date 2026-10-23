@@ -1916,11 +1916,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: #334155;
 }
 
+/* The default theme uses one blue, #0969da (5.2:1 with white text), for the
+   visitor bubbles, the launcher, the send button and the accent (--cl-accent).
+   The hover is #085cc0. */
 .theme-default .cl-input-element:focus-visible {
-  border-color: #3b82f6;
+  border-color: #0969da;
   background-color: #ffffff;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.12);
 }
 
 .theme-default .cl-input-element::placeholder {
@@ -1928,7 +1931,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .theme-default .cl-user_message {
-  background: #3b82f6;
+  background: #0969da;
   color: #ffffff;
 }
 
@@ -1940,14 +1943,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-default.cl-trigger,
 .theme-default .cl-trigger,
 .theme-default .cl-send-button {
-  background: #3b82f6;
+  background: #0969da;
   transition: background-color 0.2s;
 }
 
 .theme-default.cl-trigger:hover,
 .theme-default .cl-trigger:hover,
 .theme-default .cl-send-button:hover {
-  background: #2563eb;
+  background: #085cc0;
 }
 
 /* Theme: Ocean (Deep & Vibrant) */
@@ -2437,7 +2440,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* ---------- Header and composer colours, per theme ----------
    --cl-line separates the header and the composer from the list, --cl-field
    and --cl-field-line draw the composer field, --cl-ring is its focus ring,
-   --cl-muted colours the AI notice, --cl-accent fills the avatar. */
+   --cl-muted colours the AI notice, --cl-accent colours the avatar icon. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-line: #e6ebf1;
@@ -2517,10 +2520,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
-/* The default and dark headers are neutral: the avatar carries the accent. */
-.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar,
+/* The default and dark headers are neutral: a light circle carries the icon,
+   which takes the circle's colour (currentColor). */
+.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar {
+  background: #e1edfb; /* #0969da at 12% on white */
+  color: var(--cl-accent);
+}
+
 .cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
-  background: var(--cl-accent);
+  background: #202758; /* #5558e8 at 24% on the dark header */
+  color: #a5b4fc;
 }
 
 .cl-window .cl-header-avatar .cl-header-logo {
@@ -2794,6 +2803,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-default {
+  --cl-accent: #0969da;
+  --cl-accent-hover: #085cc0;
+  --cl-ring: rgba(9, 105, 218, 0.18);
   --cl-bot-line: #e2e8f0;
 }
 

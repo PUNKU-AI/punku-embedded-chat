@@ -69,6 +69,7 @@ function layout(page: Page) {
     return {
       user: user && {
         textAlign: user.textAlign,
+        background: user.backgroundColor,
         maxWidth: user.maxWidth,
         radius: user.borderTopLeftRadius,
         tail: user.borderBottomRightRadius,
@@ -109,7 +110,10 @@ function layout(page: Page) {
 test('visitor text reads left to right and bubbles have the quiet shape', async ({ page }) => {
   await openConversation(page);
   const result = await layout(page);
-  expect(result.user).toEqual({ textAlign: 'left', maxWidth: '85%', radius: '18px', tail: '6px' });
+  // The default theme's one blue, #0969da.
+  expect(result.user).toEqual({
+    textAlign: 'left', background: 'rgb(9, 105, 218)', maxWidth: '85%', radius: '18px', tail: '6px',
+  });
   expect(result.bot).toEqual({ maxWidth: '85%', tail: '6px', border: '1px', shadow: 'none' });
   // A change of sender gets clearly more room than two answers in a row.
   expect(result.senderChangeGap!).toBeGreaterThanOrEqual(result.sameSenderGap! + 10);
@@ -120,7 +124,7 @@ test('a link on its own line is a button, a link in a sentence stays a link', as
   await openConversation(page);
   const result = await layout(page);
   expect(result.linkButton).toEqual({
-    display: 'inline-flex', background: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)', underline: 'none',
+    display: 'inline-flex', background: 'rgb(9, 105, 218)', color: 'rgb(255, 255, 255)', underline: 'none',
   });
   expect(result.listButton).toEqual({ border: '1px', bullet: 'none' });
   // A loose list gets the same outlined buttons, not filled ones.
@@ -149,7 +153,7 @@ for (const [bubble, textColor, link] of [
     const result = await layout(page);
     expect(result.inlineLink).toEqual({ color: link, underline: 'underline' });
     // The filled link button keeps the accent colour and its white text.
-    expect(result.linkButton).toMatchObject({ background: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)' });
+    expect(result.linkButton).toMatchObject({ background: 'rgb(9, 105, 218)', color: 'rgb(255, 255, 255)' });
   });
 }
 

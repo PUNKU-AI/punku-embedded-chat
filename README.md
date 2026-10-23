@@ -625,6 +625,10 @@ Use the widget API to customize your widget:
 
 The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
 
+In the default and dark themes, the avatar is a light circle with the icon in the theme's blue. A `header_icon` image shows without a circle.
+
+The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button, the header icon and the link buttons.
+
 The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 
 ## Thinking and error states

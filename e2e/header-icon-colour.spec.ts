@@ -82,9 +82,10 @@ async function expectVisibleHeaderIcons(page: Page, extraProps: Record<string, s
 
   const header = (await headerColours(page))!;
   expect(header.background).toBe('rgb(255, 255, 255)');
-  // The header icon is white on its accent avatar; the actions are dark on the white header.
+  // The header icon is blue on its light circle; the actions are dark on the white header.
   const expected: Record<string, { stroke: string; backdrop: string }> = {
-    '.cl-header-logo': { stroke: 'rgb(255, 255, 255)', backdrop: 'rgb(37, 99, 235)' },
+    // The default blue #0969da on its light circle (#0969da at 12% on white).
+    '.cl-header-logo': { stroke: 'rgb(9, 105, 218)', backdrop: 'rgb(225, 237, 251)' },
     '.cl-new-session-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
     '.cl-close-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
   };
