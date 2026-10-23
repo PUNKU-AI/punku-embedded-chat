@@ -138,7 +138,10 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
 - If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
 - The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
-- Your `link_color` stays from 3:1 on the answer bubble. Below that, the widget makes it just dark or light enough to reach 4.5:1.
+- Link text needs 4.5:1 on the answer bubble. Your `link_color` stays if it reaches that. Below that, the widget makes it just dark or light enough.
+- Without `link_color`, links use the theme's link colour if it reaches 4.5:1. Else they take the answer text colour. If that text colour also falls below 4.5:1, links take a dark or light shade of the bubble colour.
+- The AI notice under the input field needs 4.5:1 on the input bar (`background_color` or `input_container_style`). Below that, its grey becomes just dark or light enough.
+- The closed hint text needs 4.5:1 on the hint. Your own colours win over the widget's: with only `closed_widget_hint_background_color`, the text turns white or black; with only `closed_widget_hint_text_color`, the hint turns dark. With both, the widget makes your background just dark or light enough for your text, else the text takes white or black.
 - "Try again" in an error message takes white or black if the error text colour falls below 4.5:1.
 - Gradients and colour names cannot be measured: those controls stay as they are.
 

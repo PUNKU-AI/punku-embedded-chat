@@ -2134,13 +2134,16 @@ describe('ChatWindow', () => {
       expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
     });
 
-    // The links rule: the answer's text colour (inherit), a readable
-    // replacement when that text colour does not read either, or nothing.
+    // The links rule: the answer's text colour (inherit), a readable shade of
+    // the bubble when that text colour does not read either, or nothing.
     it.each([
       ['a dark red bot_message_color with white text', { bot_message_color: '#791f0d', bot_message_text_color: '#ffffff' }, 'inherit'],
       ['a dark red background and white text in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d', color: '#ffffff' } }, 'inherit'],
-      // Without a text colour the theme's dark text does not read on dark red either.
-      ['a dark red bot_message_color without a text colour', { bot_message_color: '#791f0d' }, '#ffffff'],
+      // Without a text colour the theme's dark text does not read on dark red
+      // either: links take a light shade of the red (4.6:1).
+      ['a dark red bot_message_color without a text colour', { bot_message_color: '#791f0d' }, '#c9a59e'],
+      // White text on a mid green reads at 3:1 only: links take a dark green.
+      ['a mid green bot_message_color with white text', { bot_message_color: '#3aaa35', bot_message_text_color: '#ffffff' }, '#113310'],
       ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, 'inherit'],
       ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, null],
       ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, null],

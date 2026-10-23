@@ -1257,6 +1257,7 @@ export default function ChatWindow({
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
           ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
+          ...(guarded.noticeInk ? {"--cl-notice-ink": guarded.noticeInk} : {}),
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}

@@ -1,11 +1,12 @@
 import { expect, Page, test } from '@playwright/test';
-import { loadWidget } from './widget-helpers';
+import { assertHintVisible, loadWidget } from './widget-helpers';
 
 // Controls stay visible on a site's own colours. In the browser, the filled
-// link button reaches 3:1 on the answer bubble and its label 4.5:1, links and
-// outlined link buttons reach 3:1 on the bubble, and the send button reaches
-// 3:1 in the field with an icon at 3:1. The colour sets come from saved
-// customer embeds (anonymised).
+// link button reaches 3:1 on the answer bubble and its label 4.5:1, link text
+// reaches 4.5:1 on the bubble and outlines 3:1, the send button reaches 3:1 in
+// the field with an icon at 3:1, and the AI notice reaches 4.5:1 on the input
+// bar. The closed hint text reaches 4.5:1 on the hint. The colour sets come
+// from saved customer embeds (anonymised).
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -69,14 +70,18 @@ function contrasts(page: Page) {
     const field = style('.cl-composer-field');
     const send = style('.cl-send-button');
     const icon = style('.cl-send-icon');
-    if (!bubble || !filled || !inline || !outlined || !field || !send || !icon) return null;
+    const bar = style('.cl-input_container');
+    const notice = style('.cl-ai-notice');
+    if (!bubble || !filled || !inline || !outlined || !field || !send || !icon || !bar || !notice) return null;
     return {
       filled: ratio(filled.backgroundColor, bubble.backgroundColor),
       filledLabel: ratio(filled.color, filled.backgroundColor),
       inlineLink: ratio(inline.color, bubble.backgroundColor),
       outlined: ratio(outlined.borderTopColor, bubble.backgroundColor),
+      outlinedLabel: ratio(outlined.color, bubble.backgroundColor),
       send: ratio(send.backgroundColor, field.backgroundColor),
       sendIcon: ratio(icon.stroke, send.backgroundColor),
+      notice: ratio(notice.color, bar.backgroundColor),
       colours: { bubble: bubble.backgroundColor, filled: filled.backgroundColor, label: filled.color },
     };
   });
@@ -107,6 +112,17 @@ const customers: Record<string, Record<string, string>> = {
     bot_message_text_color: '#2A2A2A', link_color: '#C69300',
     send_button_style: JSON.stringify({ backgroundColor: '#F2B705' }),
   },
+  'white text on mid green answers, a light grey window': {
+    button_text_color: '#ffffff', background_color: '#f1efee', bot_message_color: '#3aaa35',
+    bot_message_text_color: '#ffffff', send_button_style: JSON.stringify({ backgroundColor: '#3aaa35' }),
+  },
+  'a mid blue window': {
+    background_color: '#33a1e6', send_button_style: JSON.stringify({ backgroundColor: '#2a3849' }),
+  },
+  'green buttons and links in the dark theme': {
+    theme: 'dark', button_color: '#3F9B47', button_text_color: '#FFFFFF', background_color: '#111827',
+    bot_message_color: '#1F2937', bot_message_text_color: '#F9FAFB', link_color: '#3F9B47',
+  },
   'the dark theme': { theme: 'dark' },
   'the ocean theme': { theme: 'ocean' },
 };
@@ -117,12 +133,33 @@ for (const [name, props] of Object.entries(customers)) {
     const result = (await contrasts(page))!;
     expect(result.filled, JSON.stringify(result.colours)).toBeGreaterThanOrEqual(3);
     expect(result.filledLabel, JSON.stringify(result.colours)).toBeGreaterThanOrEqual(4.5);
-    expect(result.inlineLink).toBeGreaterThanOrEqual(3);
+    expect(result.inlineLink).toBeGreaterThanOrEqual(4.5);
     expect(result.outlined).toBeGreaterThanOrEqual(3);
+    expect(result.outlinedLabel).toBeGreaterThanOrEqual(4.5);
     expect(result.send).toBeGreaterThanOrEqual(3);
     expect(result.sendIcon).toBeGreaterThanOrEqual(3);
+    expect(result.notice).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+test('the closed hint darkens a light green just enough for its white text', async ({ page }) => {
+  await loadWidget(page, {
+    closed_widget_hint_text: 'Curious? Ask me.',
+    closed_widget_hint_background_color: '#3F9B47', closed_widget_hint_text_color: '#FFFFFF',
+  });
+  const hint = await assertHintVisible(page);
+  // White on #3F9B47 reads at 3.5:1. The text stays white on a darker green.
+  expect(hint.color).toBe('rgb(255, 255, 255)');
+  expect(hint.background).not.toBe('rgb(63, 155, 71)');
+  const ratio = await page.evaluate((background) => {
+    const [r, g, b] = (background.match(/[\d.]+/g) || []).slice(0, 3).map((channel) => {
+      const c = Number(channel) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05);
+  }, hint.background);
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
+});
 
 test('the filled button in the bubble colour turns gold with the bubble colour as text', async ({ page }) => {
   await openConversation(page, customers['a button in the bubble colour, gold links']);

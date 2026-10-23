@@ -12,6 +12,7 @@ import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookin
 import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
+import { guardHintColors } from "./controlColors";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
 import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
@@ -2704,12 +2705,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline-offset: 2px;
 }
 
-/* EU AI Act, Article 50: visitors see that an AI system answers. */
+/* EU AI Act, Article 50: visitors see that an AI system answers.
+   --cl-notice-ink: a readable colour on a site's input bar (controlColors.ts). */
 .cl-window .cl-ai-notice {
   text-align: center;
   font-size: 11.5px;
   line-height: 1.35;
-  color: var(--cl-muted);
+  color: var(--cl-notice-ink, var(--cl-muted));
   padding: 0 6px;
 }
 
@@ -4258,6 +4260,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     ? activeTriggerPosition.y <= CLOSED_HINT_TOP_EDGE_THRESHOLD
     : cornerPosition.startsWith("top-");
   const shouldRenderClosedWidgetHint = !open && show_closed_widget_hint && Boolean(closed_widget_hint_text.trim());
+  // The hint text must read on the hint's colour, for example white on a
+  // light green (3.5:1). The guard keeps colours that read (controlColors.ts).
+  const hintColors = useMemo(() => guardHintColors(closed_widget_hint_background_color, closed_widget_hint_text_color),
+    [closed_widget_hint_background_color, closed_widget_hint_text_color]);
+  const hintBackground = hintColors.background || closed_widget_hint_background_color;
+  const hintText = hintColors.text || closed_widget_hint_text_color;
   const isRelocated = Boolean(activeTriggerPosition);
 
   /*
@@ -4434,9 +4442,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
             className={`cl-closed-widget-hint ${closedHintLayout?.positionClass ?? preferredClosedHintPositionClass} ${showClosedWidgetHint ? "cl-visible" : ""}`}
             aria-hidden={!showClosedWidgetHint}
             style={{
-              ...(closed_widget_hint_background_color ? { ["--cl-closed-hint-bg" as any]: closed_widget_hint_background_color } : {}),
-              ...(closed_widget_hint_background_color ? { backgroundColor: closed_widget_hint_background_color } : {}),
-              ...(closed_widget_hint_text_color ? { color: closed_widget_hint_text_color } : {}),
+              ...(hintBackground ? { ["--cl-closed-hint-bg" as any]: hintBackground } : {}),
+              ...(hintBackground ? { backgroundColor: hintBackground } : {}),
+              ...(hintText ? { color: hintText } : {}),
             }}
           >
             <div className="cl-closed-widget-hint-text">{closed_widget_hint_text}</div>
