@@ -49,6 +49,23 @@ const isOpen = chatWidget.isOpen();
 console.log('Widget is open:', isOpen);
 ```
 
+#### Your own open and close button
+
+A press outside the open widget closes it. If your page opens and closes the widget with its own button, add `data-punku-chat-toggle` to that button. Otherwise the press closes the widget, and your click handler opens it again.
+
+```html
+<button id="my-chat-button" data-punku-chat-toggle>Chat</button>
+<script>
+  document.getElementById('my-chat-button').addEventListener('click', () => {
+    const chatWidget = window['my-chat-widget_api'];
+    if (chatWidget.isOpen()) chatWidget.close();
+    else chatWidget.open();
+  });
+</script>
+```
+
+The widget also accepts `data-punku-handler`, which existing page scripts set.
+
 ### 3. Trigger Relocation API
 
 Trigger relocation APIs are enabled by default. To hide them for an embed, set
