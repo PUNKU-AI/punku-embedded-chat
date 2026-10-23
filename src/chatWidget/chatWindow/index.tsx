@@ -1,12 +1,14 @@
-import { Send, RefreshCw, X } from "lucide-react";
+import { ArrowUp, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
+import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
+import { isReadableOn } from "../colorContrast";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -31,6 +33,10 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: 1.5,
 };
+
+// The link colour of each theme in answers: --cl-link in the widget stylesheet.
+const themeLinkColor = (theme: string) =>
+  ({ dark: "#a5b4fc", ocean: "#7dd3fc", aurora: "#f0abfc" } as Record<string, string>)[theme] || "#1d4ed8";
 
 /*
  * The visitor sees a plain sentence in the chat's language, never technical
@@ -97,6 +103,7 @@ export default function ChatWindow({
   additional_headers,
   theme = "default",
   welcome_message,
+  suggestions,
   show_feedback = false,
   header_icon,
   onHeaderIconError,
@@ -122,6 +129,7 @@ export default function ChatWindow({
   left_offset = 20,
   right_offset = 20,
   positionOverrideStyle,
+  scaledPage = null,
   programmaticMessage,
   onProgrammaticMessageHandled,
   widget_id = "punku-chat-widget",
@@ -130,6 +138,8 @@ export default function ChatWindow({
   enable_client_error_reporting = true,
   onCheckout,
   removeLastMessage,
+  ai_notice_text,
+  show_ai_notice = true,
 }: {
   api_key?: string;
   output_type: string,
@@ -166,6 +176,8 @@ export default function ChatWindow({
   additional_headers?: { [key: string]: string };
   theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
   welcome_message?: string;
+  /** Up to four questions under the welcome message; a tap sends one. */
+  suggestions?: string[];
   show_feedback?: boolean;
   header_icon?: string;
   onHeaderIconError?: () => void;
@@ -190,6 +202,8 @@ export default function ChatWindow({
   left_offset?: number;
   right_offset?: number;
   positionOverrideStyle?: React.CSSProperties;
+  /** A page that the browser scales up, such as Wix with width=320 (scaledPage.ts). */
+  scaledPage?: ScaledPage | null;
   programmaticMessage?: { id: number; message: string } | null;
   onProgrammaticMessageHandled?: (id: number) => void;
   widget_id?: string;
@@ -199,6 +213,10 @@ export default function ChatWindow({
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
   /** Removes the newest message (the error that Try again replaces). */
   removeLastMessage?: () => void;
+  /** Replaces the AI notice under the input (EU AI Act, Article 50). */
+  ai_notice_text?: string;
+  /** false hides the AI notice, for sites that show it elsewhere. */
+  show_ai_notice?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
   // Use translations based on language prop
@@ -228,13 +246,18 @@ export default function ChatWindow({
   /*
    * The phone styles size and place the window from the visible part of the
    * page, not from the layout viewport (#77). Set the box before the first
-   * open frame, and follow it while the window is open.
+   * open frame, and follow it while the window is open. In the scaled page
+   * frame, the visible part is the frame (getScaledFrameVisualViewport).
    */
+  const inScaledFrame = Boolean(scaledPage);
   useLayoutEffect(() => {
     const chatWindow = chatWindowRef.current;
-    if (!open || !chatWindow) return;
+    if (!open || !chatWindow || inScaledFrame) return;
     return trackVisualViewport(chatWindow);
-  }, [open]);
+  }, [open, inScaledFrame]);
+  // Viewport units measure the small page on a scaled page. See viewportLength.
+  const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
+  const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
 
   // Place the window from the visible corner. In Chrome on Android, the
   // layout viewport corner can be outside the screen (#77). The 641 px and
@@ -605,6 +628,24 @@ export default function ChatWindow({
     }
   }
 
+  // Suggested questions under the welcome message: up to four, never empty.
+  const suggestionList = Array.isArray(suggestions)
+    ? suggestions
+        .filter((suggestion): suggestion is string => typeof suggestion === "string" && suggestion.trim() !== "")
+        .map((suggestion) => suggestion.trim())
+        .slice(0, 4)
+    : [];
+
+  // The newest answer keeps its feedback buttons visible; older ones show
+  // them on hover, on focus or after a vote.
+  let latestAnswerIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (!messages[index].isSend && !messages[index].error) {
+      latestAnswerIndex = index;
+      break;
+    }
+  }
+
   // Try again: remove the error message and send the visitor's last message again.
   const lastMessageIsError = messages.length > 0 && !!messages[messages.length - 1].error;
   const lastUserText = lastMessageIsError
@@ -649,15 +690,64 @@ export default function ChatWindow({
   ]);
 
   /*
-   * Keep the newest message and streamed tokens in view. Scroll only the
-   * message list: scrollIntoView() also scrolls every scrollable ancestor,
-   * including the visual viewport. On a phone page wider than the screen that
-   * pans the visitor's view of the host page (#69).
+   * Keep the newest message and streamed tokens in view, but only while the
+   * visitor reads at the bottom. A visitor who scrolls up to read an earlier
+   * answer stays there, and a button leads back to the newest message.
+   * Scroll only the message list: scrollIntoView() also scrolls every
+   * scrollable ancestor, including the visual viewport. On a phone page wider
+   * than the screen that pans the visitor's view of the host page (#69).
    */
+  const followNewest = useRef(true);
+  const lastListScrollTop = useRef(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  useEffect(() => {
+    const list = messagesContainer.current;
+    if (!list) return;
+    const handleScroll = () => {
+      const distance = list.scrollHeight - list.clientHeight - list.scrollTop;
+      // Only the visitor moves the list up; the widget's own scrolls go down.
+      if (list.scrollTop < lastListScrollTop.current - 2 && distance > 8) {
+        followNewest.current = false;
+      }
+      if (distance <= 80) {
+        followNewest.current = true;
+      }
+      lastListScrollTop.current = list.scrollTop;
+      setShowJumpToLatest(!followNewest.current && distance > 120);
+    };
+    list.addEventListener("scroll", handleScroll, { passive: true });
+    return () => list.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useEffect(() => {
     const el = messagesContainer.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!el) return;
+    const last = messages[messages.length - 1];
+    // A scroll up counts even before its scroll event fires (one frame later):
+    // the next streamed word must not pull the visitor back down.
+    if (el.scrollTop < lastListScrollTop.current - 2 && el.scrollHeight - el.clientHeight - el.scrollTop > 8) {
+      followNewest.current = false;
+    }
+    // The visitor's own new message always shows, and the answer follows it.
+    if (last?.isSend) followNewest.current = true;
+    if (followNewest.current) {
+      // Pin a streamed answer at once. A smooth scroll per word keeps an
+      // animation running that can override the visitor's own scroll.
+      el.scrollTo({ top: el.scrollHeight, behavior: last?.streaming ? "auto" : "smooth" });
+    } else {
+      // The answer grows below a visitor who scrolled up. That fires no scroll
+      // event, so check here whether the newest text is now far enough away.
+      setShowJumpToLatest(el.scrollHeight - el.clientHeight - el.scrollTop > 120);
+    }
   }, [messages]);
+
+  const jumpToLatest = () => {
+    const el = messagesContainer.current;
+    followNewest.current = true;
+    setShowJumpToLatest(false);
+    el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
 
   /*
    * Keep wheel/touch scrolling inside the message list instead of letting a
@@ -674,13 +764,67 @@ export default function ChatWindow({
    * preventScroll: a plain focus() pans the host page like scrollIntoView() (#69).
    */
 
+  /*
+   * When the chat opens, the visitor wants to type: focus the input. After an
+   * answer, never take focus from the host page, or from a link or button in
+   * the messages: the visitor works there. On a touch screen, keep the
+   * keyboard closed after an answer, so the visitor can read.
+   */
+  const wasOpen = useRef(false);
+  const focusOnOpen = useRef(false);
   useEffect(() => {
+    // A ref, not a local flag: a message change in the first 100 ms restarts
+    // the timer, and the chat still focuses its input for the opening.
+    if (open && !wasOpen.current) focusOnOpen.current = true;
+    if (!open) focusOnOpen.current = false;
+    wasOpen.current = open;
     if (!open || sendingMessage) return;
     const focusTimer = setTimeout(() => {
-      inputRef.current?.focus({ preventScroll: true });
+      const input = inputRef.current;
+      if (!input) return;
+      const opening = focusOnOpen.current;
+      focusOnOpen.current = false;
+      if (!opening) {
+        const root = input.getRootNode() as Document | ShadowRoot;
+        const host = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot ? root.host : null;
+        const pageFocus = document.activeElement;
+        const focusOnHostPage =
+          !!pageFocus &&
+          pageFocus !== document.body &&
+          pageFocus !== document.documentElement &&
+          pageFocus !== host &&
+          !chatWindowRef.current?.contains(pageFocus);
+        if (focusOnHostPage) return;
+        const chatFocus = root.activeElement;
+        if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
+        const touchScreen =
+          typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+        if (touchScreen) return;
+      }
+      input.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
   }, [messages, open, sendingMessage]);
+
+  /*
+   * When the chat closes from inside (the close button, Escape), the focus
+   * goes back to the launcher, so keyboard and screen-reader users keep their
+   * place. A click on the host page keeps the focus where the visitor put it.
+   */
+  const wasOpenForFocus = useRef(open);
+  useEffect(() => {
+    const closed = wasOpenForFocus.current && !open;
+    wasOpenForFocus.current = open;
+    if (!closed) return;
+    const chatWindow = chatWindowRef.current;
+    const trigger = triggerRef?.current;
+    if (!chatWindow || !trigger) return;
+    const root = chatWindow.getRootNode() as Document | ShadowRoot;
+    const focused = root.activeElement;
+    if (focused && chatWindow.contains(focused)) {
+      trigger.focus({ preventScroll: true });
+    }
+  }, [open, triggerRef]);
 
   /*
    * The composer grows with the text and takes that height from the message
@@ -693,6 +837,9 @@ export default function ChatWindow({
     const distanceToBottom = list.scrollHeight - list.clientHeight - list.scrollTop;
     if (distanceToBottom <= delta + 2) {
       list.scrollTop = list.scrollHeight;
+    } else if (!followNewest.current) {
+      // A taller field makes the list shorter: the newest text moves away.
+      setShowJumpToLatest(distanceToBottom > 120);
     }
   }, []);
 
@@ -705,9 +852,39 @@ export default function ChatWindow({
   const headerIconColor = button_color
     ? button_text_color || '#FFFFFF'
     : theme === "default" ? "#0f172a" : "white";
+  // The default and dark themes put the header icon on an accent-coloured
+  // avatar, so it is white there. Elsewhere it follows the header colour.
+  const avatarOnAccent = !button_color && (theme === "default" || theme === "dark");
+  const avatarIconColor = avatarOnAccent ? "#FFFFFF" : headerIconColor;
+
+  // The bar under the messages holds the field and the AI notice. A fixed
+  // height from input_container_style sizes the field, so the text never
+  // leaves it. The other keys (background, border) style the bar.
+  const {
+    height: fieldHeight,
+    minHeight: fieldMinHeight,
+    maxHeight: fieldMaxHeight,
+    ...inputBarStyle
+  } = input_container_style || {};
+  // The textarea is transparent, so input_style's background goes on the field.
+  const composerFieldStyle: React.CSSProperties = {
+    height: fieldHeight,
+    minHeight: fieldMinHeight,
+    maxHeight: fieldMaxHeight,
+    ...(input_style?.backgroundColor ? { backgroundColor: input_style.backgroundColor } : {}),
+  };
 
   // Determine welcome message
   const displayWelcomeMessage = welcome_message || t.welcomeMessage;
+
+  // A site's own answer colour (bot_message_color, or a background in
+  // bot_message_style) can clash with the theme's link colour: blue on dark
+  // red reads at 1.6:1. Then links take the answer's text colour. Also when
+  // the colour cannot be read, for example a gradient.
+  const customBotBackground =
+    bot_message_color || bot_message_style?.backgroundColor || bot_message_style?.background;
+  const linksTakeTextColor =
+    !!customBotBackground && !link_color && !isReadableOn(themeLinkColor(theme), customBotBackground);
 
   const effectiveBranding =
     branding === "punku-ai" ? "punku-ai" : "punku-ai-bookingkit";
@@ -757,6 +934,8 @@ export default function ChatWindow({
     setShowConfirmModal(false);
     if (onStartNewSession) {
       onStartNewSession();
+      // A new conversation starts with an empty field, not the old draft.
+      setValue("");
     }
   };
 
@@ -775,10 +954,11 @@ export default function ChatWindow({
       style={{
         "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
         "--cl-top-offset": `${Number(top_offset) || 0}px`,
+        ...(scaledPage ? getScaledFrameVisualViewport(scaledPage) : {}),
         position: "fixed",
         ...effectiveWindowPositionStyle,
-        maxHeight: "70vh",
-        maxWidth: "90vw",
+        maxHeight: vh(70),
+        maxWidth: vw(90),
         transform: "none !important", // Override any transforms with !important
         zIndex: positionOverrideStyle?.zIndex ?? 9999,
       } as React.CSSProperties}
@@ -840,6 +1020,15 @@ export default function ChatWindow({
             text-decoration: underline !important;
           }
 
+          /* The theme's link colour is hard to read on the site's own bubble
+             colour. Links take the bubble's text colour and keep their
+             underline. Filled link buttons keep the accent colour. */
+          ${linksTakeTextColor ? `
+          .cl-window .cl-bot_message .markdown-body a {
+            color: inherit !important;
+          }
+          ` : ''}
+
           /* Link color customization - scoped to chat messages only, not footer */
           ${link_color ? `
           .cl-window .cl-bot_message a,
@@ -857,9 +1046,12 @@ export default function ChatWindow({
           }
           ` : ''}
 
-          /* Responsive sizing for all screen sizes */
+          /*
+           * Responsive sizing for all screen sizes. On a scaled page,
+           * screenRules picks the rules from the frame size (scaledPage.ts).
+           */
           /* Mobile - Small phones */
-          @media (max-width: 640px) {
+          ${screenRules({ maxWidth: 640 }, `
             /*
              * Fit the visible part of the page (#77). trackVisualViewport sets
              * the variables. Without them, fill the layout viewport, as before.
@@ -874,8 +1066,9 @@ export default function ChatWindow({
               max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
               max-width: var(--cl-visual-viewport-width, 100%) !important;
               padding-top: env(safe-area-inset-top, 0px);
-              /* Follow the visible area at once. Animate only the open and close. */
-              transition-property: transform;
+              /* Follow the visible area at once. Animate only the open and close
+                 (the fade and the rise). */
+              transition-property: opacity, transform, visibility;
             }
 
             .cl-window {
@@ -891,6 +1084,13 @@ export default function ChatWindow({
               height: 44px !important;
             }
 
+            /* One line of text is as tall as the 44px send button, so the
+               text is centred next to it. input_style can still set the padding. */
+            .cl-window .cl-composer-field .cl-input-element {
+              padding-top: max(10px, 0.625rem);
+              padding-bottom: max(10px, 0.625rem);
+            }
+
             .cl-input-element {
               font-size: 16px !important; /* Prevents zoom on iOS */
             }
@@ -899,7 +1099,7 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /*
            * 641 px and wider: keep the window inside the visible part of the
@@ -910,9 +1110,9 @@ export default function ChatWindow({
            * send button stay on the screen. The X, Escape or a tap outside
            * then closes it.
            */
-          @media (min-width: 641px) {
+          ${screenRules({ minWidth: 641 }, `
             .cl-chat-window {
-              --cl-visible-height: var(--cl-visual-viewport-height, 100vh);
+              --cl-visible-height: var(--cl-visual-viewport-height, ${vh(100)});
               --cl-trigger-gap: calc(var(--cl-bottom-offset) + 80px);
               --cl-window-room: max(
                 calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
@@ -920,16 +1120,16 @@ export default function ChatWindow({
               );
               --cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));
             }
-          }
+          `, scaledPage)}
 
           /* Mobile landscape and small tablets */
-          @media (min-width: 641px) and (max-width: 767px) {
+          ${screenRules({ minWidth: 641, maxWidth: 767 }, `
             .cl-chat-window {
               /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
-              --cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));
-              width: var(--cl-anchored-window-width, min(420px, 85vw)) !important;
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, ${vh(75)}));
+              width: var(--cl-anchored-window-width, min(420px, ${vw(85)})) !important;
               height: var(--cl-window-height) !important;
-              max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important;
+              max-height: var(--cl-anchored-window-height, min(${vh(75)}, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -942,16 +1142,16 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /* Tablets */
-          @media (min-width: 768px) and (max-width: 1023px) {
+          ${screenRules({ minWidth: 768, maxWidth: 1023 }, `
             .cl-chat-window {
               /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
-              --cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));
-              width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important;
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, ${vh(70)}));
+              width: var(--cl-anchored-window-width, min(420px, calc(${vw(60)} - 10px))) !important;
               height: var(--cl-window-height) !important;
-              max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important;
+              max-height: var(--cl-anchored-window-height, min(${vh(70)}, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -963,7 +1163,7 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /*
            * Short landscape screens (#77): 641-1023 px wide, at most 500 px
@@ -975,8 +1175,7 @@ export default function ChatWindow({
            * Else it moves down (--cl-window-gap of the 641 px rule). An
            * anchored window (setTriggerPosition) keeps its own place.
            */
-          ${positionOverrideStyle ? '' : `
-          @media (min-width: 641px) and (max-width: 1023px) and (max-height: 500px) {
+          ${positionOverrideStyle ? '' : screenRules({ minWidth: 641, maxWidth: 1023, maxHeight: 500 }, `
             .cl-chat-window {
               --cl-trigger-gap: var(--cl-bottom-offset);
               --cl-window-room: max(
@@ -986,44 +1185,44 @@ export default function ChatWindow({
               top: ${visualViewportInset("top", "8px")} !important;
               bottom: ${visualViewportInset("bottom", "var(--cl-window-gap)")} !important;
               ${besideTriggerSide}: ${visualViewportInset(besideTriggerSide, besideTriggerInset)} !important;
-              width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - ${besideTriggerInset} - 8px)) !important;
+              width: min(420px, ${vw(85)}, calc(var(--cl-visual-viewport-width, ${vw(100)}) - ${besideTriggerInset} - 8px)) !important;
               height: auto !important;
               max-height: none !important;
-              /* Follow the visible area at once. Animate only the open and close. */
-              transition-property: transform;
+              /* Follow the visible area at once. Animate only the open and close
+                 (the fade and the rise). */
+              transition-property: opacity, transform, visibility;
             }
-          }
-          `}
+          `, scaledPage)}
 
           /* Desktop - standard sizes (1024px - 1440px) */
-          @media (min-width: 1024px) and (max-width: 1440px) {
+          ${screenRules({ minWidth: 1024, maxWidth: 1440 }, `
             .cl-chat-window {
-              --cl-window-height: min(${height || 650}px, 70vh);
-              max-height: min(70vh, var(--cl-window-room)) !important;
-              max-width: 90vw !important;
+              --cl-window-height: min(${height || 650}px, ${vh(70)});
+              max-height: min(${vh(70)}, var(--cl-window-room)) !important;
+              max-width: ${vw(90)} !important;
             }
 
             .cl-window {
               width: ${width || 450}px !important;
               height: ${height || 650}px !important;
-              max-height: min(70vh, var(--cl-window-room)) !important;
+              max-height: min(${vh(70)}, var(--cl-window-room)) !important;
             }
-          }
+          `, scaledPage)}
 
           /* Large desktop displays */
-          @media (min-width: 1441px) {
+          ${screenRules({ minWidth: 1441 }, `
             .cl-chat-window {
-              --cl-window-height: min(${height || 700}px, 75vh);
-              max-height: min(75vh, var(--cl-window-room)) !important;
-              max-width: 90vw !important;
+              --cl-window-height: min(${height || 700}px, ${vh(75)});
+              max-height: min(${vh(75)}, var(--cl-window-room)) !important;
+              max-width: ${vw(90)} !important;
             }
 
             .cl-window {
-              width: min(${width || 500}px, 90vw) !important;
-              height: min(${height || 700}px, 75vh) !important;
-              max-height: min(75vh, var(--cl-window-room)) !important;
+              width: min(${width || 500}px, ${vw(90)}) !important;
+              height: min(${height || 700}px, ${vh(75)}) !important;
+              max-height: min(${vh(75)}, var(--cl-window-room)) !important;
             }
-          }
+          `, scaledPage)}
 
           /* Ensure message container scrolls properly at all sizes */
           .cl-messages_container {
@@ -1048,111 +1247,89 @@ export default function ChatWindow({
           width,
           height,
           minWidth: width,
-          ...(background_color ? {backgroundColor: background_color} : {})
-        }}
+          ...(background_color ? {backgroundColor: background_color} : {}),
+          // A site's button colour is the accent for link buttons in answers,
+          // and its button text colour is the text on them.
+          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {})
+        } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
       >
-        <div className="cl-header" style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}>
+        {/* One row: the avatar, the title with the status under it, and the actions. */}
+        <div
+          className={"cl-header" + (button_color ? " cl-header--colored" : "")}
+          style={button_color ? {backgroundColor: button_color, color: button_text_color || '#FFFFFF'} : undefined}
+        >
           <div className="cl-header-content">
             {header_icon ? (
               <img
                 src={header_icon}
                 onError={onHeaderIconError}
-                alt="Chat icon"
-                className="cl-header-logo"
-                width="36"
-                height="36"
+                alt=""
+                className="cl-header-logo cl-header-logo-image"
+                width="38"
+                height="38"
               />
             ) : (
-              <div className="cl-default-header-icon">
+              <div className="cl-default-header-icon cl-header-avatar" aria-hidden="true">
                 <LucideCdnIcon
                   name={header_icon_name}
                   className="cl-header-logo"
-                  color={headerIconColor}
-                  size={24}
+                  color={avatarIconColor}
+                  size={20}
                 />
               </div>
             )}
-            {displayTitle}
-            {onStartNewSession && (
-              <button
-                onClick={handleNewSession}
-                className="cl-new-session-btn"
-                title="Start new conversation"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: '8px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <RefreshCw
-                  size={16}
-                  color={headerIconColor}
-                />
-              </button>
-            )}
-            {/* Close button for mobile and tablet */}
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="cl-close-btn"
-                title="Close chat"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: show_close_button_on_desktop ? 'flex' : 'none',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: 'auto',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                <X
-                  size={20}
-                  color={headerIconColor}
-                />
-              </button>
-            )}
-          </div>
-          <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
-            {online ? (
-              <>
-                <div className="cl-online-message"></div>
-                {online_message || statusBranding}
-              </>
-            ) : (
-              <>
-                <div className="cl-offline-message"></div>
-                {offline_message || t.offlineMessage}
-              </>
-            )}
+            <div className="cl-header-titles">
+              <div className="cl-header-title">{displayTitle}</div>
+              <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
+                <span className={online ? "cl-online-message" : "cl-offline-message"} aria-hidden="true"></span>
+                <span className="cl-header-status">
+                  {online ? (online_message || statusBranding) : (offline_message || t.offlineMessage)}
+                </span>
+              </div>
+            </div>
+            <div className="cl-header-actions">
+              {onStartNewSession && (
+                <button
+                  type="button"
+                  onClick={handleNewSession}
+                  className="cl-new-session-btn cl-header-btn"
+                  title={t.newConversation}
+                  aria-label={t.newConversation}
+                >
+                  <RefreshCw size={17} color={headerIconColor} aria-hidden="true" />
+                </button>
+              )}
+              {/* Close button for phones and tablets; desktop shows it only with show_close_button_on_desktop */}
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="cl-close-btn cl-header-btn"
+                  title={t.closeChat}
+                  aria-label={t.closeChat}
+                  style={{ display: show_close_button_on_desktop ? 'flex' : 'none' }}
+                >
+                  <X size={20} color={headerIconColor} aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="cl-messages_container" ref={messagesContainer} style={background_color ? { backgroundColor: background_color } : undefined}>
+        {/* A named log of the conversation. The status region below reads new
+            answers once, so the log itself does not announce changes. */}
+        <div
+          className="cl-messages_container"
+          ref={messagesContainer}
+          role="log"
+          aria-live="off"
+          aria-label={t.messageList}
+          // Busy while an answer is on its way: the list is still changing.
+          aria-busy={sendingMessage}
+          style={background_color ? { backgroundColor: background_color } : undefined}
+        >
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">
@@ -1190,6 +1367,30 @@ export default function ChatWindow({
             />
           )}
 
+          {/* Suggested questions before the conversation starts: a tap sends one. */}
+          {messages.length === 0 && suggestionList.length > 0 && (
+            <div
+              className="cl-suggestions"
+              role="group"
+              aria-label={t.suggestions}
+              // A site colour for the border only: as text, a light or dark
+              // button_color could be unreadable on the chip background.
+              style={button_color ? {"--cl-chip-line": button_color} as React.CSSProperties : undefined}
+            >
+              {suggestionList.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="cl-suggestion"
+                  disabled={sendingMessage}
+                  onClick={() => sendUserMessage(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+
           {messages.map((message, index) => (
             <ChatMessage
               bot_message_style={
@@ -1219,8 +1420,11 @@ export default function ChatWindow({
               host_url={hostUrl}
               onClientError={notifyClientError}
               onCheckout={onCheckout}
+              isLatest={index === latestAnswerIndex}
               onRetry={index === messages.length - 1 ? handleRetry : undefined}
               retryLabel={t.retry}
+              helpfulLabel={t.helpful}
+              notHelpfulLabel={t.notHelpful}
             />
           ))}
           {sendingMessage && !isStreaming && (
@@ -1238,65 +1442,96 @@ export default function ChatWindow({
               loading_messages={loading_messages}
             />
           )}
+          {/* Back to the newest message, for a visitor who scrolled up. The
+              anchor has no height, so it never changes the scroll length. */}
+          {showJumpToLatest && (
+            <div className="cl-jump-latest-anchor">
+              <button
+                type="button"
+                className="cl-jump-latest"
+                onClick={jumpToLatest}
+                aria-label={t.jumpToLatest}
+                title={t.jumpToLatest}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 5v14" />
+                  <path d="m19 12-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
         <div className="cl-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {statusAnnouncement}
         </div>
-        <div style={{...input_container_style, ...(button_color ? {backgroundColor: `${button_color} !important`, borderColor: 'transparent !important'} : {})}} className="cl-input_container">
-          <ChatInput
-            ref={inputRef}
-            value={value}
-            onChange={setValue}
-            onSend={handleClick}
-            // The visitor can write the next message while the assistant answers;
-            // it sends after the answer (the send button stays disabled until then).
-            placeholder={sendingMessage && placeholder_sending ? placeholder_sending : (placeholder || t.placeholder)}
-            ariaLabel={t.inputLabel}
-            style={{
-              ...DEFAULT_INPUT_TEXT_STYLE,
-              ...(input_style || {}),
-            }}
-            onHeightChange={handleInputHeightChange}
-            className="cl-input-element"
-          />
-          <button
-            className="cl-send-button"
-            style={{
-              // Base styles
-              borderRadius: '50%',
-              width: '40px',
-              height: '40px',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              // Bottom-aligned next to the growing composer; 12px centres it on the last text line.
-              margin: '8px 8px 12px',
-              cursor: 'pointer',
-              // Only set button color if explicitly provided (otherwise CSS theme handles it)
-              ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
-              // Apply remaining styles from send_button_style (if any)
-              ...(send_button_style || {})
-            }}
-            disabled={sendingMessage}
-            onClick={handleClick}
-          >
-            <Send
+        {/* input_container_style applies as set: button_color no longer replaces its background. */}
+        <div style={inputBarStyle} className="cl-input_container">
+          {/* A bordered field with the send button inside. */}
+          <div className="cl-composer-field" style={composerFieldStyle}>
+            <ChatInput
+              ref={inputRef}
+              value={value}
+              onChange={setValue}
+              onSend={handleClick}
+              // The visitor can write the next message while the assistant answers;
+              // it sends after the answer (the send button stays disabled until then).
+              placeholder={sendingMessage && placeholder_sending ? placeholder_sending : (placeholder || t.placeholder)}
+              ariaLabel={t.inputLabel}
               style={{
-                width: '18px',
-                height: '18px',
-                stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
-                ...(send_icon_style || {})
+                ...DEFAULT_INPUT_TEXT_STYLE,
+                ...(input_style || {}),
               }}
-              className={
-                "cl-send-icon " +
-                (!sendingMessage
-                  ? "cl-notsending-message"
-                  : "cl-sending-message")
-              }
+              onHeightChange={handleInputHeightChange}
+              className="cl-input-element"
             />
-          </button>
+            <button
+              type="button"
+              className="cl-send-button"
+              aria-label={t.send}
+              title={t.send}
+              style={{
+                // Base styles
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                margin: 0,
+                cursor: 'pointer',
+                // Only set button color if explicitly provided (otherwise CSS theme handles it)
+                ...(button_color ? { backgroundColor: button_color } : (send_button_style?.backgroundColor ? { backgroundColor: send_button_style.backgroundColor } : {})),
+                // Apply remaining styles from send_button_style (if any)
+                ...(send_button_style || {})
+              }}
+              // Nothing to send: an empty field, or an answer still on its way.
+              disabled={sendingMessage || !value.trim()}
+              onClick={handleClick}
+            >
+              <ArrowUp
+                aria-hidden="true"
+                strokeWidth={2.5}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
+                  ...(send_icon_style || {})
+                }}
+                className={
+                  "cl-send-icon " +
+                  (!sendingMessage
+                    ? "cl-notsending-message"
+                    : "cl-sending-message")
+                }
+              />
+            </button>
+          </div>
+          {/* EU AI Act, Article 50: visitors must know that they chat with an AI system. */}
+          {show_ai_notice !== false && (
+            <div className="cl-ai-notice">{ai_notice_text || t.aiNotice}</div>
+          )}
         </div>
       </div>
 

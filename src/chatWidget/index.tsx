@@ -4,7 +4,7 @@ import ChatWindow from "./chatWindow";
 import { ChatMessageType } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
-import { Language } from "../translations";
+import { Language, translations } from "../translations";
 import { detectBrowserLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
@@ -13,6 +13,7 @@ import { installNitroLinkRecovery } from "./nitroLinkRecovery";
 import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHintLayout";
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
+import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
 import {
   DEFAULT_TRIGGER_SIZE,
@@ -157,12 +158,15 @@ export default function ChatWidget({
   input_style,
   placeholder_sending,
   loading_messages,
+  ai_notice_text,
+  show_ai_notice,
   input_container_style,
   additional_headers,
   session_id,
   start_open = false,
   theme = "default",
   welcome_message,
+  suggestions,
   show_feedback = false,
   header_icon,
   header_icon_name,
@@ -219,6 +223,10 @@ export default function ChatWidget({
   send_button_style?: React.CSSProperties;
   placeholder_sending?: string;
   loading_messages?: string[];
+  /** Replaces the AI notice under the input (EU AI Act, Article 50). */
+  ai_notice_text?: string;
+  /** false hides the AI notice, for sites that show it elsewhere. */
+  show_ai_notice?: boolean;
   placeholder?: string;
   input_style?: React.CSSProperties;
   input_container_style?: React.CSSProperties;
@@ -230,6 +238,8 @@ export default function ChatWidget({
   start_open?: boolean;
   theme?: "default" | "dark" | "ocean" | "aurora" | "punku-ai-bookingkit" | "swarovski";
   welcome_message?: string;
+  /** Up to four questions under the welcome message; a tap sends one. */
+  suggestions?: string[];
   show_feedback?: boolean;
   header_icon?: string;
   header_icon_name?: string;
@@ -1380,11 +1390,53 @@ video {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
   sans-serif;
-  /* Animate only the open and close scale. A moving screen box (#77) or a
-     relocated trigger moves the window at once, not in a 300 ms glide. */
-  transition-property: transform;
-  transition-duration: 300ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Animate only opening and closing: a fade and a 12px rise. A moving screen
+     box (#77) or a relocated trigger moves the window at once. */
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out, visibility 0s;
+}
+
+/* Closed: invisible. When the fade ends, visibility: hidden also takes the
+   window's controls out of the tab order and the accessibility tree. */
+.cl-chat-window.cl-scale-0 {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.16s ease-in, transform 0.16s ease-in, visibility 0s linear 0.16s;
+}
+
+/* Open. A transform that is not "none" keeps the window the containing
+   block of its fixed parts, as the scale did before. */
+.cl-chat-window.cl-scale-100 {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+}
+
+/* New messages fade in. Only the opacity changes, so the layout never moves. */
+@keyframes cl-message-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cl-chat-window .cl-chat-message {
+  animation: cl-message-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-chat-window,
+  .cl-chat-window.cl-scale-0,
+  .cl-chat-window.cl-scale-100 {
+    transition: none;
+  }
+
+  .cl-chat-window.cl-scale-0 {
+    transform: none;
+  }
+
+  .cl-chat-window .cl-chat-message {
+    animation: none;
+  }
 }
 
 .cl-online-message {
@@ -1478,10 +1530,9 @@ video {
   overflow-x: clip;
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
+  /* The list cannot shrink below its padding: keep 8px at the top and bottom,
+     so the input still fits in a short landscape window. */
+  padding: max(8px, 0.5rem) max(14px, 0.875rem);
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -1505,10 +1556,13 @@ video {
 .cl-chat-message {
   display: flex;
   width: 100%;
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
-  padding-left: max(8px, 0.5rem);
-  padding-right: max(8px, 0.5rem);
+  padding: 3px 0;
+}
+
+/* Messages from one sender sit close; a change of sender gets more room. */
+.cl-chat-message.cl-justify-start + .cl-chat-message.cl-justify-end,
+.cl-chat-message.cl-justify-end + .cl-chat-message.cl-justify-start {
+  margin-top: 12px;
 }
 
 /* Typing indicator: three dots and a thinking phrase in the assistant's bubble. */
@@ -1617,7 +1671,7 @@ video {
 
 /* The composer is a textarea. Its height comes from the text (chatInput.tsx):
    one line at first, at most six lines, then it scrolls inside itself. A fixed
-   row height (input_container_style) caps it, so it never leaves the row. */
+   height (input_container_style) caps it, so it never leaves the field. */
 .cl-input-element {
   display: block;
   width: 100%;
@@ -1647,22 +1701,21 @@ video {
   outline-offset: 2px;
 }
 
+/* Visitor text reads left to right inside a right-aligned bubble with its
+   tail at the bottom right. */
 .cl-user_message {
   width: -webkit-fit-content;
   width: -moz-fit-content;
   width: fit-content;
-  max-width: 90%;
+  max-width: 85%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: max(12px, 0.75rem);
-  border-top-right-radius: max(2px, 0.125rem);
+  border-radius: 18px;
+  border-bottom-right-radius: 6px;
   --tw-bg-opacity: 1;
   background-color: rgb(59 130 246 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
-  text-align: right;
+  padding: 9px 14px;
+  text-align: left;
   font-size: 16px;
   line-height: 1.5;
   /* Visitor text is plain text: keep the line breaks typed with Shift+Enter. */
@@ -1756,21 +1809,21 @@ video {
   outline-offset: 2px;
 }
 
+/* The assistant's quiet bubble: a thin border, no shadow, the tail at the
+   bottom left. Each theme sets the border colour in --cl-bot-line. */
 .cl-bot_message {
   width: -webkit-fit-content;
   width: -moz-fit-content;
   width: fit-content;
-  max-width: 90%;
+  max-width: 85%;
   -webkit-column-break-before: all;
           break-before: all;
-  border-radius: max(12px, 0.75rem);
-  border-top-left-radius: max(2px, 0.125rem);
+  border: 1px solid var(--cl-bot-line, transparent);
+  border-radius: 18px;
+  border-bottom-left-radius: 6px;
   --tw-bg-opacity: 1;
   background-color: rgb(229 231 235 / var(--tw-bg-opacity));
-  padding-left: max(16px, 1rem);
-  padding-right: max(16px, 1rem);
-  padding-top: max(8px, 0.5rem);
-  padding-bottom: max(8px, 0.5rem);
+  padding: 9px 14px;
   text-align: left;
   font-size: 16px;
   line-height: 1.5;
@@ -1877,18 +1930,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-default .cl-user_message {
   background: #3b82f6;
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .theme-default .cl-bot_message {
   background: #ffffff;
   color: #1e293b;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .theme-default.cl-trigger,
@@ -1948,18 +1994,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-ocean .cl-user_message {
   background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
 }
 
 .theme-ocean .cl-bot_message {
   background: #1e293b;
   color: #f1f5f9;
-  border: 1px solid #2a3a52;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .theme-ocean.cl-trigger,
@@ -2019,18 +2058,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-dark .cl-user_message {
   background: #6366f1;
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
 }
 
 .theme-dark .cl-bot_message {
   background: #1e293b;
   color: #e2e8f0;
-  border: 1px solid #2d3a4d;
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .theme-dark.cl-trigger,
@@ -2070,19 +2102,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-aurora .cl-user_message {
   background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
   color: #ffffff;
-  border-radius: 12px;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .theme-aurora .cl-bot_message {
   background: rgba(76, 29, 149, 0.5);
   color: #ede9fe;
-  border: 1px solid rgba(109, 40, 217, 0.6);
-  border-radius: 12px;
-  border-bottom-left-radius: 2px;
   backdrop-filter: blur(4px);
-  box-shadow: 0 2px 6px rgba(88, 28, 135, 0.2);
 }
 
 .theme-aurora .cl-input_container {
@@ -2152,6 +2177,206 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- Suggested questions, feedback and scrolling ----------
+   Chip colours per theme (a site's button_color replaces the chip line),
+   and the colours of the button back to the newest message. */
+.cl-window {
+  --cl-chip-ink: #1d4ed8;
+  --cl-chip-line: #bfd3fb;
+  --cl-chip-bg: #ffffff;
+  --cl-chip-hover: #eff4ff;
+  --cl-jump-bg: #ffffff;
+  --cl-jump-ink: #334155;
+  --cl-jump-line: rgba(15, 23, 42, 0.12);
+}
+
+.cl-window.theme-dark {
+  --cl-chip-ink: #c7d2fe;
+  --cl-chip-line: rgba(129, 140, 248, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(129, 140, 248, 0.12);
+  --cl-jump-bg: #1e293b;
+  --cl-jump-ink: #e2e8f0;
+  --cl-jump-line: rgba(255, 255, 255, 0.14);
+}
+
+.cl-window.theme-ocean {
+  --cl-chip-ink: #bae6fd;
+  --cl-chip-line: rgba(56, 189, 248, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(56, 189, 248, 0.12);
+  --cl-jump-bg: #1e293b;
+  --cl-jump-ink: #f1f5f9;
+  --cl-jump-line: rgba(255, 255, 255, 0.14);
+}
+
+.cl-window.theme-aurora {
+  --cl-chip-ink: #f5d0fe;
+  --cl-chip-line: rgba(232, 121, 249, 0.45);
+  --cl-chip-bg: transparent;
+  --cl-chip-hover: rgba(232, 121, 249, 0.12);
+  --cl-jump-bg: #3b0764;
+  --cl-jump-ink: #ede9fe;
+  --cl-jump-line: rgba(255, 255, 255, 0.16);
+}
+
+.cl-window .cl-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.cl-window .cl-suggestion {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.3;
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-chip-line);
+  background: var(--cl-chip-bg);
+  color: var(--cl-chip-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cl-window .cl-suggestion:hover {
+  background: var(--cl-chip-hover);
+  border-color: var(--cl-chip-ink);
+}
+
+.cl-window .cl-suggestion:focus-visible {
+  outline: 2px solid var(--cl-chip-ink);
+  outline-offset: 2px;
+}
+
+.cl-window .cl-suggestion:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The answer and, under it, its feedback buttons. */
+.cl-window .cl-message-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 85%;
+  min-width: 0;
+}
+
+.cl-window .cl-message-stack > .cl-bot_message {
+  max-width: 100%;
+}
+
+.cl-window .cl-message-stack .feedback-container {
+  justify-content: flex-start;
+  margin: 2px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.cl-window .cl-message-stack .feedback-buttons {
+  gap: 2px;
+}
+
+.cl-window .cl-message-stack .feedback-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  opacity: 1;
+}
+
+.cl-window .cl-message-stack .feedback-button:hover,
+.cl-window .cl-message-stack .feedback-button.selected {
+  background: rgba(127, 127, 127, 0.12);
+  outline: none;
+}
+
+/* A keyboard user keeps the focus ring, also on the button just voted. */
+.cl-window .cl-message-stack .feedback-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* The newest answer, a voted answer, and a hovered or focused answer show
+   their feedback buttons. A device with a touch screen always shows them,
+   also a laptop with a touch screen and a trackpad: a finger cannot hover. */
+.cl-window .cl-message-stack .feedback-container {
+  opacity: 0;
+}
+
+.cl-window .cl-latest .feedback-container,
+.cl-window .feedback-container:has(.selected),
+.cl-window .cl-chat-message:hover .feedback-container,
+.cl-window .cl-chat-message:focus-within .feedback-container {
+  opacity: 1;
+}
+
+@media (hover: none), (any-pointer: coarse) {
+  .cl-window .cl-chat-message .feedback-container {
+    opacity: 1;
+  }
+}
+
+/* The feedback row already separates an answer from the next question. */
+.cl-window .cl-chat-message.cl-justify-start:has(.feedback-container) + .cl-chat-message.cl-justify-end {
+  margin-top: 2px;
+}
+
+/* A thin scrollbar on computers, so the visitor sees that the list scrolls. */
+.cl-window .cl-messages_container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.35);
+  border-radius: 3px;
+}
+
+.cl-window .cl-messages_container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* The button back to the newest message floats over the end of the list. */
+.cl-window .cl-jump-latest-anchor {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  z-index: 1;
+}
+
+.cl-window .cl-jump-latest {
+  position: absolute;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--cl-jump-line);
+  background: var(--cl-jump-bg);
+  color: var(--cl-jump-ink);
+  box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+
+.cl-window .cl-jump-latest:focus-visible {
+  outline: 2px solid var(--cl-chip-ink);
+  outline-offset: 2px;
+}
+
 /* Add these styles at an appropriate location in the CSS */
 
 .cl-header {
@@ -2207,6 +2432,272 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .theme-aurora .cl-header {
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
+}
+
+/* ---------- Header and composer colours, per theme ----------
+   --cl-line separates the header and the composer from the list, --cl-field
+   and --cl-field-line draw the composer field, --cl-ring is its focus ring,
+   --cl-muted colours the AI notice, --cl-accent fills the avatar. */
+.cl-window {
+  --cl-accent: #2563eb;
+  --cl-line: #e6ebf1;
+  --cl-muted: #64748b;
+  --cl-field: #ffffff;
+  --cl-field-line: #d5dde7;
+  --cl-ring: rgba(37, 99, 235, 0.18);
+}
+
+.cl-window.theme-dark {
+  --cl-accent: #5558e8;
+  --cl-line: #1e293b;
+  --cl-muted: #94a3b8;
+  --cl-field: #111a2e;
+  --cl-field-line: #2b3850;
+  --cl-ring: rgba(129, 140, 248, 0.28);
+}
+
+.cl-window.theme-ocean {
+  --cl-accent: #0369a1;
+  --cl-line: #1e293b;
+  --cl-muted: #94a3b8;
+  --cl-field: #111c30;
+  --cl-field-line: #2a3a52;
+  --cl-ring: rgba(56, 189, 248, 0.25);
+}
+
+.cl-window.theme-aurora {
+  --cl-accent: #7c3aed;
+  --cl-line: rgba(139, 92, 246, 0.35);
+  --cl-muted: #c4b5fd;
+  --cl-field: rgba(46, 16, 101, 0.55);
+  --cl-field-line: rgba(167, 139, 250, 0.4);
+  --cl-ring: rgba(216, 180, 254, 0.25);
+}
+
+/* ---------- Header: one row. The avatar, the title with the status or
+   "Powered by" under it, and the actions on the right. ---------- */
+.cl-window .cl-header {
+  display: block;
+  padding: max(12px, 0.75rem) max(10px, 0.625rem) max(12px, 0.75rem) max(14px, 0.875rem);
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--cl-line);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+/* Coloured headers need no line under them. */
+.cl-window.theme-ocean .cl-header,
+.cl-window.theme-aurora .cl-header,
+.cl-window.theme-punku-ai-bookingkit .cl-header,
+.cl-window.theme-swarovski .cl-header,
+.cl-window .cl-header.cl-header--colored {
+  border-bottom-color: transparent;
+}
+
+.cl-window .cl-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cl-window .cl-header-avatar {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* The default and dark headers are neutral: the avatar carries the accent. */
+.cl-window.theme-default .cl-header:not(.cl-header--colored) .cl-header-avatar,
+.cl-window.theme-dark .cl-header:not(.cl-header--colored) .cl-header-avatar {
+  background: var(--cl-accent);
+}
+
+.cl-window .cl-header-avatar .cl-header-logo {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.cl-window .cl-header-avatar .cl-header-logo path,
+.cl-window .cl-header-avatar .cl-header-logo rect,
+.cl-window .cl-header-avatar .cl-header-logo circle {
+  fill: none;
+}
+
+.cl-window img.cl-header-logo-image {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.cl-window .cl-header-titles {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cl-window .cl-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cl-window .cl-header-subtitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/* "Powered by PUNKU.AI & bookingkit", or the site's online_message, wraps
+   to a second line on a narrow phone instead of losing its end. A host page
+   can set hyphens: auto, and it inherits into the widget: brand names must
+   never break ("booking-kit"). */
+.cl-window .cl-header-status {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}
+
+.cl-window .cl-header-status a {
+  white-space: nowrap;
+}
+
+/* The status dot stays centred on the first line. */
+.cl-window .cl-online-message,
+.cl-window .cl-offline-message {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: calc((1.3em - 7px) / 2) 0 0;
+}
+
+.cl-window .cl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.cl-window .cl-header-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cl-window .cl-header-btn:hover {
+  background: rgba(127, 127, 127, 0.14);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.cl-window .cl-header-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 0;
+}
+
+/* ---------- Composer: a bordered field with the send button inside, and
+   the AI notice under it. ---------- */
+.cl-window .cl-input_container {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  /* Fixed side padding: a larger host root font must not narrow the field. */
+  padding: max(10px, 0.625rem) 12px max(8px, 0.5rem);
+  border-top: 1px solid var(--cl-line);
+}
+
+.cl-window .cl-composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  border: 1px solid var(--cl-field-line);
+  border-radius: 22px;
+  background: var(--cl-field);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cl-window .cl-composer-field:focus-within {
+  border-color: var(--cl-accent);
+  box-shadow: 0 0 0 3px var(--cl-ring);
+}
+
+.cl-window .cl-composer-field .cl-input-element {
+  flex: 1 1 auto;
+  padding: max(8px, 0.5rem) max(6px, 0.375rem) max(8px, 0.5rem) max(12px, 0.75rem);
+  border: 0;
+  background: transparent;
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.cl-window .cl-composer-field .cl-input-element:focus,
+.cl-window .cl-composer-field .cl-input-element:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.cl-window .cl-send-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cl-window .cl-send-button:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
+}
+
+/* EU AI Act, Article 50: visitors see that an AI system answers. */
+.cl-window .cl-ai-notice {
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--cl-muted);
+  padding: 0 6px;
 }
 
 /* Message styles */
@@ -2286,6 +2777,158 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background-color: #e2e8f0 !important;
   color: rgb(31 41 55) !important;
   border-radius: 14px !important;
+}
+
+/* ---------- Answers: colours for links and link buttons, per theme ----------
+   --cl-accent fills a link button (a site's button_color replaces it inline),
+   --cl-link colours links in answers, --cl-bot-line is the bubble border.
+   chatWindow's themeLinkColor repeats the --cl-link values for its contrast
+   check: change both together. */
+.cl-window {
+  --cl-accent: #2563eb;
+  --cl-accent-hover: #1d4ed8;
+  --cl-on-accent: #ffffff;
+  --cl-link: #1d4ed8;
+  --cl-hover: rgba(15, 23, 42, 0.06);
+  --cl-bot-line: transparent;
+}
+
+.cl-window.theme-default {
+  --cl-bot-line: #e2e8f0;
+}
+
+.cl-window.theme-dark {
+  --cl-accent: #5558e8;
+  --cl-accent-hover: #4547d6;
+  --cl-link: #a5b4fc;
+  --cl-hover: rgba(255, 255, 255, 0.08);
+  --cl-bot-line: #2d3a4d;
+}
+
+.cl-window.theme-ocean {
+  --cl-accent: #0369a1;
+  --cl-accent-hover: #075985;
+  --cl-link: #7dd3fc;
+  --cl-hover: rgba(255, 255, 255, 0.08);
+  --cl-bot-line: #2a3a52;
+}
+
+.cl-window.theme-aurora {
+  --cl-accent: #7c3aed;
+  --cl-accent-hover: #6d28d9;
+  --cl-link: #f0abfc;
+  --cl-hover: rgba(255, 255, 255, 0.1);
+  --cl-bot-line: rgba(109, 40, 217, 0.6);
+}
+
+/* Compact spacing between paragraphs and list items in an answer. */
+.cl-window .cl-bot_message .markdown-body > * {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.cl-window .cl-bot_message .markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.cl-window .cl-bot_message .markdown-body ul,
+.cl-window .cl-bot_message .markdown-body ol {
+  padding-left: 1.25em;
+}
+
+.cl-window .cl-bot_message .markdown-body li + li {
+  margin-top: 2px;
+}
+
+/* Links in answers: the link colour and a light underline that firms up on
+   hover. A site's link_color still wins (inline !important rule). */
+.cl-window .cl-bot_message .markdown-body a {
+  color: var(--cl-link);
+  font-weight: 500;
+  text-decoration-thickness: 1px !important;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(127, 127, 127, 0.5) !important;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent) !important;
+}
+
+.cl-window .cl-bot_message .markdown-body a:hover {
+  text-decoration-color: currentColor !important;
+}
+
+/* A link on its own line is an action, so it renders as a button: filled
+   when it stands alone in a top-level paragraph, outlined when it is a list
+   item. In a loose list (blank lines between the items) the link sits in a
+   paragraph inside the item: li > p > a. */
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* An arrow shows that the button opens a page. */
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:visited {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent) !important;
+}
+
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover {
+  background: var(--cl-accent-hover);
+  opacity: 1 !important;
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
+  border: 1px solid rgba(127, 127, 127, 0.45);
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:hover {
+  background: var(--cl-hover);
+}
+
+/* A list of link buttons drops its bullets and stacks the buttons. */
+.cl-window .cl-bot_message .markdown-body li.cl-link-only {
+  list-style: none;
+  margin-left: -1.25em;
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p {
+  margin: 0;
+}
+
+.cl-window .cl-bot_message .markdown-body li.cl-link-only + li.cl-link-only {
+  margin-top: 6px;
+}
+
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
 }
     `;
 
@@ -3523,18 +4166,34 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   object-fit: contain;
   border-radius: 4px;
 }`
+  const activeTriggerPosition = enable_trigger_relocation ? triggerPositionOverride : null;
+  /*
+   * A page with a small fixed layout width (Wix: width=320) is scaled up to
+   * the screen. The root then becomes a frame over the visible screen that
+   * undoes the scale (scaledPage.ts). A relocated trigger keeps its page
+   * coordinates, so it keeps the unscaled layout.
+   */
+  const scaledPage = useScaledPage(!activeTriggerPosition);
+  /*
+   * The offsets stay in px of the page, also in the frame. Site owners set
+   * them to clear host elements, such as a booking button, and those scale
+   * with the page. Only the widget itself lays out at the screen size.
+   */
+  const pagePx = (value: number) => (scaledPage ? Math.round(value * scaledPage.scale * 100) / 100 : value);
+
   // Get position styles for the chat trigger based on chat_position prop
-  const effectiveBottomOffset = bottom_offset ?? 20;
-  const effectiveTopOffset = top_offset ?? 60;
-  const effectiveLeftOffset = left_offset ?? 20;
-  const effectiveRightOffset = right_offset ?? 20;
+  const effectiveBottomOffset = pagePx(bottom_offset ?? 20);
+  const effectiveTopOffset = pagePx(top_offset ?? 60);
+  const effectiveLeftOffset = pagePx(left_offset ?? 20);
+  const effectiveRightOffset = pagePx(right_offset ?? 20);
+  const cornerTopOffset = pagePx(CORNER_TOP_OFFSET);
 
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: `${CORNER_TOP_OFFSET}px`, left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
+        return { top: `${cornerTopOffset}px`, left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
       case "top-right":
-        return { top: `${CORNER_TOP_OFFSET}px`, right: `${effectiveRightOffset}px`, bottom: "", left: "" };
+        return { top: `${cornerTopOffset}px`, right: `${effectiveRightOffset}px`, bottom: "", left: "" };
       case "bottom-left":
         return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "", right: "" };
       case "bottom-right":
@@ -3559,7 +4218,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   };
   
   const cornerPosition = chat_position || "bottom-right";
-  const activeTriggerPosition = enable_trigger_relocation ? triggerPositionOverride : null;
   const defaultTriggerStyle = getCornerStyle(cornerPosition);
   const triggerStyle = activeTriggerPosition
     ? {
@@ -3599,7 +4257,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   useLayoutEffect(() => {
     const root = widgetRootRef.current;
     const anchor = triggerAnchorRef.current;
-    if (!root || !anchor || isRelocated) return;
+    // The scaled page frame is already on the visible screen.
+    if (!root || !anchor || isRelocated || scaledPage) return;
 
     const offsets = {
       top: CORNER_TOP_OFFSET,
@@ -3630,7 +4289,15 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       observer?.disconnect();
       anchor.style.transform = "";
     };
-  }, [open, isRelocated, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);
+  }, [open, isRelocated, scaledPage, cornerPosition, effectiveRightOffset, effectiveBottomOffset, effectiveLeftOffset]);
+
+  // Keep the scaled page frame on the visible screen, also above the on-screen keyboard.
+  const pageScale = scaledPage?.scale;
+  useLayoutEffect(() => {
+    const root = widgetRootRef.current;
+    if (!root || !pageScale) return;
+    return trackScaledFrame(root, pageScale, open);
+  }, [pageScale, open]);
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
@@ -3693,6 +4360,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     triggerStyle.left,
     triggerStyle.bottom,
     triggerStyle.right,
+    scaledPage,
   ]);
 
   // Create style objects from simple color props if provided
@@ -3727,16 +4395,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       ref={widgetRootRef}
       className="cl-widget-root"
       style={{
-        position: "fixed",
-        ...triggerStyle,
-        transform: "none",
+        ...(scaledPage
+          ? getScaledFrameStyle(scaledPage)
+          : { position: "fixed", ...triggerStyle, transform: "none" }),
         // The root is a stacking context. This one value places the whole
         // widget against the host page. Inner layers stack only inside it.
         zIndex: activeTriggerPosition?.zIndex ?? getZIndex(z_index)
       }}
     >
       <style dangerouslySetInnerHTML={{ __html: styles + markdownBody }}></style>
-      <div ref={triggerAnchorRef} style={{ position: "relative" }}>
+      <div
+        ref={triggerAnchorRef}
+        // In the scaled page frame, the trigger takes the corner of the frame.
+        style={scaledPage ? { position: "absolute", ...triggerStyle, pointerEvents: "auto" } : { position: "relative" }}
+      >
         {shouldRenderClosedWidgetHint && (
           <div
             ref={closedWidgetHintRef}
@@ -3761,6 +4433,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           buttonTextColor={button_text_color}
           theme={effectiveTheme}
           triggerIcon={trigger_icon}
+          openLabel={(translations[currentLanguage] || translations.en).triggerOpen}
+          closeLabel={(translations[currentLanguage] || translations.en).triggerClose}
         />
       </div>
       <div
@@ -3768,6 +4442,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           position: "fixed",
           ...(anchoredChatWindowStyle || chatWindowStyle),
           zIndex: anchoredChatWindowStyle?.zIndex ?? 9999,
+          ...(scaledPage ? { pointerEvents: "auto" } : {}),
         }}
       >
         <ChatWindow
@@ -3792,6 +4467,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           error_message_style={error_message_style}
           placeholder_sending={placeholder_sending}
           loading_messages={loading_messages}
+          ai_notice_text={ai_notice_text}
+          show_ai_notice={show_ai_notice}
           send_button_style={send_button_style}
           online={online}
           online_message={online_message}
@@ -3809,6 +4486,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           additional_headers={additional_headers}
           theme={effectiveTheme}
           welcome_message={welcome_message}
+          suggestions={suggestions}
           show_feedback={show_feedback}
           header_icon={headerIcon}
           onHeaderIconError={onHeaderIconError}
@@ -3832,6 +4510,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           left_offset={effectiveLeftOffset}
           right_offset={effectiveRightOffset}
           positionOverrideStyle={anchoredChatWindowStyle}
+          scaledPage={scaledPage}
           programmaticMessage={programmaticMessage}
           onProgrammaticMessageHandled={handleProgrammaticMessageHandled}
           widget_id={widget_id}
@@ -3840,7 +4519,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           enable_client_error_reporting={enable_client_error_reporting}
         />
       </div>
-      <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} />
+      <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} scaledPage={scaledPage} />
     </div>
   );
 }

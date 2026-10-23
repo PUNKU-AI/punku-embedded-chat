@@ -128,6 +128,12 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - Automatically adjusts opacity on hover for better user interaction
 - Works seamlessly with all themes and custom color schemes
 
+**Link buttons:** a link that stands alone on its own line in an answer is an action, so the widget shows it as a button with an arrow:
+- A link alone in a paragraph is a filled button in the accent colour. With `button_color`, the button uses `button_color` and `button_text_color`.
+- Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
+- A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
+- With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency. Filled link buttons keep the accent colour.
+
 **Color recommendations:**
 - Ensure sufficient contrast with the background for accessibility
 - Use colors that complement your brand or theme
@@ -245,6 +251,7 @@ Use the widget API to customize your widget:
 | user_message_style    | json      | No       |
 | user_message_text_color| string   | No       |
 | welcome_message       | string    | No       |
+| suggestions           | json      | No       |
 | width                 | number    | No       |
 | window_title          | string    | No       |
 | session_id            | string    | No       |
@@ -255,11 +262,24 @@ Use the widget API to customize your widget:
 | left_offset           | number    | No       |
 | right_offset          | number    | No       |
 | additional_headers    | json      | No       |
+| ai_notice_text        | string    | No       |
+| show_ai_notice        | boolean   | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
 | z_index               | number    | No       |
+
+- **ai_notice_text:**
+  - Type: String
+  - Required: No
+  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant. Answers can contain mistakes." In German: "Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten."
+
+- **show_ai_notice:**
+  - Type: Boolean
+  - Required: No
+  - Default: `true`
+  - Description: `false` hides the AI notice under the input. Use it only when your page tells visitors in another way that they chat with an AI system.
 
 - **api_key:**
   - Type: String
@@ -372,12 +392,12 @@ Use the widget API to customize your widget:
 - **input_container_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the input container where chat messages are typed. A fixed `height` keeps the growing input inside the bar; the input then scrolls inside itself.
+  - Description: Styling options for the bar under the messages. It holds the input field (a bordered field with the send button inside) and the AI notice. `height`, `minHeight` and `maxHeight` size the input field, not the whole bar. With a fixed `height`, the text stays inside the field and scrolls there. The other keys, for example `backgroundColor` and `borderTop`, style the bar. `backgroundColor` applies also when `button_color` is set.
 
 - **input_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the chat input field. The field is a textarea that grows with the text up to six lines and then scrolls inside itself. Enter sends the message and Shift+Enter inserts a line break; the visitor's bubble keeps those line breaks. `fontSize`, `lineHeight`, `padding` and `maxHeight` are honoured. A fixed `height` is ignored, because the widget sets the height from the text.
+  - Description: Styling options for the chat input field. The field is a textarea that grows with the text up to six lines and then scrolls inside itself. Enter sends the message and Shift+Enter inserts a line break; the visitor's bubble keeps those line breaks. `fontSize`, `lineHeight`, `padding` and `maxHeight` are honoured. A fixed `height` is ignored, because the widget sets the height from the text. `backgroundColor` colours the whole field around the text and the send button.
 
 - **loading_messages:**
   - Type: JSON
@@ -419,12 +439,12 @@ Use the widget API to customize your widget:
 - **send_button_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the send button in the chat window.
+  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message".
 
 - **send_icon_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the send icon in the chat window.
+  - Description: Styling options for the arrow-up send icon.
 
 - **theme:**
   - Type: String
@@ -460,6 +480,11 @@ Use the widget API to customize your widget:
   - Type: String
   - Required: No
   - Description: A customizable message that appears at the start of a conversation when no messages are present. This welcomes users and guides them on how to interact with the assistant.
+
+- **suggestions:**
+  - Type: JSON
+  - Required: No
+  - Description: Up to four questions that show as buttons under the welcome message, for example `'["Opening hours","Tickets for families","Wheelchair access"]'`. A tap sends the question. The buttons show only before the conversation starts. Empty strings are ignored, and more than four are cut to four. With `button_color`, the buttons take that colour as their border. Their text keeps the theme colour, so it stays readable.
 
 - **closed_widget_hint_text:**
   - Type: String
@@ -589,12 +614,18 @@ Use the widget API to customize your widget:
   - Type: Boolean
   - Required: No
   - Default: None (the prop has no effect)
-  - Description: The widget accepts this attribute, but it ignores the value. The feedback buttons (thumbs up and down) always show on bot replies. They do not show on the welcome message or on error messages. You cannot turn them off with this prop.
+  - Description: The widget accepts this attribute, but it ignores the value. The feedback buttons (thumbs up and down) sit under each bot reply. On a computer they show under the newest reply, under a reply with a vote, and under a reply that the pointer or the keyboard focus is on. On a touch screen they always show. They do not show on the welcome message or on error messages. You cannot turn them off with this prop.
 
 - **link_color:**
   - Type: String
   - Required: No
   - Description: Customizes the color of hyperlinks inside bot messages and markdown content (hex code or CSS color). The color is applied to link states (normal, hover, visited) with automatic hover opacity adjustment for better user interaction. Accepts any valid CSS color format including hex codes (e.g., "#0066CC"), RGB values, or color names.
+
+## Header and input bar
+
+The header is one row: the header icon on a round avatar, the title with the online status and "Powered by" under it, and the actions on the right. The actions are "New conversation" and, on phones and tablets (or with `show_close_button_on_desktop`), "Close chat". A new conversation also clears the text in the input field. With `button_color`, the header takes that colour, as before.
+
+The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 
 ## Thinking and error states
 
@@ -605,6 +636,15 @@ The input field stays enabled while the assistant answers, so the visitor can wr
 If a reply fails, the chat shows a plain sentence in the chat's language, for example "Sorry, we're experiencing technical issues. Please try again." The visitor never sees technical text: not HTTP status codes, and not the error text that a flow sends in its stream. These details go only to the browser console and to [client error notifications](#client-error-notifications). The newest error has a **Try again** button. It removes the error, sends the visitor's last message again and keeps the keyboard focus in the input field.
 
 Screen readers hear "The assistant is writing" when a message is sent. When the answer is complete, they hear the answer once, as plain text without markdown marks. They also hear each new error once. Messages restored from a stored session are not read again on page load.
+
+## Accessibility and motion
+
+- The launcher button says what it does ("Open chat" or "Close chat", in German "Chat öffnen" or "Chat schließen") and tells screen readers whether the chat is open.
+- The message list is a log named "Conversation" ("Unterhaltung"). New answers are read once from a status region, so the log itself does not announce changes.
+- The feedback buttons are "Helpful" and "Not helpful" ("Hilfreich", "Nicht hilfreich") and report the vote.
+- When the chat closes with the close button or Escape, the keyboard focus returns to the launcher. A closed chat window is out of the tab order.
+- The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
+- The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.
 
 ## Stacking order on the host page
 

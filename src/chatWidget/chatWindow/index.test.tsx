@@ -32,14 +32,16 @@ jest.mock('./chatMessage', () => {
     isSend,
     onRetry,
     retryLabel,
+    isLatest,
   }: {
     message: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
+    isLatest?: boolean;
   }) {
     return (
-      <div data-testid={isSend ? 'user-message' : 'bot-message'}>
+      <div data-testid={isSend ? 'user-message' : 'bot-message'} data-latest={isLatest ? 'true' : undefined}>
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
       </div>
@@ -333,6 +335,50 @@ describe('ChatWindow', () => {
       });
     });
 
+    describe('Scaled page (#82)', () => {
+      // width=320 on a 740 x 360 phone in landscape. Media queries see the
+      // 320 px page, so the rules for the frame size come without @media.
+      const landscape = { scale: 2.3125, width: 740, height: 361 };
+      const renderedStyles = () => Array.from(document.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+
+      it('should use the short landscape rules of the screen size', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={landscape} />);
+
+        const styles = renderedStyles();
+        expect(styles).not.toMatch(/@media \((min|max)-(width|height)/);
+        expect(styles).not.toMatch(/[0-9]v[wh]\b/);
+        expect(styles).toContain('--cl-trigger-gap: var(--cl-bottom-offset);');
+        expect(styles).toContain(`top: ${visualViewportInset('top', '8px')} !important`);
+        expect(styles).toContain(
+          'width: min(420px, 629px, calc(var(--cl-visual-viewport-width, 740px) - calc(20px + 48px + 12px) - 8px)) !important'
+        );
+        // The phone rules of the 320 px page are gone.
+        expect(styles).not.toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+      });
+
+      it('should use the phone rules on a scaled portrait page', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.21875, width: 390, height: 843 }} />);
+
+        const styles = renderedStyles();
+        expect(styles).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+        expect(styles).not.toContain('--cl-window-room');
+      });
+
+      it('should take the visible part of the page from the frame', () => {
+        render(<ChatWindow {...defaultProps} scaledPage={landscape} />);
+
+        const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-left')).toBe('0px');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-top')).toBe('0px');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-width')).toBe('var(--cl-frame-width, 740px)');
+        expect(chatWindow.style.getPropertyValue('--cl-visual-viewport-height')).toBe('var(--cl-frame-height, 361px)');
+        expect(chatWindow.style.maxHeight).toBe('252.7px');
+        expect(chatWindow.style.maxWidth).toBe('666px');
+      });
+    });
+
     it('should render window title', () => {
       render(<ChatWindow {...defaultProps} window_title="Test Chat" />);
 
@@ -465,7 +511,180 @@ describe('ChatWindow', () => {
 
       expect(scrollTo).toHaveBeenCalledTimes(1);
       expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+      // A streamed answer is pinned at once, without a running smooth scroll.
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
+    });
+
+    // jsdom has no scrolling: set the list's position and report a scroll.
+    const scrollListTo = (list: HTMLElement, top: number) => {
+      Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: top });
+      fireEvent.scroll(list);
+    };
+
+    const streamedAnswer = (text: string): ChatMessageType[] => [
+      { message: 'Question', isSend: true },
+      { message: text, isSend: false, message_id: 'stream', streaming: true },
+    ];
+
+    it('should stop following the stream when the visitor scrolls up, and lead back', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      // At the end (640 - 200 = 440), then the visitor scrolls up to read.
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+      expect(scrollTo).not.toHaveBeenCalled();
+
+      const jump = screen.getByRole('button', { name: 'Jump to the newest message' });
+      fireEvent.click(jump);
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+    });
+
+    it('should offer the way back once the stream grows far below a visitor who scrolled up a little', () => {
+      const height = jest.spyOn(Element.prototype, 'scrollHeight', 'get');
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      // 100px above the end (440): the list stops following, no button yet.
+      scrollListTo(list, 440);
+      scrollListTo(list, 340);
+      expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+
+      // The answer grows by 200px. No scroll event fires, the visitor stays.
+      height.mockReturnValue(840);
+      scrollTo.mockClear();
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now much longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+    });
+
+    it('should follow again when the visitor scrolls back to the end', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollListTo(list, 400);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'auto' });
+    });
+
+    it('should stop following when the next word comes before the scroll event of the visitor', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      scrollListTo(list, 440);
+      scrollTo.mockClear();
+
+      // The visitor scrolls up; the browser fires the scroll event one frame later.
+      Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 100 });
+      rerender(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial answer, now longer')} />);
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+    });
+
+    it('should show the visitor their own new message, even after scrolling up', () => {
+      jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+      const answered: ChatMessageType[] = [
+        { message: 'Question', isSend: true },
+        { message: 'Answer', isSend: false },
+      ];
+      const { rerender } = render(<ChatWindow {...defaultProps} messages={answered} />);
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+      scrollListTo(list, 440);
+      scrollListTo(list, 100);
+      scrollTo.mockClear();
+
+      rerender(<ChatWindow {...defaultProps} messages={[...answered, { message: 'Next question', isSend: true }]} />);
+      expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+    });
+  });
+
+  describe('Suggested questions and the newest answer', () => {
+    it('should show up to four suggested questions before the conversation starts', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          suggestions={['Opening hours', '  ', 'Tickets for families', 'Wheelchair access', 'Parking', 'Groups']}
+        />
+      );
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual([
+        'Opening hours', 'Tickets for families', 'Wheelchair access', 'Parking',
+      ]);
+    });
+
+    it('should name the suggestions in German', () => {
+      render(<ChatWindow {...defaultProps} language="de" suggestions={['Öffnungszeiten']} />);
+
+      expect(screen.getByRole('group', { name: 'Vorgeschlagene Fragen' })).toBeInTheDocument();
+    });
+
+    it('should use button_color for the chip border only, so the text stays readable', () => {
+      render(<ChatWindow {...defaultProps} button_color="#fde68a" suggestions={['Opening hours']} />);
+
+      const group = screen.getByRole('group', { name: 'Suggested questions' });
+      expect(group.style.getPropertyValue('--cl-chip-line')).toBe('#fde68a');
+      expect(group.style.getPropertyValue('--cl-chip-ink')).toBe('');
+    });
+
+    it('should send a suggested question when the visitor taps it', async () => {
+      const addMessage = jest.fn();
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(
+        <ChatWindow {...defaultProps} enable_streaming={true} addMessage={addMessage} suggestions={['Opening hours']} />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Opening hours' }));
+
+      expect(addMessage).toHaveBeenCalledWith({ message: 'Opening hours', isSend: true });
+      expect(mockedStreamMessage.mock.calls[0][2]).toBe('Opening hours');
+      // While the answer is on its way, the questions cannot send again.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Opening hours' })).toBeDisabled());
+    });
+
+    it('should hide the suggestions once the conversation has started', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          messages={[{ message: 'Hello', isSend: true }]}
+          suggestions={['Opening hours']}
+        />
+      );
+
+      expect(screen.queryByRole('group', { name: 'Suggested questions' })).not.toBeInTheDocument();
+    });
+
+    it('should mark only the newest answer, not errors or questions', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          messages={[
+            { message: 'First question', isSend: true },
+            { message: 'First answer', isSend: false },
+            { message: 'Second question', isSend: true },
+            { message: 'Second answer', isSend: false },
+            { message: 'Third question', isSend: true },
+            { message: 'The assistant could not be reached.', isSend: false, error: true },
+          ]}
+        />
+      );
+
+      const latest = Array.from(document.querySelectorAll('[data-latest="true"]'));
+      expect(latest.map((element) => element.textContent)).toEqual(['Second answer']);
     });
   });
 
@@ -1671,6 +1890,155 @@ describe('ChatWindow', () => {
     });
   });
 
+  describe('Accessibility and focus', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      delete (window as any).matchMedia;
+    });
+
+    const runFocusTimer = () => {
+      act(() => {
+        jest.advanceTimersByTime(150);
+      });
+    };
+
+    it('should name the message list as a log that does not announce by itself', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} />);
+
+      const log = screen.getByRole('log', { name: 'Conversation' });
+      expect(log).toHaveClass('cl-messages_container');
+      // The status region reads complete answers; the log would repeat them.
+      expect(log).toHaveAttribute('aria-live', 'off');
+
+      rerender(<ChatWindow {...defaultProps} language="de" />);
+      expect(screen.getByRole('log', { name: 'Unterhaltung' })).toBeInTheDocument();
+    });
+
+    it('should return the focus to the launcher when the chat closes from inside', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const { rerender } = render(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={true} />
+        </>
+      );
+      runFocusTimer();
+      expect(screen.getByRole('textbox')).toHaveFocus();
+
+      rerender(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={false} />
+        </>
+      );
+      expect(trigger.current).toHaveFocus();
+    });
+
+    it('should leave the focus on the host page when the chat closes from there', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const { rerender } = render(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={true} />
+        </>
+      );
+      runFocusTimer();
+      const hostField = screen.getByRole('textbox', { name: 'Host search' });
+      hostField.focus();
+
+      rerender(
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} open={false} />
+        </>
+      );
+      expect(hostField).toHaveFocus();
+    });
+
+    it('should not take the focus from a host page field when an answer arrives', () => {
+      const hostPage = (messages: ChatMessageType[]) => (
+        <>
+          <input aria-label="Host search" />
+          <ChatWindow {...defaultProps} messages={messages} />
+        </>
+      );
+      const { rerender } = render(hostPage([]));
+      runFocusTimer();
+
+      const hostField = screen.getByRole('textbox', { name: 'Host search' });
+      hostField.focus();
+      rerender(hostPage([{ message: 'Hello', isSend: true }, { message: 'Answer', isSend: false }]));
+      runFocusTimer();
+
+      expect(hostField).toHaveFocus();
+    });
+
+    it('should not take the focus from a link in the messages when an answer arrives', () => {
+      const chat = (messages: ChatMessageType[]) => <ChatWindow {...defaultProps} messages={messages} />;
+      const { rerender } = render(chat([]));
+      runFocusTimer();
+
+      // A focusable element inside the message list, as a link in an answer is.
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      const link = document.createElement('a');
+      link.href = 'https://example.com/tickets';
+      link.textContent = 'Tickets';
+      list.appendChild(link);
+      link.focus();
+
+      rerender(chat([{ message: 'Answer', isSend: false }]));
+      runFocusTimer();
+
+      expect(link).toHaveFocus();
+      link.remove();
+    });
+
+    it('should focus the input on opening, also when a message arrives in the first 100 ms', () => {
+      const chat = (open: boolean, messages: ChatMessageType[]) => (
+        <>
+          <button>Open the chat</button>
+          <ChatWindow {...defaultProps} open={open} messages={messages} />
+        </>
+      );
+      const { rerender } = render(chat(false, []));
+      // A host page button opens the chat and keeps the focus until then.
+      screen.getByRole('button', { name: 'Open the chat' }).focus();
+
+      rerender(chat(true, []));
+      act(() => {
+        jest.advanceTimersByTime(50);
+      });
+      rerender(chat(true, [{ message: 'Welcome back', isSend: false }]));
+      runFocusTimer();
+
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should focus the input on opening, but not after an answer, on a touch screen', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      const chat = (open: boolean, messages: ChatMessageType[]) => (
+        <ChatWindow {...defaultProps} open={open} messages={messages} />
+      );
+      const { rerender } = render(chat(false, []));
+
+      rerender(chat(true, []));
+      runFocusTimer();
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveFocus();
+
+      input.blur();
+      rerender(chat(true, [{ message: 'Answer', isSend: false }]));
+      runFocusTimer();
+      expect(input).not.toHaveFocus();
+    });
+  });
+
   describe('Session Management', () => {
     it('should show new session button when onStartNewSession is provided', () => {
       const onStartNewSession = jest.fn();
@@ -1750,6 +2118,36 @@ describe('ChatWindow', () => {
       expect(window).toHaveClass('custom-theme');
     });
 
+    it('should give link buttons the button colours of the site', () => {
+      render(<ChatWindow {...defaultProps} button_color="#7c2d12" button_text_color="#fff7ed" />);
+
+      const window = document.querySelector('.cl-window') as HTMLElement;
+      expect(window.style.getPropertyValue('--cl-accent')).toBe('#7c2d12');
+      expect(window.style.getPropertyValue('--cl-on-accent')).toBe('#fff7ed');
+    });
+
+    it.each([
+      ['a dark red bot_message_color', { bot_message_color: '#791f0d' }, true],
+      ['a dark red background in bot_message_style', { bot_message_style: { backgroundColor: '#791f0d' } }, true],
+      ['a gradient that cannot be read', { bot_message_style: { background: 'linear-gradient(#fff, #eee)' } }, true],
+      ['a light blue bot_message_color', { bot_message_color: '#EAF1FF' }, false],
+      ['a dark bot_message_color in the dark theme', { bot_message_color: '#1F2937', theme: 'dark' as const }, false],
+      ['a dark red bot_message_color with link_color', { bot_message_color: '#791f0d', link_color: '#fde68a' }, false],
+      ['no own bubble colour', {}, false],
+    ])('should let links take the bubble text colour with %s: %s', (_case, props, inherits) => {
+      render(<ChatWindow {...defaultProps} {...props} />);
+
+      const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
+      expect(styles.includes('.cl-window .cl-bot_message .markdown-body a {\n            color: inherit !important;')).toBe(inherits);
+    });
+
+    it('should keep the theme accent for link buttons without button_color', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const window = document.querySelector('.cl-window') as HTMLElement;
+      expect(window.style.getPropertyValue('--cl-accent')).toBe('');
+    });
+
     it('should render header with custom icon', () => {
       render(<ChatWindow {...defaultProps} header_icon="https://example.com/icon.png" />);
 
@@ -1774,42 +2172,45 @@ describe('ChatWindow', () => {
         <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} {...props} />
       );
 
+    // The header icon, then the new-chat and close icons.
     const headerIconStrokes = () =>
       ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'].map((selector) =>
         document.querySelector(selector)?.getAttribute('stroke')
       );
 
-    // Header text colour of each theme without button_color.
+    // Header text colour of each theme without button_color, and the header
+    // icon colour: white on the accent avatar of the default and dark themes.
     const themeHeaderColors = [
-      ['default', '#0f172a'],
-      ['dark', 'white'],
-      ['ocean', 'white'],
-      ['aurora', 'white'],
-      ['punku-ai-bookingkit', 'white'],
-      ['swarovski', 'white'],
+      ['default', '#0f172a', '#FFFFFF'],
+      ['dark', 'white', '#FFFFFF'],
+      ['ocean', 'white', 'white'],
+      ['aurora', 'white', 'white'],
+      ['punku-ai-bookingkit', 'white', 'white'],
+      ['swarovski', 'white', 'white'],
     ] as const;
 
-    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
+    it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color, logo) => {
       renderHeader({ theme });
 
-      expect(headerIconStrokes()).toEqual([color, color, color]);
+      expect(headerIconStrokes()).toEqual([logo, color, color]);
     });
 
     it.each(themeHeaderColors)(
       'ignores button_text_color without button_color in the %s theme',
-      (theme, color) => {
+      (theme, color, logo) => {
         renderHeader({ theme, button_text_color: '#FFEE00' });
 
-        expect(headerIconStrokes()).toEqual([color, color, color]);
+        expect(headerIconStrokes()).toEqual([logo, color, color]);
       }
     );
 
-    it('keeps the default header icons dark when button_text_color is white', () => {
+    it('keeps the default header actions dark when button_text_color is white', () => {
       renderHeader({ theme: 'default', button_text_color: '#FFFFFF' });
 
       const header = document.querySelector('.cl-header') as HTMLElement;
       expect(header.getAttribute('style')).toBeNull();
-      expect(headerIconStrokes()).toEqual(['#0f172a', '#0f172a', '#0f172a']);
+      // The header icon is white on its accent avatar; the actions sit on the white header.
+      expect(headerIconStrokes()).toEqual(['#FFFFFF', '#0f172a', '#0f172a']);
     });
 
     it.each(themeHeaderColors.map(([theme]) => theme))(
@@ -1832,6 +2233,147 @@ describe('ChatWindow', () => {
 
       const sendIcon = document.querySelector('.cl-send-icon') as SVGElement;
       expect(sendIcon.getAttribute('style')).toContain('stroke: #FFEE00');
+    });
+  });
+
+  describe('Header, composer and AI notice', () => {
+    it('should label the header actions in the chat language', () => {
+      const { rerender } = render(
+        <ChatWindow {...defaultProps} onStartNewSession={jest.fn()} onClose={jest.fn()} />
+      );
+      expect(screen.getByRole('button', { name: 'New conversation' })).toHaveClass('cl-header-btn');
+      // Desktop hides the close button by default, so check its label directly.
+      expect(document.querySelector('.cl-close-btn')).toHaveAttribute('aria-label', 'Close chat');
+
+      rerender(<ChatWindow {...defaultProps} language="de" onStartNewSession={jest.fn()} onClose={jest.fn()} />);
+      expect(screen.getByRole('button', { name: 'Neues Gespräch' })).toBeInTheDocument();
+      expect(document.querySelector('.cl-close-btn')).toHaveAttribute('aria-label', 'Chat schließen');
+    });
+
+    it('should put the title and the status in one header row', () => {
+      render(<ChatWindow {...defaultProps} window_title="Museum information" />);
+
+      const content = document.querySelector('.cl-header-content') as HTMLElement;
+      expect(content.querySelector('.cl-header-title')).toHaveTextContent('Museum information');
+      expect(content.querySelector('.cl-header-subtitle')).toHaveTextContent('Powered by PUNKU.AI & bookingkit');
+      expect(content.querySelector('.cl-header-actions')).toBeInTheDocument();
+    });
+
+    it('should mark a header that a site colours', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} />);
+      expect(document.querySelector('.cl-header')).not.toHaveClass('cl-header--colored');
+
+      rerender(<ChatWindow {...defaultProps} button_color="#7c2d12" />);
+      expect(document.querySelector('.cl-header')).toHaveClass('cl-header--colored');
+    });
+
+    it.each([
+      ['en', 'You are chatting with an AI assistant. Answers can contain mistakes.'],
+      ['de', 'Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten.'],
+    ] as const)('should show the AI notice in %s by default', (language, notice) => {
+      render(<ChatWindow {...defaultProps} language={language} />);
+
+      expect(document.querySelector('.cl-ai-notice')).toHaveTextContent(notice);
+    });
+
+    it('should show the site text as the AI notice', () => {
+      render(<ChatWindow {...defaultProps} ai_notice_text="Our assistant is an AI. Please check important details." />);
+
+      expect(document.querySelector('.cl-ai-notice')).toHaveTextContent('Our assistant is an AI. Please check important details.');
+    });
+
+    it('should hide the AI notice with show_ai_notice false', () => {
+      render(<ChatWindow {...defaultProps} show_ai_notice={false} />);
+
+      expect(document.querySelector('.cl-ai-notice')).not.toBeInTheDocument();
+    });
+
+    it('should name the send button and enable it only when there is text', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const sendButton = screen.getByRole('button', { name: 'Send message' });
+      expect(sendButton).toHaveAttribute('type', 'button');
+      expect(sendButton).toBeDisabled();
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: '   ' } });
+      expect(sendButton).toBeDisabled();
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      expect(sendButton).not.toBeDisabled();
+    });
+
+    it('should mark the message list busy while an answer is on its way', async () => {
+      mockedSendMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+
+      const list = document.querySelector('.cl-messages_container') as HTMLElement;
+      expect(list).toHaveAttribute('aria-busy', 'false');
+
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      await waitFor(() => expect(list).toHaveAttribute('aria-busy', 'true'));
+    });
+
+    it('should clear the typed text when a new conversation starts', () => {
+      const onStartNewSession = jest.fn();
+      render(<ChatWindow {...defaultProps} onStartNewSession={onStartNewSession} />);
+
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: 'A draft for the old conversation' } });
+      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+      fireEvent.click(screen.getByText('Confirm'));
+
+      expect(onStartNewSession).toHaveBeenCalledTimes(1);
+      expect(input.value).toBe('');
+    });
+
+    it('should keep the typed text when the new conversation is cancelled', () => {
+      render(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} />);
+
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: 'Keep me' } });
+      fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
+      fireEvent.click(screen.getByText('Cancel'));
+
+      expect(input.value).toBe('Keep me');
+    });
+
+    it('should keep the input_container_style background when button_color is set', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          button_color="#7c2d12"
+          input_container_style={{ backgroundColor: '#fafaf9' }}
+        />
+      );
+
+      expect(document.querySelector('.cl-input_container')).toHaveStyle({ backgroundColor: 'rgb(250, 250, 249)' });
+    });
+
+    it('should give the field the input_style background, because the textarea is transparent', () => {
+      render(<ChatWindow {...defaultProps} input_style={{ backgroundColor: '#fef3c7' }} />);
+
+      expect(document.querySelector('.cl-composer-field')).toHaveStyle({ backgroundColor: 'rgb(254, 243, 199)' });
+    });
+
+    it('should size the field, not the bar, with the height keys of input_container_style', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          input_container_style={{ height: '56px', minHeight: '48px', maxHeight: '80px', borderTop: '2px solid #e7e5e4' }}
+        />
+      );
+
+      const bar = document.querySelector<HTMLElement>('.cl-input_container')!;
+      const field = document.querySelector<HTMLElement>('.cl-composer-field')!;
+      expect(field.style.height).toBe('56px');
+      expect(field.style.minHeight).toBe('48px');
+      expect(field.style.maxHeight).toBe('80px');
+      expect(bar.style.height).toBe('');
+      expect(bar.style.minHeight).toBe('');
+      expect(bar.style.maxHeight).toBe('');
+      expect(bar).toHaveStyle({ borderTop: '2px solid #e7e5e4' });
     });
   });
 

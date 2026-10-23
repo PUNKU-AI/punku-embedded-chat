@@ -14,7 +14,8 @@ const props = {
 const icons = ['.cl-header-logo', '.cl-new-session-btn svg', '.cl-close-btn svg'];
 
 type Rgb = [number, number, number];
-type Icon = { stroke: string; visible: boolean };
+// backdrop: the colour behind the icon. The header icon sits on its avatar.
+type Icon = { stroke: string; visible: boolean; backdrop: string };
 type Header = { background: string; icons: Record<string, Icon | null> };
 
 const errors = new WeakMap<Page, string[]>();
@@ -42,9 +43,11 @@ async function headerColours(page: Page): Promise<Header | null> {
       }
       const rect = icon.getBoundingClientRect();
       const style = getComputedStyle(icon);
+      const avatar = icon.closest('.cl-header-avatar');
       result[selector] = {
         stroke: style.stroke,
         visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility === 'visible',
+        backdrop: getComputedStyle(avatar || header).backgroundColor,
       };
     }
     return { background: getComputedStyle(header).backgroundColor, icons: result };
@@ -79,12 +82,17 @@ async function expectVisibleHeaderIcons(page: Page, extraProps: Record<string, s
 
   const header = (await headerColours(page))!;
   expect(header.background).toBe('rgb(255, 255, 255)');
+  // The header icon is white on its accent avatar; the actions are dark on the white header.
+  const expected: Record<string, { stroke: string; backdrop: string }> = {
+    '.cl-header-logo': { stroke: 'rgb(255, 255, 255)', backdrop: 'rgb(37, 99, 235)' },
+    '.cl-new-session-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
+    '.cl-close-btn svg': { stroke: 'rgb(15, 23, 42)', backdrop: header.background },
+  };
   for (const selector of icons) {
     const icon = header.icons[selector]!;
-    expect(icon.stroke, selector).not.toBe(header.background);
-    expect(icon.stroke, selector).toBe('rgb(15, 23, 42)');
+    expect({ stroke: icon.stroke, backdrop: icon.backdrop }, selector).toEqual(expected[selector]);
     // WCAG 1.4.11 asks for 3:1 against the adjacent colour for UI components.
-    expect(contrast(rgb(icon.stroke), rgb(header.background)), selector).toBeGreaterThanOrEqual(3);
+    expect(contrast(rgb(icon.stroke), rgb(icon.backdrop)), selector).toBeGreaterThanOrEqual(3);
   }
 }
 

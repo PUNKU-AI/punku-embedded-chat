@@ -68,6 +68,15 @@ The open window, its header, close button and send button, and the trigger stay 
 The `android` profile also runs this at 839 × 412 px with a 200 px keyboard.
 Geometry checks wait until each box is at full scale and stays the same in two reads, because the window scales in when it opens.
 
+Scaled page checks serve the fixture with `<meta name="viewport" content="width=320">`, as Wix sites do.
+The browser then scales the page up to the screen width, for example by 2.3 at 740 × 360 px.
+The `android` and `iphone` profiles run them at 740 × 360, 844 × 390 and 390 × 844 px.
+The widget must lay out at the screen size: the trigger is 48 screen px wide.
+The open window, its header, close button, input and send button, and the trigger stay on the screen, and the welcome message is fully visible.
+In landscape, the window fills the height beside the trigger. In portrait, it uses the phone layout.
+The checks also cover the on-screen keyboard, the closed hint, `bottom_offset` 80, the checkout dialog, and a rotation (`android` only).
+On a scaled page, Playwright WebKit maps touch points wrongly, also before this fix. Its checks test the hit target with `elementFromPoint` and then activate the element by script.
+
 Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
 Local servers record the actual HTTP headers and body on both origins.
 Tests verify same-origin cookies, blocked cross-origin cookies, and no copied XSRF headers on every profile.

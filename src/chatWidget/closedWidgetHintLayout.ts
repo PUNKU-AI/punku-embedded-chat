@@ -1,3 +1,5 @@
+import { renderedScale } from "./utils";
+
 const HINT_MARGIN = 8;
 const HINT_GAP = 12;
 
@@ -11,29 +13,37 @@ const setStyle = (element: HTMLElement, property: string, value: string) => {
   }
 };
 
-const pixels = (value: number) => `${Math.round(value * 100) / 100}px`;
-
 /** Keep the preferred hint placement when the viewport has room. */
 export function layoutClosedWidgetHint(
   hint: HTMLDivElement,
   trigger: HTMLButtonElement,
   preferredPositionClass: string
 ): ClosedWidgetHintLayout | null {
-  const anchor = hint.parentElement?.getBoundingClientRect();
+  const anchorElement = hint.parentElement;
+  const anchor = anchorElement?.getBoundingClientRect();
   const triggerBounds = trigger.getBoundingClientRect();
   // JSDOM and detached elements have no layout to correct.
-  if (!anchor || !triggerBounds.width || !triggerBounds.height) return null;
+  if (!anchorElement || !anchor || !triggerBounds.width || !triggerBounds.height) return null;
 
+  /*
+   * Client rects and the visual viewport are page px. The hint styles are
+   * widget px, which a scaled page frame (scaledPage.ts) makes smaller than
+   * page px. Compute in page px, and write widget px.
+   */
+  const scale = renderedScale(anchor.width, anchorElement.offsetWidth);
+  const pixels = (value: number) => `${Math.round((value / scale) * 100) / 100}px`;
+  const margin = HINT_MARGIN * scale;
+  const gap = HINT_GAP * scale;
   const viewport = window.visualViewport;
   const viewportWidth = viewport?.width ?? window.innerWidth;
   const viewportHeight = viewport?.height ?? window.innerHeight;
-  const minimumX = (viewport?.offsetLeft ?? 0) + HINT_MARGIN;
-  const minimumY = (viewport?.offsetTop ?? 0) + HINT_MARGIN;
-  const availableWidth = Math.max(0, viewportWidth - HINT_MARGIN * 2);
-  const availableHeight = Math.max(0, viewportHeight - HINT_MARGIN * 2);
+  const minimumX = (viewport?.offsetLeft ?? 0) + margin;
+  const minimumY = (viewport?.offsetTop ?? 0) + margin;
+  const availableWidth = Math.max(0, viewportWidth - margin * 2);
+  const availableHeight = Math.max(0, viewportHeight - margin * 2);
   const maximumX = minimumX + availableWidth;
   const maximumY = minimumY + availableHeight;
-  setStyle(hint, "max-width", pixels(Math.min(320, availableWidth, Math.max(0, viewportWidth - 96))));
+  setStyle(hint, "max-width", pixels(Math.min(320 * scale, availableWidth, Math.max(0, viewportWidth - 96 * scale))));
   setStyle(hint, "max-height", pixels(availableHeight));
   const bounds = hint.getBoundingClientRect();
   const width = Math.min(bounds.width, availableWidth);
@@ -44,8 +54,8 @@ export function layoutClosedWidgetHint(
 
   if (!sidePosition) {
     const above = positionClass.startsWith("cl-hint-top");
-    const aboveSpace = anchor.top - HINT_GAP - minimumY;
-    const belowSpace = maximumY - anchor.bottom - HINT_GAP;
+    const aboveSpace = anchor.top - gap - minimumY;
+    const belowSpace = maximumY - anchor.bottom - gap;
     const preferredSpace = above ? aboveSpace : belowSpace;
     const otherSpace = above ? belowSpace : aboveSpace;
     if (preferredSpace < height && otherSpace > preferredSpace) {
@@ -56,11 +66,11 @@ export function layoutClosedWidgetHint(
   let x: number;
   let y: number;
   if (sidePosition) {
-    x = positionClass === "cl-hint-left" ? anchor.left - HINT_GAP - width : anchor.right + HINT_GAP;
+    x = positionClass === "cl-hint-left" ? anchor.left - gap - width : anchor.right + gap;
     y = anchor.top + (anchor.height - height) / 2;
   } else {
     x = leftAligned ? anchor.left : anchor.right - width;
-    y = positionClass.startsWith("cl-hint-top") ? anchor.top - HINT_GAP - height : anchor.bottom + HINT_GAP;
+    y = positionClass.startsWith("cl-hint-top") ? anchor.top - gap - height : anchor.bottom + gap;
   }
 
   x = Math.max(minimumX, Math.min(x, maximumX - width));
@@ -71,6 +81,6 @@ export function layoutClosedWidgetHint(
   setStyle(hint, "right", "auto");
   setStyle(hint, "bottom", "auto");
   setStyle(hint, "transform", "none");
-  setStyle(hint, "--cl-closed-hint-arrow-y", pixels(Math.max(8, Math.min(triggerBounds.top + triggerBounds.height / 2 - y, height - 8))));
+  setStyle(hint, "--cl-closed-hint-arrow-y", pixels(Math.max(8 * scale, Math.min(triggerBounds.top + triggerBounds.height / 2 - y, height - 8 * scale))));
   return { positionClass };
 }

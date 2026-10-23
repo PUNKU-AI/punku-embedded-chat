@@ -108,6 +108,15 @@ export function detectBrowserLanguage(availableLanguages: string[] = ['en', 'de'
 	return 'en';
 }
 /*
+ * Rendered px per layout px of an element, from its client rect size and its
+ * offset size. Below 1 inside a scaled page frame (scaledPage.ts). 1 without
+ * layout (jsdom).
+ */
+export function renderedScale(renderedSize: number, layoutSize: number) {
+	return renderedSize > 0 && layoutSize > 0 ? renderedSize / layoutSize : 1;
+}
+
+/*
  * Scroll the nearest scrolling ancestor, such as the message list, so that
  * `element` is visible. focus() and scrollIntoView() also scroll the host page
  * and the visual viewport. On a phone page wider than the screen, that pans the
@@ -122,10 +131,14 @@ export function revealInScrollContainer(element: HTMLElement) {
 	) {
 		if (!/auto|scroll|overlay/.test(getComputedStyle(parent).overflowY)) continue;
 		if (parent.scrollHeight <= parent.clientHeight) continue;
-		const top = parent.getBoundingClientRect().top + parent.clientTop;
+		// Client rects are page px. A scaled page frame (scaledPage.ts) makes them
+		// smaller than the container px of scrollTop.
+		const parentBox = parent.getBoundingClientRect();
+		const scale = renderedScale(parentBox.height, parent.offsetHeight);
+		const top = parentBox.top / scale + parent.clientTop;
 		const target = element.getBoundingClientRect();
-		const above = top - target.top;
-		const below = target.bottom - (top + parent.clientHeight);
+		const above = top - target.top / scale;
+		const below = target.bottom / scale - (top + parent.clientHeight);
 		// Show the whole element, or its top when it is taller than the container.
 		if (above > 0) parent.scrollTop -= above;
 		else if (below > 0) parent.scrollTop += Math.min(below, -above);
@@ -146,7 +159,7 @@ export const VISUAL_VIEWPORT_PROPERTIES = {
 	height: '--cl-visual-viewport-height',
 } as const;
 
-// Above this scale the visitor has pinch-zoomed in.
+// Above this zoom the visitor has pinch-zoomed in.
 const PINCH_ZOOM_SCALE = 1.01;
 
 /** The visual viewport box, in px from the layout viewport origin. */
@@ -156,9 +169,32 @@ type VisualViewportListener = (box: VisualViewportBox | null) => void;
 const visualViewportListeners = new Set<VisualViewportListener>();
 let observedViewport: VisualViewport | null = null;
 
+/*
+ * The layout viewport size without scrollbars: the client size of the
+ * scrolling element (the root, or the body in quirks mode).
+ */
+export function getLayoutViewportSize() {
+	const element = document.scrollingElement ?? document.documentElement;
+	return { width: element?.clientWidth ?? 0, height: element?.clientHeight ?? 0 };
+}
+
+/*
+ * Screen px per CSS px of the page without pinch zoom. A page with a small
+ * fixed layout width, such as <meta name="viewport" content="width=320"> on
+ * Wix sites, is scaled up to the screen width: 2.3 on a 740 px wide phone.
+ * The visible width in screen px (width x scale) stays the same when the
+ * visitor pinch-zooms, so this is the scale at which the page fits the
+ * screen width. It is 1 on pages with width=device-width and on desktops.
+ */
+export function getPageScale(viewport: VisualViewport | null | undefined = window.visualViewport) {
+	const layoutWidth = getLayoutViewportSize().width;
+	if (!viewport || !layoutWidth || !(viewport.scale > 0)) return 1;
+	return (viewport.width * viewport.scale) / layoutWidth;
+}
+
 function readVisualViewport(): VisualViewportBox | null {
 	const viewport = observedViewport;
-	if (!viewport || viewport.scale > PINCH_ZOOM_SCALE) return null;
+	if (!viewport || viewport.scale > getPageScale(viewport) * PINCH_ZOOM_SCALE) return null;
 	const { offsetLeft, offsetTop, width, height } = viewport;
 	return { offsetLeft, offsetTop, width, height };
 }

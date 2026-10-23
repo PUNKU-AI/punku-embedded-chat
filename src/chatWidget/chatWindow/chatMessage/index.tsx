@@ -85,6 +85,29 @@ function parseMessage(message: any): string {
   }
 }
 
+type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+
+const meaningfulChildren = (node: unknown) =>
+  ((node as HastNode | undefined)?.children || []).filter(
+    (child) => !(child.type === "text" && !(child.value || "").trim())
+  );
+
+/** True when an element holds exactly one link and nothing else but whitespace. */
+export function isLinkOnly(node: unknown): boolean {
+  const children = meaningfulChildren(node);
+  return children.length === 1 && children[0].type === "element" && children[0].tagName === "a";
+}
+
+/**
+ * True when a list item holds only a link. In a loose list (blank lines
+ * between the items) markdown wraps the link in a paragraph: li > p > a.
+ */
+export function isLinkOnlyListItem(node: unknown): boolean {
+  if (isLinkOnly(node)) return true;
+  const children = meaningfulChildren(node);
+  return children.length === 1 && children[0].type === "element" && children[0].tagName === "p" && isLinkOnly(children[0]);
+}
+
 export default function ChatMessage({
   message,
   message_id,
@@ -100,14 +123,19 @@ export default function ChatMessage({
   onFeedbackUpdate,
   onClientError,
   onCheckout,
+  isLatest = false,
   onRetry,
   retryLabel = "Try again",
+  helpfulLabel = "Helpful",
+  notHelpfulLabel = "Not helpful",
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
   onCheckout?: (url: string, opener: HTMLAnchorElement) => boolean;
+  /** The newest answer keeps its feedback buttons visible. */
+  isLatest?: boolean;
   onClientError?: (
     error: unknown,
     phase: PunkuChatErrorPhase,
@@ -116,16 +144,31 @@ export default function ChatMessage({
   /** Shown on the newest error message: sends the visitor's last message again. */
   onRetry?: () => void;
   retryLabel?: string;
+  /** Names of the feedback buttons for screen readers, in the chat language. */
+  helpfulLabel?: string;
+  notHelpfulLabel?: string;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
 
   // Keep the opener mounted so checkout can capture and restore its focus.
+  // A link that stands alone in a paragraph or list item is an action: it
+  // renders as a button (see .cl-link-only in the widget stylesheet).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
         {children}
       </BookingkitCheckoutLink>
+    ),
+    p: ({ node, children, ...props }) => (
+      <p {...props} className={isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
+    ),
+    // react-markdown 8 passes ordered, checked and index to list items; they
+    // are not DOM attributes.
+    li: ({ node, children, ordered, checked, index, className, ...props }) => (
+      <li {...props} className={[className, isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+        {children}
+      </li>
     ),
   }), [onCheckout]);
 
@@ -135,6 +178,25 @@ export default function ChatMessage({
     feedback === 'negative' ? 'thumbsDown' :
     null
   );
+
+  // The width keys of bot_message_style size the stack around the bubble, so
+  // the stack's default width limit never caps a site's wider answers. The
+  // bubble then fills the stack; percentages still refer to the message row.
+  const {
+    width: answerWidth,
+    minWidth: answerMinWidth,
+    maxWidth: answerMaxWidth,
+    ...answerStyleRest
+  } = bot_message_style || {};
+  const answerStackStyle: React.CSSProperties | undefined =
+    answerWidth === undefined && answerMinWidth === undefined && answerMaxWidth === undefined
+      ? undefined
+      : { width: answerWidth, minWidth: answerMinWidth, maxWidth: answerMaxWidth };
+  const answerBubbleStyle: React.CSSProperties = {
+    ...answerStyleRest,
+    ...(answerWidth !== undefined ? { width: "100%" } : {}),
+    ...(answerMinWidth !== undefined ? { minWidth: "100%" } : {}),
+  };
 
   const handleFeedback = async (type: 'thumbsUp' | 'thumbsDown') => {
     setSelectedFeedback(type);
@@ -175,7 +237,7 @@ export default function ChatMessage({
   return (
     <div
       className={
-        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start")
+        "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start") + (isLatest ? " cl-latest" : "")
       }
     >
       {isSend ? (
@@ -212,40 +274,47 @@ export default function ChatMessage({
           )}
         </div>
       ) : (
-        <div 
-          style={{
-            ...DEFAULT_MESSAGE_TEXT_STYLE,
-            ...(bot_message_style || {}),
-          }} 
-          className={"cl-bot_message"}
-        >
-          <Markdown
-            className={"markdown-body prose flex flex-col word-break-break-word"}
-            remarkPlugins={[remarkGfm]}
-            components={markdownComponents}
+        // The answer bubble, with the feedback buttons under it (not inside it).
+        <div className="cl-message-stack" style={answerStackStyle}>
+          <div
+            style={{
+              ...DEFAULT_MESSAGE_TEXT_STYLE,
+              ...answerBubbleStyle,
+            }}
+            className={"cl-bot_message"}
           >
-            {parsedMessage}
-          </Markdown>
-          
+            <Markdown
+              className={"markdown-body prose flex flex-col word-break-break-word"}
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+              {parsedMessage}
+            </Markdown>
+          </div>
+
           {/* Simple thumbs up/down feedback - hide for welcome message */}
           {!isSend && !error && message_id !== "welcome-message" && (
             <div className="feedback-container">
               <div className="feedback-buttons">
-                <button 
+                <button
+                  type="button"
                   className={`feedback-button thumbs-up ${selectedFeedback === 'thumbsUp' ? 'selected' : ''}`}
                   onClick={() => handleFeedback('thumbsUp')}
-                  aria-label="Thumbs up"
-                  title="Thumbs up"
+                  aria-label={helpfulLabel}
+                  aria-pressed={selectedFeedback === 'thumbsUp'}
+                  title={helpfulLabel}
                 >
-                  <ThumbsUp size={16} />
+                  <ThumbsUp size={16} aria-hidden="true" />
                 </button>
-                <button 
+                <button
+                  type="button"
                   className={`feedback-button thumbs-down ${selectedFeedback === 'thumbsDown' ? 'selected' : ''}`}
                   onClick={() => handleFeedback('thumbsDown')}
-                  aria-label="Thumbs down"
-                  title="Thumbs down"
+                  aria-label={notHelpfulLabel}
+                  aria-pressed={selectedFeedback === 'thumbsDown'}
+                  title={notHelpfulLabel}
                 >
-                  <ThumbsDown size={16} />
+                  <ThumbsDown size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -280,6 +349,13 @@ export default function ChatMessage({
         
         .feedback-button:hover {
           opacity: 1;
+        }
+
+        .feedback-button:focus-visible {
+          opacity: 1;
+          outline: 2px solid currentColor;
+          outline-offset: 2px;
+          border-radius: 4px;
         }
         
         .feedback-button.thumbs-up:hover {
