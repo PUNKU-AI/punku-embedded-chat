@@ -284,7 +284,7 @@ Use the widget API to customize your widget:
 - **ai_notice_text:**
   - Type: String
   - Required: No
-  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant. Answers can contain mistakes." In German: "Sie chatten mit einem KI-Assistenten. Antworten können Fehler enthalten."
+  - Description: Your own wording for the line under the input that tells visitors they are chatting with an AI system (EU AI Act, Article 50). Default: "You are chatting with an AI assistant." In German: "Sie chatten mit einem KI-Assistenten."
 
 - **show_ai_notice:**
   - Type: Boolean
@@ -671,6 +671,8 @@ A dialog that the visitor must answer first stays above the widget. While the pa
 - a fixed backdrop over the whole screen with one of these words in its id or class, for example the Contao privacy opt-in (`privacy_overlay`).
 
 When the dialog closes, the widget returns to its own z-index within a second. A floating WhatsApp button or a greeting bubble is none of these, so the widget stays above it.
+
+While the chat window is open, the widget puts it in the browser's top layer (a popover). There it is above every z-index of the page, also above an element at the highest value 2147483647, such as an accessibility button. This does not apply while a consent dialog is visible (see above) or on a scaled Wix page. Browsers without popovers (Safari before 17, Firefox before 125) keep the z-index.
 
 ### Known values
 

@@ -938,6 +938,57 @@ describe('ChatWidget', () => {
       }
     });
 
+    // jsdom has no popovers: record the calls of the top layer.
+    function mockPopovers() {
+      const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+      const had = { show: 'showPopover' in proto, hide: 'hidePopover' in proto };
+      const original = { show: proto.showPopover, hide: proto.hidePopover };
+      const showPopover = jest.fn();
+      const hidePopover = jest.fn();
+      proto.showPopover = showPopover;
+      proto.hidePopover = hidePopover;
+      const restore = () => {
+        if (had.show) proto.showPopover = original.show; else delete proto.showPopover;
+        if (had.hide) proto.hidePopover = original.hide; else delete proto.hidePopover;
+      };
+      return { showPopover, hidePopover, restore };
+    }
+
+    it('should lift the open window to the top layer and take it back when it closes', () => {
+      const popovers = mockPopovers();
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        const layer = document.querySelector('.cl-window-layer') as HTMLElement;
+        expect(layer.getAttribute('popover')).toBe('manual');
+        expect(popovers.showPopover).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+        expect(layer.hasAttribute('popover')).toBe(false);
+        expect(popovers.hidePopover).toHaveBeenCalledTimes(1);
+      } finally {
+        popovers.restore();
+      }
+    });
+
+    it('should keep the open window under a consent dialog of the page', () => {
+      const popovers = mockPopovers();
+      const layer = document.createElement('div');
+      layer.style.cssText = 'position: fixed; z-index: 999999;';
+      layer.innerHTML = '<div role="alertdialog" aria-modal="true">Privacy settings</div>';
+      layer.firstElementChild!.getBoundingClientRect = () => ({
+        x: 20, y: 40, left: 20, top: 40, width: 280, height: 300, right: 300, bottom: 340, toJSON: () => ({}),
+      }) as DOMRect;
+      document.body.appendChild(layer);
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(document.querySelector('.cl-window-layer')!.hasAttribute('popover')).toBe(false);
+        expect(document.querySelector('.cl-widget-root')).toHaveStyle({ zIndex: '999998' });
+      } finally {
+        popovers.restore();
+        layer.remove();
+      }
+    });
+
     it.each([
       [500, '500'],
       [12.6, '13'],

@@ -1390,6 +1390,19 @@ video {
   object-fit: contain;
 }
 
+/* The open window's layer in the browser's top layer (a popover, see
+   ChatWidget): undo the browser's popover box. :where() keeps the
+   specificity at 0, so the inline position and every other rule win. */
+:where(.cl-window-layer[popover]) {
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
 .cl-chat-window {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
   "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
@@ -4272,6 +4285,32 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   // A consent dialog or another modal dialog of the page stays above the
   // widget, so a visitor can answer it (pageDialogs.ts).
   const blockingDialogZIndex = useBlockingDialogZIndex();
+  // The open window goes to the browser's top layer (a manual popover), above
+  // every z-index of the page. An accessibility button at 2147483647 that the
+  // page adds after the widget (Eyeable on Swarovski) covered the window. Not
+  // while a consent dialog is visible: it stays above the widget. Not in a
+  // scaled page frame: the top layer would leave the frame's scale. Browsers
+  // without popovers keep the widget's z-index.
+  const windowLayerRef = useRef<HTMLDivElement>(null);
+  const windowOnTopLayer = open && blockingDialogZIndex === null && !scaledPage;
+  useLayoutEffect(() => {
+    const layer = windowLayerRef.current;
+    // The popover attribute is set exactly while the layer is shown.
+    if (!layer || typeof layer.showPopover !== "function" || windowOnTopLayer === layer.hasAttribute("popover")) return;
+    try {
+      if (windowOnTopLayer) {
+        layer.setAttribute("popover", "manual");
+        layer.showPopover();
+      } else {
+        layer.hidePopover();
+        layer.removeAttribute("popover");
+      }
+    } catch {
+      // Not shown, for example a detached element: the window keeps the
+      // widget's z-index. A popover that is not shown would be hidden.
+      layer.removeAttribute("popover");
+    }
+  }, [windowOnTopLayer]);
   const isRelocated = Boolean(activeTriggerPosition);
 
   /*
@@ -4471,6 +4510,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         />
       </div>
       <div
+        ref={windowLayerRef}
+        className="cl-window-layer"
         style={{
           position: "fixed",
           ...(anchoredChatWindowStyle || chatWindowStyle),

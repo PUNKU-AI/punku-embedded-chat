@@ -163,6 +163,31 @@ for (const { tool, layer, html } of consentDialogs) {
   });
 }
 
+// An accessibility button at the highest z-index, added after the widget
+// (Eyeable on Swarovski). No z-index can cover it, so the open window goes to
+// the browser's top layer.
+const accessibilityButton = `
+  <div id="eyeable-trigger" role="button" aria-label="Accessibility"
+       style="position:fixed;right:0;top:40%;width:60px;height:60px;background:#1a73e8;z-index:2147483647"></div>`;
+
+test('the open window covers an accessibility button at the highest z-index', async ({ page }) => {
+  await injectHostElements(page, accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  const covered = overlap(await settledBox(page, '.cl-chat-window'), await hostBox(page, 'eyeable-trigger'));
+  test.skip(covered.width <= 0 || covered.height <= 0, 'The window does not reach the button at this size.');
+  expect(await topmostAt(page, center(covered))).toBe('punku-chat');
+});
+
+test('a consent dialog still covers the open window', async ({ page }) => {
+  await injectHostElements(page, consentDialogs[0].html + accessibilityButton);
+  await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+
+  await expect.poll(() => widgetZIndex(page)).toBe('999998');
+  const chatWindow = await settledBox(page, '.cl-chat-window');
+  await expect.poll(() => topmostAt(page, center(chatWindow))).toBe('consent-layer');
+});
+
 test('a consent dialog that opens after the widget also stays above it', async ({ page }) => {
   await loadWidget(page, { show_closed_widget_hint: 'false' });
   const trigger = await settledBox(page, '.cl-trigger');
