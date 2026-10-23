@@ -1,6 +1,7 @@
 import { ArrowUp, RefreshCw, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
+import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatMessageType } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
@@ -128,6 +129,7 @@ export default function ChatWindow({
   left_offset = 20,
   right_offset = 20,
   positionOverrideStyle,
+  scaledPage = null,
   programmaticMessage,
   onProgrammaticMessageHandled,
   widget_id = "punku-chat-widget",
@@ -200,6 +202,8 @@ export default function ChatWindow({
   left_offset?: number;
   right_offset?: number;
   positionOverrideStyle?: React.CSSProperties;
+  /** A page that the browser scales up, such as Wix with width=320 (scaledPage.ts). */
+  scaledPage?: ScaledPage | null;
   programmaticMessage?: { id: number; message: string } | null;
   onProgrammaticMessageHandled?: (id: number) => void;
   widget_id?: string;
@@ -242,13 +246,18 @@ export default function ChatWindow({
   /*
    * The phone styles size and place the window from the visible part of the
    * page, not from the layout viewport (#77). Set the box before the first
-   * open frame, and follow it while the window is open.
+   * open frame, and follow it while the window is open. In the scaled page
+   * frame, the visible part is the frame (getScaledFrameVisualViewport).
    */
+  const inScaledFrame = Boolean(scaledPage);
   useLayoutEffect(() => {
     const chatWindow = chatWindowRef.current;
-    if (!open || !chatWindow) return;
+    if (!open || !chatWindow || inScaledFrame) return;
     return trackVisualViewport(chatWindow);
-  }, [open]);
+  }, [open, inScaledFrame]);
+  // Viewport units measure the small page on a scaled page. See viewportLength.
+  const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
+  const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
 
   // Place the window from the visible corner. In Chrome on Android, the
   // layout viewport corner can be outside the screen (#77). The 641 px and
@@ -945,10 +954,11 @@ export default function ChatWindow({
       style={{
         "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
         "--cl-top-offset": `${Number(top_offset) || 0}px`,
+        ...(scaledPage ? getScaledFrameVisualViewport(scaledPage) : {}),
         position: "fixed",
         ...effectiveWindowPositionStyle,
-        maxHeight: "70vh",
-        maxWidth: "90vw",
+        maxHeight: vh(70),
+        maxWidth: vw(90),
         transform: "none !important", // Override any transforms with !important
         zIndex: positionOverrideStyle?.zIndex ?? 9999,
       } as React.CSSProperties}
@@ -1036,9 +1046,12 @@ export default function ChatWindow({
           }
           ` : ''}
 
-          /* Responsive sizing for all screen sizes */
+          /*
+           * Responsive sizing for all screen sizes. On a scaled page,
+           * screenRules picks the rules from the frame size (scaledPage.ts).
+           */
           /* Mobile - Small phones */
-          @media (max-width: 640px) {
+          ${screenRules({ maxWidth: 640 }, `
             /*
              * Fit the visible part of the page (#77). trackVisualViewport sets
              * the variables. Without them, fill the layout viewport, as before.
@@ -1086,7 +1099,7 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /*
            * 641 px and wider: keep the window inside the visible part of the
@@ -1097,9 +1110,9 @@ export default function ChatWindow({
            * send button stay on the screen. The X, Escape or a tap outside
            * then closes it.
            */
-          @media (min-width: 641px) {
+          ${screenRules({ minWidth: 641 }, `
             .cl-chat-window {
-              --cl-visible-height: var(--cl-visual-viewport-height, 100vh);
+              --cl-visible-height: var(--cl-visual-viewport-height, ${vh(100)});
               --cl-trigger-gap: calc(var(--cl-bottom-offset) + 80px);
               --cl-window-room: max(
                 calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
@@ -1107,16 +1120,16 @@ export default function ChatWindow({
               );
               --cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));
             }
-          }
+          `, scaledPage)}
 
           /* Mobile landscape and small tablets */
-          @media (min-width: 641px) and (max-width: 767px) {
+          ${screenRules({ minWidth: 641, maxWidth: 767 }, `
             .cl-chat-window {
               /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
-              --cl-window-height: var(--cl-anchored-window-height, min(600px, 75vh));
-              width: var(--cl-anchored-window-width, min(420px, 85vw)) !important;
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, ${vh(75)}));
+              width: var(--cl-anchored-window-width, min(420px, ${vw(85)})) !important;
               height: var(--cl-window-height) !important;
-              max-height: var(--cl-anchored-window-height, min(75vh, var(--cl-window-room))) !important;
+              max-height: var(--cl-anchored-window-height, min(${vh(75)}, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -1129,16 +1142,16 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /* Tablets */
-          @media (min-width: 768px) and (max-width: 1023px) {
+          ${screenRules({ minWidth: 768, maxWidth: 1023 }, `
             .cl-chat-window {
               /* An anchored window (setTriggerPosition) keeps the size that its placement used. */
-              --cl-window-height: var(--cl-anchored-window-height, min(600px, 70vh));
-              width: var(--cl-anchored-window-width, min(420px, calc(60vw - 10px))) !important;
+              --cl-window-height: var(--cl-anchored-window-height, min(600px, ${vh(70)}));
+              width: var(--cl-anchored-window-width, min(420px, calc(${vw(60)} - 10px))) !important;
               height: var(--cl-window-height) !important;
-              max-height: var(--cl-anchored-window-height, min(70vh, var(--cl-window-room))) !important;
+              max-height: var(--cl-anchored-window-height, min(${vh(70)}, var(--cl-window-room))) !important;
             }
 
             .cl-window {
@@ -1150,7 +1163,7 @@ export default function ChatWindow({
             .cl-close-btn {
               display: flex !important;
             }
-          }
+          `, scaledPage)}
 
           /*
            * Short landscape screens (#77): 641-1023 px wide, at most 500 px
@@ -1162,8 +1175,7 @@ export default function ChatWindow({
            * Else it moves down (--cl-window-gap of the 641 px rule). An
            * anchored window (setTriggerPosition) keeps its own place.
            */
-          ${positionOverrideStyle ? '' : `
-          @media (min-width: 641px) and (max-width: 1023px) and (max-height: 500px) {
+          ${positionOverrideStyle ? '' : screenRules({ minWidth: 641, maxWidth: 1023, maxHeight: 500 }, `
             .cl-chat-window {
               --cl-trigger-gap: var(--cl-bottom-offset);
               --cl-window-room: max(
@@ -1173,45 +1185,44 @@ export default function ChatWindow({
               top: ${visualViewportInset("top", "8px")} !important;
               bottom: ${visualViewportInset("bottom", "var(--cl-window-gap)")} !important;
               ${besideTriggerSide}: ${visualViewportInset(besideTriggerSide, besideTriggerInset)} !important;
-              width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - ${besideTriggerInset} - 8px)) !important;
+              width: min(420px, ${vw(85)}, calc(var(--cl-visual-viewport-width, ${vw(100)}) - ${besideTriggerInset} - 8px)) !important;
               height: auto !important;
               max-height: none !important;
               /* Follow the visible area at once. Animate only the open and close
                  (the fade and the rise). */
               transition-property: opacity, transform, visibility;
             }
-          }
-          `}
+          `, scaledPage)}
 
           /* Desktop - standard sizes (1024px - 1440px) */
-          @media (min-width: 1024px) and (max-width: 1440px) {
+          ${screenRules({ minWidth: 1024, maxWidth: 1440 }, `
             .cl-chat-window {
-              --cl-window-height: min(${height || 650}px, 70vh);
-              max-height: min(70vh, var(--cl-window-room)) !important;
-              max-width: 90vw !important;
+              --cl-window-height: min(${height || 650}px, ${vh(70)});
+              max-height: min(${vh(70)}, var(--cl-window-room)) !important;
+              max-width: ${vw(90)} !important;
             }
 
             .cl-window {
               width: ${width || 450}px !important;
               height: ${height || 650}px !important;
-              max-height: min(70vh, var(--cl-window-room)) !important;
+              max-height: min(${vh(70)}, var(--cl-window-room)) !important;
             }
-          }
+          `, scaledPage)}
 
           /* Large desktop displays */
-          @media (min-width: 1441px) {
+          ${screenRules({ minWidth: 1441 }, `
             .cl-chat-window {
-              --cl-window-height: min(${height || 700}px, 75vh);
-              max-height: min(75vh, var(--cl-window-room)) !important;
-              max-width: 90vw !important;
+              --cl-window-height: min(${height || 700}px, ${vh(75)});
+              max-height: min(${vh(75)}, var(--cl-window-room)) !important;
+              max-width: ${vw(90)} !important;
             }
 
             .cl-window {
-              width: min(${width || 500}px, 90vw) !important;
-              height: min(${height || 700}px, 75vh) !important;
-              max-height: min(75vh, var(--cl-window-room)) !important;
+              width: min(${width || 500}px, ${vw(90)}) !important;
+              height: min(${height || 700}px, ${vh(75)}) !important;
+              max-height: min(${vh(75)}, var(--cl-window-room)) !important;
             }
-          }
+          `, scaledPage)}
 
           /* Ensure message container scrolls properly at all sizes */
           .cl-messages_container {

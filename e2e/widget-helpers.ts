@@ -43,6 +43,16 @@ export async function extendHostPage(page: Page, html: string) {
   });
 }
 
+export async function scaleHostPage(page: Page, width = 320) {
+  // Wix sites fix the layout width with <meta name="viewport" content="width=320">.
+  // The browser scales the page up to the screen width: 2.3 on a 740 px screen.
+  await page.route(/\/fixture\.html(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('content="width=device-width,initial-scale=1"', `content="width=${width}"`);
+    await route.fulfill({ response, body });
+  });
+}
+
 export async function widenHostPage(page: Page, html = '') {
   // A host element 43 px wider than the viewport, as on the live page in #69:
   // 433 px on a 390 px phone. `html` adds more host elements after it.
@@ -156,17 +166,22 @@ export async function fakeKeyboard(page: Page, height: number) {
 export async function waitForSettledBoxes(page: Page, selectors: string[]) {
   // The window scales in when it opens. Wait until each box is shown at full
   // scale and stays the same in two reads, so a check cannot pass mid-move.
+  // On a scaled host page (scaleHostPage), the widget root scales the whole
+  // widget down by the page scale. Full scale is then the root scale.
   let previous = '';
   await expect.poll(async () => {
     const current = await page.evaluate((selectors) => {
       const host = document.querySelector('punku-chat')!;
       const root = window.__widgetRoots.get(host)!;
       if (root.querySelector('.cl-chat-window')?.getAnimations().length) return 'moving';
+      const widgetRoot = root.querySelector<HTMLElement>('.cl-widget-root');
+      const rootWidth = widgetRoot?.getBoundingClientRect().width ?? 0;
+      const scale = widgetRoot && rootWidth > 0 && widgetRoot.offsetWidth > 0 ? rootWidth / widgetRoot.offsetWidth : 1;
       return selectors.map((selector) => {
         const element = root.querySelector<HTMLElement>(selector);
         if (!element) return 'missing';
         const box = element.getBoundingClientRect();
-        if (Math.abs(box.width - element.offsetWidth) > 1 || Math.abs(box.height - element.offsetHeight) > 1) return 'scaled';
+        if (Math.abs(box.width - element.offsetWidth * scale) > 1 || Math.abs(box.height - element.offsetHeight * scale) > 1) return 'scaled';
         return [box.left, box.top, box.right, box.bottom].map(Math.round).join(',');
       }).join('|');
     }, selectors);

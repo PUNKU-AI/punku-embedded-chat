@@ -107,6 +107,12 @@ use the same calculation to choose left alignment when the trigger is on the
 left. If a top hint would render from a trigger near the top edge, the widget
 automatically uses the bottom hint placement instead.
 
+Some host pages fix a small layout width, for example Wix sites with
+`<meta name="viewport" content="width=320">`. The browser then scales the page
+up to the screen width. On such a page, the widget normally lays out at the
+real screen size. A relocated trigger uses page coordinates, so while the
+trigger is relocated, the widget uses the unscaled page layout instead.
+
 ### 4. Example Testing Script
 <script>
     // Wait for the widget to load
