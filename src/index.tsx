@@ -21,6 +21,7 @@ function createChatElement() {
             bot_message_style:"json",
             user_message_style:"json",
             chat_window_style:"json",
+            mobile_chat_window_style:"json",
             height:"number",
             width:"number",
             session_id:"string",

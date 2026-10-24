@@ -33,15 +33,21 @@ jest.mock('./chatMessage', () => {
     onRetry,
     retryLabel,
     isLatest,
+    linkButtons,
   }: {
     message: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
     isLatest?: boolean;
+    linkButtons?: boolean;
   }) {
     return (
-      <div data-testid={isSend ? 'user-message' : 'bot-message'} data-latest={isLatest ? 'true' : undefined}>
+      <div
+        data-testid={isSend ? 'user-message' : 'bot-message'}
+        data-latest={isLatest ? 'true' : undefined}
+        data-link-buttons={String(linkButtons)}
+      >
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
       </div>
@@ -2112,6 +2118,21 @@ describe('ChatWindow', () => {
   });
 
   describe('Theming', () => {
+    it('keeps the swarovski-widget branch look in the swarovski theme: text links and a paper plane', () => {
+      const { unmount } = render(<ChatWindow {...defaultProps} theme="default" />);
+      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'true');
+      // eslint-disable-next-line testing-library/no-node-access
+      expect(document.querySelector('.cl-send-icon')).toHaveClass('lucide-arrow-up');
+      unmount();
+
+      render(<ChatWindow {...defaultProps} theme="swarovski" />);
+      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'false');
+      // eslint-disable-next-line testing-library/no-node-access
+      const icon = document.querySelector('.cl-send-icon')!;
+      expect(icon).toHaveClass('lucide-send');
+      expect(icon).toHaveStyle({ width: '18px', height: '18px' });
+    });
+
     it('should apply theme class', () => {
       render(<ChatWindow {...defaultProps} theme="dark" />);
 
@@ -2585,6 +2606,99 @@ describe('ChatWindow', () => {
 
       const window = document.querySelector('.cl-window');
       expect(window).toHaveStyle({ height: '700px' });
+    });
+  });
+
+  describe('Phone window style (mobile_chat_window_style)', () => {
+    const phoneQuery = '@media (max-width: 640px) {';
+    // The phone styles of a live embed (no flow ID, host or texts).
+    const liveStyles = {
+      chat_window_style: { maxHeight: '550px' },
+      mobile_chat_window_style: { bottom: '65px', height: 'calc(98vh - 120px)' },
+    };
+    // jsdom has no layout. The window stylesheet is the result.
+    const renderedStyles = () => Array.from(document.querySelectorAll('style'))
+      .map((style) => style.textContent || '')
+      .join('\n');
+    // The phone rule, and the rest of the stylesheet without it.
+    const splitPhoneRule = (styles: string) => {
+      const start = styles.indexOf(phoneQuery);
+      let depth = 0;
+      let end = start;
+      for (; end < styles.length; end += 1) {
+        if (styles[end] === '{') depth += 1;
+        if (styles[end] === '}' && --depth === 0) break;
+      }
+      return { phone: styles.slice(start, end + 1), rest: styles.slice(0, start) + styles.slice(end + 1) };
+    };
+    const chatWindowRule = (rule: string) => rule.slice(rule.indexOf('.cl-chat-window {'), rule.indexOf('}', rule.indexOf('.cl-chat-window {')));
+
+    it('keeps the phone defaults without the prop', () => {
+      render(<ChatWindow {...defaultProps} />);
+
+      const box = chatWindowRule(splitPhoneRule(renderedStyles()).phone);
+      expect(box).toContain('top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;');
+      expect(box).toContain('bottom: auto !important;');
+      expect(box).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;');
+    });
+
+    it('places the phone window from the visible bottom with the live styles', () => {
+      render(<ChatWindow {...defaultProps} {...liveStyles} />);
+
+      const box = chatWindowRule(splitPhoneRule(renderedStyles()).phone);
+      expect(box).toContain('top: auto !important;');
+      expect(box).toContain(`bottom: ${visualViewportInset('bottom', 'round(max(0px, 65px), 1px)')} !important;`);
+      expect(box).toContain('height: round(calc(calc(98 * var(--cl-visual-viewport-height, 100vh) / 100) - 120px), 1px) !important;');
+      // The phone rule keeps its other declarations.
+      expect(box).toContain('padding-top: env(safe-area-inset-top, 0px);');
+      expect(box).toContain('transition-property: opacity, transform, visibility;');
+    });
+
+    it('changes only the phone rule', () => {
+      const { unmount } = render(<ChatWindow {...defaultProps} chat_window_style={liveStyles.chat_window_style} />);
+      const without = splitPhoneRule(renderedStyles());
+      unmount();
+      render(<ChatWindow {...defaultProps} {...liveStyles} />);
+      const withProp = splitPhoneRule(renderedStyles());
+
+      expect(withProp.rest).toBe(without.rest);
+      expect(withProp.phone).not.toBe(without.phone);
+    });
+
+    it('leaves chat_window_style on the window, where the phone rule fills the box', () => {
+      render(<ChatWindow {...defaultProps} {...liveStyles} />);
+
+      // eslint-disable-next-line testing-library/no-node-access
+      const chatWindow = document.querySelector<HTMLElement>('.cl-window')!;
+      expect(chatWindow.style.maxHeight).toBe('550px');
+      // The phone rule wins over the inline maxHeight, as on the swarovski-widget branch.
+      const phone = splitPhoneRule(renderedStyles()).phone;
+      expect(phone).toMatch(/\.cl-window \{\s*width: 100% !important;\s*height: 100% !important;\s*max-height: 100% !important;/);
+    });
+
+    it('changes nothing on a scaled page in landscape, where the phone rule is off', () => {
+      const landscape = { scale: 2.3125, width: 740, height: 361 };
+      const { unmount } = render(<ChatWindow {...defaultProps} scaledPage={landscape} />);
+      const without = renderedStyles();
+      unmount();
+      render(<ChatWindow {...defaultProps} scaledPage={landscape} mobile_chat_window_style={liveStyles.mobile_chat_window_style} />);
+
+      expect(renderedStyles()).toBe(without);
+    });
+
+    it('measures the frame on a scaled page in portrait', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          scaledPage={{ scale: 1.21875, width: 390, height: 843 }}
+          mobile_chat_window_style={liveStyles.mobile_chat_window_style}
+        />
+      );
+
+      const styles = renderedStyles();
+      expect(styles).not.toContain('@media (max-width: 640px)');
+      expect(styles).toContain('height: round(calc(calc(98 * var(--cl-visual-viewport-height, 843px) / 100) - 120px), 1px) !important;');
+      expect(styles).toContain(`bottom: ${visualViewportInset('bottom', 'round(max(0px, 79.22px), 1px)')} !important;`);
     });
   });
 

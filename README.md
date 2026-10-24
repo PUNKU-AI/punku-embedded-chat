@@ -133,9 +133,11 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
 - With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency.
+- The `swarovski` theme shows no link buttons. All links are text links in `#0969da`, in the weight of the answer text, with the light underline. Lists of links keep their bullets.
 
 **Readable controls on your colours:** your colours can make a control vanish, for example a filled link button in the same colour as the answer bubble. The widget checks every control on the surface behind it (WCAG 1.4.11 and 1.4.3) and keeps every colour that reads:
 - A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
+- A send button in the colour of the input field (for example `send_button_style='{"backgroundColor":"#FFFFFF"}'` in a white field) shows only its icon. The widget then checks only the icon: 3:1 on the field.
 - If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
 - The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
 - Link text needs 4.5:1 on the answer bubble. Your `link_color` stays if it reaches that. Below that, the widget makes it just dark or light enough.
@@ -231,6 +233,7 @@ Use the widget API to customize your widget:
 | chat_position         | string    | No       |
 | chat_trigger_style    | json      | No       |
 | chat_window_style     | json      | No       |
+| mobile_chat_window_style | json   | No       |
 | client_error_report_url | string  | No       |
 | default_language      | string    | No       |
 | enable_client_error_reporting | boolean | No |
@@ -356,7 +359,20 @@ Use the widget API to customize your widget:
 - **chat_window_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the overall chat window.
+  - Description: Styling options for the overall chat window. On phones (640 px wide or less), the phone layout sets the window size, so size keys such as `maxHeight` do not apply there. Use `mobile_chat_window_style` to place and size the window on phones.
+
+- **mobile_chat_window_style:**
+  - Type: JSON
+  - Required: No
+  - Description: The place and size of the open window on phones (screens 640 px wide or less). Keys: `top`, `right`, `bottom`, `left`, `width`, `height` and `maxHeight`. The widget ignores other keys. Use `chat_window_style` for colours, borders and other styles.
+  - Each key replaces the phone default. By default, the window fills the width of the screen. It starts `top_offset` px below the top and ends 80 px above the bottom, which leaves room for the trigger.
+  - `top`, `right`, `bottom` and `left` are gaps to the edges of the visible part of the screen. With `bottom` and no `top`, the window sits on the bottom gap. With `right` and no `left`, it sits on the right gap.
+  - Without `height` or `width`, the window fills the room between the two gaps. `maxHeight` defaults to `height`.
+  - `vh` and `vw` measure the visible part of the screen. The browser toolbars and the on-screen keyboard make it smaller, so the window gets shorter.
+  - The window never leaves the visible part of the screen. A negative gap counts as 0.
+  - Values are CSS lengths, for example `65px`, `5%`, `calc(98vh - 120px)` or `min(600px, 80vh)`. A number is px. The widget ignores keywords such as `auto` and values that are not valid.
+  - Larger screens ignore this prop: tablets, desktops and phones in landscape.
+  - Example: `mobile_chat_window_style='{"bottom":"65px","height":"calc(98vh - 120px)"}'` keeps 65 px free under the window, for example for a bottom bar of your page.
 
 - **default_language:**
   - Type: String
@@ -460,7 +476,7 @@ Use the widget API to customize your widget:
 - **send_button_style:**
   - Type: JSON
   - Required: No
-  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message".
+  - Description: Styling options for the round send button inside the input field. The button is dimmed while the field is empty or while the assistant answers. Screen readers announce it as "Send message". The icon is an arrow up; the `swarovski` theme shows a paper plane.
 
 - **send_icon_style:**
   - Type: JSON

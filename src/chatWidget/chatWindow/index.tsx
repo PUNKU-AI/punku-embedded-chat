@@ -1,7 +1,8 @@
-import { ArrowUp, RefreshCw, X } from "lucide-react";
+import { ArrowUp, RefreshCw, Send, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
+import { phoneWindowDeclarations, readMobileChatWindowStyle } from "../mobileChatWindowStyle";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatMessageType, LoadingMessages } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
@@ -77,6 +78,7 @@ export default function ChatWindow({
   send_icon_style,
   user_message_style,
   chat_window_style,
+  mobile_chat_window_style,
   error_message_style,
   placeholder_sending,
   send_button_style,
@@ -145,6 +147,8 @@ export default function ChatWindow({
   send_icon_style?: React.CSSProperties;
   user_message_style?: React.CSSProperties;
   chat_window_style?: React.CSSProperties;
+  /** The place and size of the open window in the phone layout (mobileChatWindowStyle.ts). */
+  mobile_chat_window_style?: React.CSSProperties;
   error_message_style?: React.CSSProperties;
   send_button_style?: React.CSSProperties;
   online?: boolean;
@@ -254,6 +258,19 @@ export default function ChatWindow({
   // Viewport units measure the small page on a scaled page. See viewportLength.
   const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
   const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
+  // The swarovski theme keeps the look of the swarovski-widget branch: links
+  // on their own line stay text links, and the send button is a paper plane.
+  const branchLook = theme === "swarovski";
+  const linkButtons = !branchLook;
+  const SendIcon = branchLook ? Send : ArrowUp;
+  const sendIconSize = branchLook ? "18px" : "20px";
+  const sendIconStroke = branchLook ? 2 : 2.5;
+  // The phone window box: the defaults, or mobile_chat_window_style (mobileChatWindowStyle.ts).
+  const phoneWindowBox = useMemo(
+    () => phoneWindowDeclarations(readMobileChatWindowStyle(mobile_chat_window_style), scaledPage)
+      .join("\n              "),
+    [mobile_chat_window_style, scaledPage]
+  );
 
   // Place the window from the visible corner. In Chrome on Android, the
   // layout viewport corner can be outside the screen (#77). The 641 px and
@@ -1055,14 +1072,7 @@ export default function ChatWindow({
              * the variables. Without them, fill the layout viewport, as before.
              */
             .cl-chat-window {
-              top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;
-              left: var(--cl-visual-viewport-left, 0px) !important;
-              right: auto !important;
-              bottom: auto !important;
-              width: var(--cl-visual-viewport-width, 100%) !important;
-              height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
-              max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;
-              max-width: var(--cl-visual-viewport-width, 100%) !important;
+              ${phoneWindowBox}
               padding-top: env(safe-area-inset-top, 0px);
               /* Follow the visible area at once. Animate only the open and close
                  (the fade and the rise). */
@@ -1377,6 +1387,7 @@ export default function ChatWindow({
               onClientError={notifyClientError}
               onCheckout={onCheckout}
               onFeedbackUpdate={undefined}
+              linkButtons={linkButtons}
             />
           )}
 
@@ -1436,6 +1447,7 @@ export default function ChatWindow({
               host_url={hostUrl}
               onClientError={notifyClientError}
               onCheckout={onCheckout}
+              linkButtons={linkButtons}
               isLatest={index === latestAnswerIndex}
               onRetry={index === messages.length - 1 ? handleRetry : undefined}
               retryLabel={t.retry}
@@ -1528,12 +1540,12 @@ export default function ChatWindow({
               disabled={sendingMessage || !value.trim()}
               onClick={handleClick}
             >
-              <ArrowUp
+              <SendIcon
                 aria-hidden="true"
-                strokeWidth={2.5}
+                strokeWidth={sendIconStroke}
                 style={{
-                  width: '20px',
-                  height: '20px',
+                  width: sendIconSize,
+                  height: sendIconSize,
                   stroke: button_text_color || (send_icon_style && send_icon_style.stroke) || '#FFFFFF',
                   ...(send_icon_style || {}),
                   ...(guarded.sendIcon ? { stroke: guarded.sendIcon } : {})

@@ -63,6 +63,24 @@ describe('link buttons in answers', () => {
   });
 });
 
+describe('text links only (linkButtons false, the swarovski theme)', () => {
+  it('marks no paragraph or list item, also for a bold link and a loose list', () => {
+    render(
+      <ChatMessage
+        message={'[See all prices](https://example.com/prices)\n\n- [Directions](https://example.com/map)\n- [FAQ](https://example.com/faq)\n\n'
+          + '- [Gift shop](https://example.com/gifts)\n\n- [Café](https://example.com/cafe)\n\n[**Book now**](https://example.com/book)'}
+        isSend={false}
+        message_id="answer"
+        host_url="http://localhost:3000"
+        linkButtons={false}
+      />
+    );
+
+    expect(document.querySelectorAll('.markdown-body a')).toHaveLength(6);
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+});
+
 describe('isLinkOnly', () => {
   const text = (value: string) => ({ type: 'text', value });
   const link = { type: 'element', tagName: 'a', children: [text('Book')] };
