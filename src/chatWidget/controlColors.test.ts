@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
-  BOUNDARY_MIN, guardControlColors, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN, TEXT_MIN,
-  THEME_COLORS, ThemeName,
+  BOUNDARY_MIN, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN,
+  TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -306,6 +306,30 @@ describe('guardHintColors', () => {
 
 // The header icon sits on the header without a plate. It gets a plate only
 // where its colour would vanish on the header (WCAG 1.4.11, 3:1).
+describe('guardDialogConfirm', () => {
+  it('keeps the stylesheet red #dc2626 for white text', () => {
+    expect(guardDialogConfirm()).toEqual({});
+    expect(guardDialogConfirm('#FFFFFF')).toEqual({});
+    expect(ratio('#ffffff', '#dc2626')).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('keeps the lighter red #ef4444 for a dark site text that reads on it', () => {
+    // A saved customer sets button_text_color #1C1C1C without button_color:
+    // 4.5:1 on #ef4444 (v1.0.24), but below that on #dc2626.
+    expect(ratio('#1c1c1c', '#dc2626')).toBeLessThan(TEXT_MIN);
+    expect(guardDialogConfirm('#1C1C1C')).toEqual({ fill: '#ef4444' });
+    expect(ratio('#1c1c1c', '#ef4444')).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('gives a text that reads on neither red white or black', () => {
+    expect(guardDialogConfirm('#888888')).toEqual({ label: '#ffffff' });
+  });
+
+  it('leaves a colour name as it is', () => {
+    expect(guardDialogConfirm('white')).toEqual({});
+  });
+});
+
 describe('header icon plate', () => {
   const headerIcon = (props: Parameters<typeof guardControlColors>[0]) => {
     const { colors, pairs } = guardControlColors(props);

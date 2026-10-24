@@ -1,6 +1,6 @@
 import { CUSTOMER_COLORS } from './__fixtures__/customerColors';
 import { contrastRatio, parseOpaqueColor, Rgb } from './colorContrast';
-import { guardControlColors, guardHintColors, TEXT_MIN } from './controlColors';
+import { guardControlColors, guardDialogConfirm, guardHintColors, TEXT_MIN } from './controlColors';
 
 // Every saved customer configuration: no control may fall below its minimum
 // (3:1 for fills, outlines and icons; 4.5:1 for links, labels and the AI notice).
@@ -19,6 +19,16 @@ describe('controls on every saved customer configuration', () => {
     const fill = parseOpaqueColor(guarded.background || background || '#ffffff') as Rgb;
     const label = parseOpaqueColor(guarded.text || text || '#111827') as Rgb;
     expect(contrastRatio(label, fill)).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it.each(CUSTOMER_COLORS.filter((colors) => !colors.button_color && colors.theme !== 'swarovski')
+    .map((colors) => [colors.name, colors] as const))('%s: the dialog confirm text reads', (_name, colors) => {
+    const guarded = guardDialogConfirm(colors.button_text_color);
+    const fill = parseOpaqueColor(guarded.fill || '#dc2626') as Rgb;
+    const label = parseOpaqueColor(guarded.label || colors.button_text_color || '#ffffff') as Rgb;
+    expect(contrastRatio(label, fill)).toBeGreaterThanOrEqual(TEXT_MIN);
+    // A site text colour that reads stays.
+    expect(guarded.label).toBeUndefined();
   });
 
   it('covers the cases from the review', () => {

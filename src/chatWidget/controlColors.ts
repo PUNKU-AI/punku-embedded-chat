@@ -357,6 +357,28 @@ function surfaces(props: ControlColorProps) {
   return { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk };
 }
 
+/** The red of the confirm button in the new-conversation dialog (ConfirmationModal). */
+const DIALOG_REDS = ["#dc2626", "#ef4444"];
+
+/**
+ * The confirm button of the new-conversation dialog without button_color: its
+ * text (button_text_color, else white) on the dialog red (4.5:1). White reads
+ * on the stylesheet red #dc2626. A dark site text reads on the lighter #ef4444
+ * of v1.0.24 and keeps it. A text that reads on neither red turns white or
+ * black. Returns only the colours that change.
+ */
+export function guardDialogConfirm(text?: string): { fill?: string; label?: string } {
+  const label = parseColor(text || "#ffffff");
+  if (!label) return {};
+  for (const red of DIALOG_REDS) {
+    const fill = resolve(red, null)!;
+    if (contrast(paintOver(label.rgb, label.alpha, fill), fill) >= TEXT_MIN) {
+      return red === DIALOG_REDS[0] ? {} : { fill: red };
+    }
+  }
+  return { label: toHex(blackOrWhite(resolve(DIALOG_REDS[0], null)!)) };
+}
+
 /** The colours of the closed hint in the stylesheet (.cl-closed-widget-hint). */
 const HINT_BACKGROUND = "#ffffff";
 const HINT_TEXT = "#111827";

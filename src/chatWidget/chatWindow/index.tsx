@@ -9,7 +9,7 @@ import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
-import { guardControlColors } from "../controlColors";
+import { guardControlColors, guardDialogConfirm } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -893,6 +893,7 @@ export default function ChatWindow({
   // guard keeps every colour that reads and replaces the others
   // (controlColors.ts). The style props are objects, so compare their contents.
   const colorStyles = JSON.stringify([bot_message_style, input_style, input_container_style, send_button_style, send_icon_style, error_message_style]);
+  const dialogConfirm = useMemo(() => guardDialogConfirm(button_text_color), [button_text_color]);
   const guarded = useMemo(() => guardControlColors({
     theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color,
     bot_message_style, background_color, input_style, input_container_style, send_button_style, send_icon_style,
@@ -1577,9 +1578,10 @@ export default function ChatWindow({
           message={t.newSessionConfirm}
           confirmText={t.confirmButton}
           cancelText={t.cancelButton}
-          // The swarovski theme keeps the branch's red (#ef4444).
-          buttonColor={button_color || (branchLook ? "#ef4444" : undefined)}
-          buttonTextColor={button_text_color}
+          // The swarovski theme keeps the branch's red (#ef4444). Else a
+          // site text colour without button_color gets a red it reads on.
+          buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}
+          buttonTextColor={(!button_color && !branchLook && dialogConfirm.label) || button_text_color}
         />
 
         <style>{`
