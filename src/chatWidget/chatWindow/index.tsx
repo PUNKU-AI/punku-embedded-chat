@@ -1577,7 +1577,8 @@ export default function ChatWindow({
           message={t.newSessionConfirm}
           confirmText={t.confirmButton}
           cancelText={t.cancelButton}
-          buttonColor={button_color}
+          // The swarovski theme keeps the branch's red (#ef4444).
+          buttonColor={button_color || (branchLook ? "#ef4444" : undefined)}
           buttonTextColor={button_text_color}
         />
 

@@ -113,11 +113,13 @@ describe('ConfirmationModal', () => {
       expect(confirmButton).toHaveStyle({ color: '#000000' });
     });
 
-    it('should use default button color when not provided', () => {
+    it('should use a default red that white text reads on when not provided', () => {
       render(<ConfirmationModal {...defaultProps} />);
 
       const confirmButton = document.querySelector('.cl-modal-btn-confirm');
-      expect(confirmButton).toHaveStyle({ backgroundColor: '#ef4444' });
+      // The stylesheet colours it: #dc2626, 4.8:1 with white text.
+      expect(confirmButton).not.toHaveAttribute('style', expect.stringContaining('background'));
+      expect(confirmButton).toHaveStyle({ backgroundColor: '#dc2626' });
     });
 
     it('should use default button text color when not provided', () => {

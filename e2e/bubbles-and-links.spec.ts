@@ -162,6 +162,8 @@ test('the dark theme fills link buttons with its light link colour and dark text
   await openConversation(page, { theme: 'dark' });
   const result = await layout(page);
   expect(result.inlineLink?.color).toBe('rgb(165, 180, 252)');
-  // The accent #5558e8 reads at 2.5:1 on the dark bubble; the link colour at 7:1.
-  expect(result.linkButton).toMatchObject({ background: 'rgb(165, 180, 252)', color: 'rgb(30, 41, 59)' });
+  // The theme's own colours, without the contrast guard: #a5b4fc reads at
+  // 7.3:1 on the dark bubble, its dark indigo text #1e1b4b at 8:1 on it. The
+  // indigo of the visitor bubbles (#5558e8) reads at only 2.8:1 on the bubble.
+  expect(result.linkButton).toMatchObject({ background: 'rgb(165, 180, 252)', color: 'rgb(30, 27, 75)' });
 });

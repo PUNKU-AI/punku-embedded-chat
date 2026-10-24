@@ -1944,8 +1944,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.12);
 }
 
+/* Placeholders read at 4.5:1 on the input field (WCAG 1.4.3). */
 .theme-default .cl-input-element::placeholder {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .theme-default .cl-user_message {
@@ -2009,11 +2010,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .theme-ocean .cl-input-element::placeholder {
-  color: #64748b;
+  color: #94a3b8;
 }
 
+/* White text reads at 4.5:1 on both ends of the gradient. */
 .theme-ocean .cl-user_message {
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #0369a1 0%, #0277b6 100%);
   color: #ffffff;
 }
 
@@ -2022,10 +2024,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: #f1f5f9;
 }
 
+/* #0277b6: the white icon reaches 4.9:1 on it, and the send button 3.5:1
+   on the input field. Hover turns lighter: a darker blue would vanish in
+   the dark field. */
 .theme-ocean.cl-trigger,
 .theme-ocean .cl-trigger,
 .theme-ocean .cl-send-button {
-  background: #0ea5e9;
+  background: #0277b6;
 }
 
 .theme-ocean.cl-trigger:hover,
@@ -2073,11 +2078,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .theme-dark .cl-input-element::placeholder {
-  color: #64748b;
+  color: #94a3b8;
 }
 
+/* #5558e8: white text reads at 5.3:1 on it (#6366f1 gave 4.47:1). */
 .theme-dark .cl-user_message {
-  background: #6366f1;
+  background: #5558e8;
   color: #ffffff;
 }
 
@@ -2086,16 +2092,17 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: #e2e8f0;
 }
 
+/* Hover turns lighter: a darker indigo would vanish in the dark field. */
 .theme-dark.cl-trigger,
 .theme-dark .cl-trigger,
 .theme-dark .cl-send-button {
-  background: #6366f1;
+  background: #5558e8;
 }
 
 .theme-dark.cl-trigger:hover,
 .theme-dark .cl-trigger:hover,
 .theme-dark .cl-send-button:hover {
-  background: #4f46e5;
+  background: #6366f1;
 }
 
 /* Theme: Aurora (Magical Gradient) */
@@ -2112,8 +2119,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   border-bottom: 1px solid #5b21b6;
 }
 
+/* White reads at 4.5:1 on every stop of the header gradient. */
 .theme-aurora .cl-header-subtitle {
-  color: #e9d5ff;
+  color: #ffffff;
 }
 
 .theme-aurora .cl-messages_container {
@@ -2151,17 +2159,43 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   color: #a78bfa;
 }
 
+/* Both ends of the gradient reach 3:1 on the input field, and the white
+   icon 3:1 on them. Hover turns brighter: a darker violet would vanish in
+   the field. */
 .theme-aurora.cl-trigger,
 .theme-aurora .cl-trigger,
 .theme-aurora .cl-send-button {
-  background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #db2777 100%);
 }
 
 .theme-aurora.cl-trigger:hover,
 .theme-aurora .cl-trigger:hover,
 .theme-aurora .cl-send-button:hover {
-  background: linear-gradient(135deg, #6d28d9 0%, #be185d 100%);
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
   transform: scale(1.05);
+}
+
+/* Theme: punku-ai-bookingkit. The base look (dark header, grey answers) in
+   the base blue #2563eb: white text reads at 5.2:1 on it (#3b82f6 gave
+   3.7:1). The swarovski theme keeps the base colours. */
+.theme-punku-ai-bookingkit .cl-input-element::placeholder {
+  color: #6b7280;
+}
+
+.theme-punku-ai-bookingkit .cl-user_message {
+  background: #2563eb;
+}
+
+.theme-punku-ai-bookingkit.cl-trigger,
+.theme-punku-ai-bookingkit .cl-trigger,
+.theme-punku-ai-bookingkit .cl-send-button {
+  background: #2563eb;
+}
+
+.theme-punku-ai-bookingkit.cl-trigger:hover,
+.theme-punku-ai-bookingkit .cl-trigger:hover,
+.theme-punku-ai-bookingkit .cl-send-button:hover {
+  background: #1d4ed8;
 }
 
 
@@ -2308,6 +2342,18 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   padding: 0;
   border-radius: 8px;
   opacity: 1;
+}
+
+/* The feedback icons and a chosen thumbs up reach 3:1 on the light lists
+   (WCAG 1.4.11). The dark themes keep the light grey of the message. */
+.cl-window.theme-default {
+  --cl-feedback-ink: #64748b;
+  --cl-feedback-up: #059669;
+}
+
+.cl-window.theme-punku-ai-bookingkit {
+  --cl-feedback-ink: #6b7280;
+  --cl-feedback-up: #059669;
 }
 
 .cl-window .cl-message-stack .feedback-button:hover,
@@ -2460,9 +2506,9 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* ---------- Header and composer colours, per theme ----------
    --cl-line separates the header and the composer from the list, --cl-field
    and --cl-field-line draw the composer field, --cl-ring is its focus ring,
-   --cl-muted colours the AI notice, --cl-accent marks the focused field. */
+   --cl-muted colours the AI notice. --cl-accent (in the answer colours
+   below) marks the focused field. */
 .cl-window {
-  --cl-accent: #2563eb;
   --cl-line: #e6ebf1;
   --cl-muted: #64748b;
   --cl-field: #ffffff;
@@ -2471,7 +2517,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-dark {
-  --cl-accent: #5558e8;
   --cl-line: #1e293b;
   --cl-muted: #94a3b8;
   --cl-field: #111a2e;
@@ -2480,7 +2525,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-ocean {
-  --cl-accent: #0369a1;
   --cl-line: #1e293b;
   --cl-muted: #94a3b8;
   --cl-field: #111c30;
@@ -2489,7 +2533,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-aurora {
-  --cl-accent: #7c3aed;
   --cl-line: rgba(139, 92, 246, 0.35);
   --cl-muted: #c4b5fd;
   --cl-field: rgba(46, 16, 101, 0.55);
@@ -2589,6 +2632,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   text-overflow: ellipsis;
 }
 
+/* The subtitle shows in its own colour, without the old 85% opacity, so it
+   reads at 4.5:1 on the header. */
 .cl-window .cl-header-subtitle {
   display: flex;
   align-items: flex-start;
@@ -2598,6 +2643,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   font-size: 12.5px;
   font-weight: 400;
   line-height: 1.3;
+  opacity: 1;
 }
 
 /* "Powered by PUNKU.AI & bookingkit", or the site's online_message, wraps
@@ -2807,10 +2853,13 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* ---------- Answers: colours for links and link buttons, per theme ----------
-   --cl-accent fills a link button (a site's button_color replaces it inline),
-   --cl-link colours links in answers, --cl-bot-line is the bubble border.
-   chatWindow's themeLinkColor repeats the --cl-link values for its contrast
-   check: change both together. */
+   --cl-accent fills a link button (a site's button_color replaces it inline)
+   and marks focus, --cl-on-accent is the text on it, --cl-link colours links
+   in answers, --cl-bot-line is the bubble border. The contrast guard
+   (THEME_COLORS in controlColors.ts) repeats these values: change both
+   together. The dark themes fill link buttons in their light link colour
+   with dark text: their mid accents do not reach 3:1 on the dark answer
+   bubble. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-accent-hover: #1d4ed8;
@@ -2828,24 +2877,27 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window.theme-dark {
-  --cl-accent: #5558e8;
-  --cl-accent-hover: #4547d6;
+  --cl-accent: #a5b4fc;
+  --cl-accent-hover: #c7d2fe;
+  --cl-on-accent: #1e1b4b;
   --cl-link: #a5b4fc;
   --cl-hover: rgba(255, 255, 255, 0.08);
   --cl-bot-line: #2d3a4d;
 }
 
 .cl-window.theme-ocean {
-  --cl-accent: #0369a1;
-  --cl-accent-hover: #075985;
+  --cl-accent: #7dd3fc;
+  --cl-accent-hover: #bae6fd;
+  --cl-on-accent: #082f49;
   --cl-link: #7dd3fc;
   --cl-hover: rgba(255, 255, 255, 0.08);
   --cl-bot-line: #2a3a52;
 }
 
 .cl-window.theme-aurora {
-  --cl-accent: #7c3aed;
-  --cl-accent-hover: #6d28d9;
+  --cl-accent: #f0abfc;
+  --cl-accent-hover: #f5d0fe;
+  --cl-on-accent: #3b0764;
   --cl-link: #f0abfc;
   --cl-hover: rgba(255, 255, 255, 0.1);
   --cl-bot-line: rgba(109, 40, 217, 0.6);
@@ -2978,6 +3030,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window.theme-swarovski .cl-bot_message .markdown-body a {
   font-weight: inherit;
+}
+
+/* The header subtitle keeps the branch's 85% opacity. */
+.cl-window.theme-swarovski .cl-header-subtitle {
+  opacity: 0.85;
 }
 
 .cl-window.theme-swarovski .cl-composer-field:focus-within {

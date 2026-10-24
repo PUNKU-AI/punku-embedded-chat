@@ -343,7 +343,8 @@ export default function ChatMessage({
           border: none;
           background: none;
           cursor: pointer;
-          color: #9ca3af;
+          /* The widget stylesheet sets readable colours per theme. */
+          color: var(--cl-feedback-ink, #9ca3af);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -363,7 +364,7 @@ export default function ChatMessage({
         }
         
         .feedback-button.thumbs-up:hover {
-          color: #10b981;
+          color: var(--cl-feedback-up, #10b981);
         }
         
         .feedback-button.thumbs-down:hover {
@@ -371,8 +372,8 @@ export default function ChatMessage({
         }
         
         .feedback-button.thumbs-up.selected {
-          color: #10b981;
-          outline: 2px solid #10b981;
+          color: var(--cl-feedback-up, #10b981);
+          outline: 2px solid var(--cl-feedback-up, #10b981);
           outline-offset: 2px;
           border-radius: 4px;
         }
