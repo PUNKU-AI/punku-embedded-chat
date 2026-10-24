@@ -7,6 +7,10 @@ import {
   detectPageLanguage,
   revealInScrollContainer,
   getPageScale,
+  isKeyboardOpen,
+  KEYBOARD_ATTRIBUTE,
+  safeAreaGap,
+  safeAreaInset,
   subscribeVisualViewport,
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
@@ -546,6 +550,45 @@ describe('visual viewport tracking', () => {
     expect(removeListener.mock.calls.map(([type]) => type)).toEqual(['resize', 'scroll']);
   });
 
+  describe('with the on-screen keyboard', () => {
+    // A 412 x 839 layout viewport. The keyboard makes only the visual viewport shorter.
+    const root = document.documentElement as unknown as { clientWidth?: number; clientHeight?: number };
+    beforeEach(() => {
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 412 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 839 });
+    });
+    afterEach(() => {
+      delete root.clientWidth;
+      delete root.clientHeight;
+    });
+
+    it('marks the element while the keyboard is open, in the same event as the box', () => {
+      const element = document.createElement('div');
+      track(element);
+      expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(false);
+
+      viewport.height = 462;
+      viewport.dispatchEvent(new Event('resize'));
+      expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(true);
+      expect(variables(element)).toEqual(['0px', '0px', '412px', '462px']);
+
+      viewport.height = 839;
+      viewport.dispatchEvent(new Event('resize'));
+      expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(false);
+    });
+
+    it('removes the mark while the visitor pinch-zooms in', () => {
+      const element = document.createElement('div');
+      track(element);
+      viewport.height = 462;
+      viewport.dispatchEvent(new Event('resize'));
+
+      Object.assign(viewport, { scale: 2, width: 206, height: 231 });
+      viewport.dispatchEvent(new Event('resize'));
+      expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(false);
+    });
+  });
+
   it('gives no box without a visual viewport', () => {
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: null });
     const element = document.createElement('div');
@@ -557,6 +600,48 @@ describe('visual viewport tracking', () => {
     expect(variables(element)).toEqual(['', '', '', '']);
     expect(listener).toHaveBeenCalledWith(null);
     expect(() => stop()).not.toThrow();
+  });
+});
+
+describe('isKeyboardOpen', () => {
+  const box = (width: number, height: number) => ({ offsetLeft: 0, offsetTop: 0, width, height });
+  const phone = { width: 412, height: 839 };
+
+  it('is true when the visible box is much flatter than the layout viewport', () => {
+    // 45 % of a phone screen in portrait, 200 px in landscape.
+    expect(isKeyboardOpen(box(412, 462), phone)).toBe(true);
+    expect(isKeyboardOpen(box(750, 142), { width: 750, height: 342 })).toBe(true);
+  });
+
+  it('is false without a keyboard, also with browser toolbars', () => {
+    expect(isKeyboardOpen(box(412, 839), phone)).toBe(false);
+    // The address bar shows: 56 px less.
+    expect(isKeyboardOpen(box(412, 783), phone)).toBe(false);
+    // The toolbars hide: the visible box is taller than the layout viewport.
+    expect(isKeyboardOpen(box(412, 915), phone)).toBe(false);
+  });
+
+  it('is false on a host page wider than the screen, which scales both boxes', () => {
+    // Chrome on Android: a 455 x 927 layout viewport for a 412 x 839 screen
+    // (#77), and twice the screen for a page twice as wide.
+    expect(isKeyboardOpen(box(412, 839), { width: 455, height: 927 })).toBe(false);
+    expect(isKeyboardOpen(box(412, 839), { width: 824, height: 1678 })).toBe(false);
+    expect(isKeyboardOpen(box(412, 462), { width: 824, height: 1678 })).toBe(true);
+  });
+
+  it('is false without a box or a layout', () => {
+    expect(isKeyboardOpen(null, phone)).toBe(false);
+    expect(isKeyboardOpen(box(412, 462), { width: 0, height: 0 })).toBe(false);
+  });
+});
+
+describe('safe areas', () => {
+  it('reads the inset of an edge from the variables of the widget root', () => {
+    expect(safeAreaInset('bottom')).toBe('var(--cl-safe-area-bottom, 0px)');
+  });
+
+  it('adds the inset to a gap', () => {
+    expect(safeAreaGap('right', '20px')).toBe('calc(20px + var(--cl-safe-area-right, 0px))');
   });
 });
 
