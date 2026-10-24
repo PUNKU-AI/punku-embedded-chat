@@ -69,6 +69,33 @@ export function readMobileChatWindowStyle(style: unknown): MobileChatWindowStyle
   return result;
 }
 
+/*
+ * A theme's own phone window, under the prop. The swarovski theme keeps the
+ * box of the swarovski-widget branch: 8 px from the left and calc(100vw -
+ * 16px) wide, capped by the branch's inline max-width of 90vw. On a 390 px
+ * phone that is 351 px wide, with 8 px on the left and 31 px on the right.
+ */
+const THEME_PHONE_WINDOWS: Record<string, MobileChatWindowStyle> = {
+  swarovski: { left: "8px", width: "min(calc(100vw - 16px), 90vw)" },
+};
+
+const AXES: MobileChatWindowStyleKey[][] = [["left", "right", "width"], ["top", "bottom", "height", "maxHeight"]];
+
+/**
+ * The prop over the theme's phone window. A prop key of one axis replaces
+ * all theme keys of that axis, so that the prop places the window alone.
+ */
+export function phoneWindowStyle(style: unknown, theme?: string): MobileChatWindowStyle {
+  const own = readMobileChatWindowStyle(style);
+  const themed = (theme && Object.prototype.hasOwnProperty.call(THEME_PHONE_WINDOWS, theme) && THEME_PHONE_WINDOWS[theme]) || {};
+  const result: MobileChatWindowStyle = {};
+  for (const axis of AXES) {
+    const source = axis.some((key) => own[key] !== undefined) ? own : themed;
+    for (const key of axis) if (source[key] !== undefined) result[key] = source[key];
+  }
+  return result;
+}
+
 const NUMBER_TOKEN = /-?(?:\d+\.?\d*|\.\d+)[a-z%]*/gi;
 const VIEWPORT_LENGTH = /^(-?(?:\d+\.?\d*|\.\d+))[sld]?v([hw])$/i;
 const PX_LENGTH = /^(-?(?:\d+\.?\d*|\.\d+))px$/i;

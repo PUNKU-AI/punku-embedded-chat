@@ -2,7 +2,7 @@ import { ArrowUp, RefreshCw, Send, X } from "lucide-react";
 import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
-import { phoneWindowDeclarations, readMobileChatWindowStyle } from "../mobileChatWindowStyle";
+import { phoneWindowDeclarations, phoneWindowStyle } from "../mobileChatWindowStyle";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatMessageType, LoadingMessages } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
@@ -259,17 +259,19 @@ export default function ChatWindow({
   const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
   const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
   // The swarovski theme keeps the look of the swarovski-widget branch: links
-  // on their own line stay text links, and the send button is a paper plane.
+  // on their own line stay text links, the send button is a paper plane, and
+  // the phone window keeps its side margins (mobileChatWindowStyle.ts).
   const branchLook = theme === "swarovski";
   const linkButtons = !branchLook;
   const SendIcon = branchLook ? Send : ArrowUp;
   const sendIconSize = branchLook ? "18px" : "20px";
   const sendIconStroke = branchLook ? 2 : 2.5;
-  // The phone window box: the defaults, or mobile_chat_window_style (mobileChatWindowStyle.ts).
+  // The phone window box: the defaults, or the theme's box and
+  // mobile_chat_window_style (mobileChatWindowStyle.ts).
   const phoneWindowBox = useMemo(
-    () => phoneWindowDeclarations(readMobileChatWindowStyle(mobile_chat_window_style), scaledPage)
+    () => phoneWindowDeclarations(phoneWindowStyle(mobile_chat_window_style, theme), scaledPage)
       .join("\n              "),
-    [mobile_chat_window_style, scaledPage]
+    [mobile_chat_window_style, theme, scaledPage]
   );
 
   // Place the window from the visible corner. In Chrome on Android, the

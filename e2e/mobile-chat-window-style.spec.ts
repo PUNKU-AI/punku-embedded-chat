@@ -52,9 +52,11 @@ async function windowState(page: Page) {
       return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     };
     const style = getComputedStyle(chatWindow);
+    const inner = getComputedStyle(innerWindow);
     return {
       window: box(chatWindow),
       inner: box(innerWindow),
+      radius: [inner.borderTopLeftRadius, inner.borderTopRightRadius, inner.borderBottomRightRadius, inner.borderBottomLeftRadius],
       applied: { bottom: style.bottom, height: style.height, width: style.width },
       innerInlineMaxHeight: innerWindow.style.maxHeight,
     };
@@ -92,6 +94,23 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 740 }
       // the box, as on the branch: its maxHeight of 550 px has no effect.
       expect(state.innerInlineMaxHeight).toBe('550px');
       near(state.inner.height, state.window.height);
+      expect(await partsOutsideScreen(page, parts)).toEqual([]);
+    });
+
+    test('the swarovski theme keeps the side margins and corners of the branch', async ({ page }) => {
+      await openWindow(page, { ...liveEmbed, theme: 'swarovski' });
+      const { screen } = await screenView(page);
+      const state = await windowState(page);
+
+      // 8 px from the left, calc(100vw - 16px) wide, at most 90vw: on
+      // 390 x 844 the branch window is x 8, 351 px wide; on 360 x 740, 324 px.
+      expect(state.window.left).toBe(8);
+      expect(state.window.width).toBe(Math.round(Math.min(screen.width - 16, screen.width * 0.9)));
+      expect(state.radius).toEqual(['16px', '16px', '16px', '16px']);
+      // The prop's place and height stay.
+      const height = screen.height * 0.98 - 120;
+      near(state.window.height, height);
+      expect((await edgeGaps(page, '.cl-chat-window')).screen.bottom).toBe(65);
       expect(await partsOutsideScreen(page, parts)).toEqual([]);
     });
 
@@ -140,19 +159,40 @@ test.describe('Phone in portrait on a host page wider than the screen', () => {
       expect(await partsOutsideScreen(page, parts)).toEqual([]);
     }
   });
-});
 
-test.describe('Phone in landscape, 844 x 390', () => {
-  test.use({ viewport: { width: 844, height: 390 } });
+  test('the swarovski side margins follow the visible area when the visitor pans', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'android', 'Only Chromium phones grow the layout viewport on a wide host page.');
+    await widenHostPage(page, hostCorner);
+    await openWindow(page, { ...liveEmbed, theme: 'swarovski' });
 
-  test('the phone styles do not change the landscape window, as on the branch', async ({ page }) => {
-    // 844 px is wider than the 640 px phone layout.
-    await openWindow(page, withoutMobileStyle);
-    const without = await windowState(page);
-    await openWindow(page, liveEmbed);
-    const withProp = await windowState(page);
-
-    expect(withProp.window).toEqual(without.window);
-    expect(await partsOutsideScreen(page, parts)).toEqual([]);
+    for (const pan of [false, true]) {
+      if (pan) await panToLayoutCorner(page);
+      await waitForSettledBoxes(page, parts);
+      const { screen } = await screenView(page);
+      const width = Math.round(Math.min(screen.width - 16, screen.width * 0.9));
+      expect((await edgeGaps(page, '.cl-chat-window')).screen)
+        .toMatchObject({ left: 8, right: Math.round(screen.width - 8 - width), bottom: 65 });
+      expect(await partsOutsideScreen(page, parts)).toEqual([]);
+    }
   });
 });
+
+for (const viewport of [{ width: 844, height: 390 }, { width: 740, height: 360 }]) {
+  test.describe(`Phone in landscape, ${viewport.width} x ${viewport.height}`, () => {
+    test.use({ viewport });
+
+    test('the phone styles and the swarovski theme do not change the landscape window', async ({ page }) => {
+      // Wider than the 640 px phone layout, as on the branch.
+      await openWindow(page, withoutMobileStyle);
+      const without = await windowState(page);
+      await openWindow(page, liveEmbed);
+      const withProp = await windowState(page);
+      await openWindow(page, { ...liveEmbed, theme: 'swarovski' });
+      const swarovski = await windowState(page);
+
+      expect(withProp.window).toEqual(without.window);
+      expect(swarovski.window).toEqual(without.window);
+      expect(await partsOutsideScreen(page, parts)).toEqual([]);
+    });
+  });
+}
