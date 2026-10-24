@@ -66,16 +66,20 @@ jest.mock('../components/ConfirmationModal', () => {
     isOpen,
     onConfirm,
     onCancel,
-    title
+    title,
+    buttonColor,
+    buttonTextColor
   }: {
     isOpen: boolean;
     onConfirm: () => void;
     onCancel: () => void;
     title: string;
+    buttonColor?: string;
+    buttonTextColor?: string;
   }) {
     if (!isOpen) return null;
     return (
-      <div data-testid="confirmation-modal">
+      <div data-testid="confirmation-modal" data-button-color={buttonColor ?? ''} data-button-text-color={buttonTextColor ?? ''}>
         <span>{title}</span>
         <button onClick={onConfirm}>Confirm</button>
         <button onClick={onCancel}>Cancel</button>
@@ -2108,6 +2112,23 @@ describe('ChatWindow', () => {
 
       expect(screen.queryByTestId('confirmation-modal')).not.toBeInTheDocument();
       expect(onStartNewSession).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      // The stylesheet red #dc2626 carries white text at 4.8:1.
+      ['no site colours', {}, '', ''],
+      // Dark text reads on the lighter red of v1.0.24, not on #dc2626.
+      ['a dark button_text_color without button_color', { button_text_color: '#1C1C1C' }, '#ef4444', '#1C1C1C'],
+      ['button_color and button_text_color', { button_color: '#9e183b', button_text_color: '#ffffff' }, '#9e183b', '#ffffff'],
+      ['the swarovski theme', { theme: 'swarovski' as const }, '#ef4444', ''],
+    ])('gives the dialog confirm button readable colours with %s', (_case, props, color, text) => {
+      render(<ChatWindow {...defaultProps} {...props} onStartNewSession={jest.fn()} />);
+
+      fireEvent.click(document.querySelector('.cl-new-session-btn') as HTMLButtonElement);
+
+      const modal = screen.getByTestId('confirmation-modal');
+      expect(modal).toHaveAttribute('data-button-color', color);
+      expect(modal).toHaveAttribute('data-button-text-color', text);
     });
 
     it('should show session refresh message when isRefreshingSession is true', () => {

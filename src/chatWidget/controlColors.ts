@@ -108,10 +108,11 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     field: "#111a2e",
     fieldBackdrop: "#0f172a",
     window: "#030712",
-    accent: "#5558e8",
-    onAccent: "#ffffff",
+    // Link buttons in the light link colour with dark text.
+    accent: "#a5b4fc",
+    onAccent: "#1e1b4b",
     link: "#a5b4fc",
-    send: "#6366f1",
+    send: "#5558e8",
     sendIcon: "#ffffff",
     chipInk: "#c7d2fe",
     chipLine: "#818cf8",
@@ -129,10 +130,10 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     field: "#111c30",
     fieldBackdrop: "#0f172a",
     window: "#0f172a",
-    accent: "#0369a1",
-    onAccent: "#ffffff",
+    accent: "#7dd3fc",
+    onAccent: "#082f49",
     link: "#7dd3fc",
-    send: "#0ea5e9",
+    send: "#0277b6",
     sendIcon: "#ffffff",
     chipInk: "#bae6fd",
     chipLine: "#38bdf8",
@@ -150,8 +151,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     field: "rgba(46, 16, 101, 0.55)",
     fieldBackdrop: "#1e1b4b",
     window: "#2e1065",
-    accent: "#7c3aed",
-    onAccent: "#ffffff",
+    accent: "#f0abfc",
+    onAccent: "#3b0764",
     link: "#f0abfc",
     // A gradient (#7c3aed to #db2777).
     send: null,
@@ -165,7 +166,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     header: ["#4c1d95", "#7c3aed", "#db2777"],
     headerInk: "#ffffff",
   },
-  "punku-ai-bookingkit": LIGHT_BASE,
+  "punku-ai-bookingkit": { ...LIGHT_BASE, send: "#2563eb" },
   // Links in the blue of the swarovski-widget branch (.theme-swarovski in the stylesheet).
   swarovski: { ...LIGHT_BASE, link: "#0969da" },
 };
@@ -354,6 +355,28 @@ function surfaces(props: ControlColorProps) {
   const errorBg = surface(styleBackground(props.error_message_style) || (customError ? "#f87171" : theme.errorBg), list);
   const errorInk = resolve(props.error_message_style?.color || (customError ? "#ffffff" : theme.errorInk), errorBg);
   return { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk };
+}
+
+/** The red of the confirm button in the new-conversation dialog (ConfirmationModal). */
+const DIALOG_REDS = ["#dc2626", "#ef4444"];
+
+/**
+ * The confirm button of the new-conversation dialog without button_color: its
+ * text (button_text_color, else white) on the dialog red (4.5:1). White reads
+ * on the stylesheet red #dc2626. A dark site text reads on the lighter #ef4444
+ * of v1.0.24 and keeps it. A text that reads on neither red turns white or
+ * black. Returns only the colours that change.
+ */
+export function guardDialogConfirm(text?: string): { fill?: string; label?: string } {
+  const label = parseColor(text || "#ffffff");
+  if (!label) return {};
+  for (const red of DIALOG_REDS) {
+    const fill = resolve(red, null)!;
+    if (contrast(paintOver(label.rgb, label.alpha, fill), fill) >= TEXT_MIN) {
+      return red === DIALOG_REDS[0] ? {} : { fill: red };
+    }
+  }
+  return { label: toHex(blackOrWhite(resolve(DIALOG_REDS[0], null)!)) };
 }
 
 /** The colours of the closed hint in the stylesheet (.cl-closed-widget-hint). */
