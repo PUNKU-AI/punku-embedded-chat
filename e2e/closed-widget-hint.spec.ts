@@ -212,16 +212,29 @@ async function resizeHintFixture(page: Page, viewport: { width: number; height: 
     width: document.documentElement.clientWidth,
     desktop: matchMedia('(min-width: 768px)').matches,
   }))).toEqual({ width: viewport.width, desktop: viewport.width >= 768 });
+  // states() measures each trigger against the visible area (innerWidth and
+  // innerHeight). Linux WebKit mobile emulation in CI can keep the old visible
+  // area after setViewportSize: the desktop trigger at x 1212 then seemed off
+  // a 390 px screen (release v1.0.23, iphone). False: the area kept its size.
+  return page.waitForFunction(({ width, height }) => window.innerWidth === width && window.innerHeight === height,
+    viewport, { timeout: 3000 }).then(() => true, () => false);
 }
 
-test('responsive switch does not repeat a consumed hint', async ({ page }) => {
+test('responsive switch does not repeat a consumed hint', async ({ page, browserName, isMobile }) => {
+  // Only WebKit mobile emulation may keep the old visible area. On every other
+  // engine an old visible area is a failure, so an off-screen trigger still fails.
+  const expectVisibleAreaResized = (resized: boolean) => {
+    test.skip(!resized && browserName === 'webkit' && !!isMobile,
+      'WebKit mobile emulation kept the old visible area after setViewportSize (Linux CI), so the triggers cannot be measured against the screen.');
+    expect(resized, 'innerWidth and innerHeight have the new size').toBe(true);
+  };
   await page.setViewportSize({ width: 1280, height: 720 });
   await loadHints(page, { scene: 'responsive-mobile-first' });
   await expectVisible(page, 1);
-  await resizeHintFixture(page, { width: 390, height: 844 });
+  expectVisibleAreaResized(await resizeHintFixture(page, { width: 390, height: 844 }));
   await expect.poll(async () => (await states(page))[0].triggerVisible).toBe(true);
   await expect.poll(async () => (await states(page)).some((state) => state.hintVisible)).toBe(false);
-  await resizeHintFixture(page, { width: 1280, height: 720 });
+  expectVisibleAreaResized(await resizeHintFixture(page, { width: 1280, height: 720 }));
   await expect.poll(async () => (await states(page))[1].triggerVisible).toBe(true);
   // The desktop exposure already owns its timer. Returning does not create another exposure.
   expect((await states(page))[0].opacity).toBe(0);

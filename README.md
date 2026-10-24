@@ -366,6 +366,7 @@ Use the widget API to customize your widget:
   - Required: No
   - Description: The place and size of the open window on phones (screens 640 px wide or less). Keys: `top`, `right`, `bottom`, `left`, `width`, `height` and `maxHeight`. The widget ignores other keys. Use `chat_window_style` for colours, borders and other styles.
   - Each key replaces the phone default. By default, the window fills the width of the screen. It starts `top_offset` px below the top and ends 80 px above the bottom, which leaves room for the trigger.
+  - The `swarovski` theme keeps the phone window of its older version: 8 px from the left edge and `calc(100vw - 16px)` wide, but at most 90 % of the screen width (351 px on a 390 px phone). A `left`, `right` or `width` key replaces both.
   - `top`, `right`, `bottom` and `left` are gaps to the edges of the visible part of the screen. With `bottom` and no `top`, the window sits on the bottom gap. With `right` and no `left`, it sits on the right gap.
   - Without `height` or `width`, the window fills the room between the two gaps. `maxHeight` defaults to `height`.
   - `vh` and `vw` measure the visible part of the screen. The browser toolbars and the on-screen keyboard make it smaller, so the window gets shorter.

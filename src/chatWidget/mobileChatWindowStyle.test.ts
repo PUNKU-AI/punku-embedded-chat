@@ -1,4 +1,4 @@
-import { phoneWindowDeclarations, readMobileChatWindowStyle } from './mobileChatWindowStyle';
+import { phoneWindowDeclarations, phoneWindowStyle, readMobileChatWindowStyle } from './mobileChatWindowStyle';
 import { visualViewportInset } from './utils';
 
 // The phone window box of v1.0.22, before mobile_chat_window_style. Pages
@@ -88,6 +88,37 @@ describe('readMobileChatWindowStyle', () => {
       expect(supports).toHaveBeenCalledWith('bottom', '65px');
       expect(supports).toHaveBeenCalledWith('max-height', '500px');
     });
+  });
+});
+
+describe('phoneWindowStyle', () => {
+  // The branch box: 8 px from the left, calc(100vw - 16px) wide, at most 90vw.
+  const branchBox = { left: '8px', width: 'min(calc(100vw - 16px), 90vw)' };
+
+  it('gives the swarovski theme the side margins of the branch, under the live prop', () => {
+    expect(phoneWindowStyle(LIVE_MOBILE_STYLE, 'swarovski')).toEqual({ ...branchBox, ...LIVE_MOBILE_STYLE });
+    expect(phoneWindowStyle(undefined, 'swarovski')).toEqual(branchBox);
+  });
+
+  it('gives other themes only the prop', () => {
+    for (const theme of [undefined, 'default', 'dark', 'ocean', 'aurora', 'punku-ai-bookingkit', 'constructor', 'toString']) {
+      expect(phoneWindowStyle(LIVE_MOBILE_STYLE, theme)).toEqual(LIVE_MOBILE_STYLE);
+      expect(phoneWindowStyle(undefined, theme)).toEqual({});
+    }
+  });
+
+  it('lets a horizontal prop key replace all horizontal theme keys', () => {
+    expect(phoneWindowStyle({ right: '12px' }, 'swarovski')).toEqual({ right: '12px' });
+    expect(phoneWindowStyle({ width: '300px', bottom: '65px' }, 'swarovski')).toEqual({ width: '300px', bottom: '65px' });
+  });
+
+  it('measures 351 px from x 8 on a 390 px phone, as the branch', () => {
+    const lines = phoneWindowDeclarations(phoneWindowStyle(LIVE_MOBILE_STYLE, 'swarovski'));
+    const visibleWidth = 'var(--cl-visual-viewport-width, 100vw)';
+    expect(lines).toContain(
+      `width: round(min(calc(calc(100 * ${visibleWidth} / 100) - 16px), calc(90 * ${visibleWidth} / 100)), 1px) !important;`
+    );
+    expect(lines).toContain(`left: ${visualViewportInset('left', 'round(max(0px, 8px), 1px)')} !important;`);
   });
 });
 

@@ -2654,6 +2654,22 @@ describe('ChatWindow', () => {
       expect(box).toContain('transition-property: opacity, transform, visibility;');
     });
 
+    it('keeps the side margins of the swarovski-widget branch in the swarovski theme only', () => {
+      const margin = `left: ${visualViewportInset('left', 'round(max(0px, 8px), 1px)')} !important;`;
+      const { unmount } = render(<ChatWindow {...defaultProps} theme="default" {...liveStyles} />);
+      const defaultBox = chatWindowRule(splitPhoneRule(renderedStyles()).phone);
+      expect(defaultBox).toContain('width: var(--cl-visual-viewport-width, 100%) !important;');
+      expect(defaultBox).not.toContain(margin);
+      unmount();
+
+      render(<ChatWindow {...defaultProps} theme="swarovski" {...liveStyles} />);
+      const box = chatWindowRule(splitPhoneRule(renderedStyles()).phone);
+      expect(box).toContain(margin);
+      expect(box).toContain('90 * var(--cl-visual-viewport-width, 100vw) / 100');
+      // The top and bottom gaps of the prop stay.
+      expect(box).toContain(`bottom: ${visualViewportInset('bottom', 'round(max(0px, 65px), 1px)')} !important;`);
+    });
+
     it('changes only the phone rule', () => {
       const { unmount } = render(<ChatWindow {...defaultProps} chat_window_style={liveStyles.chat_window_style} />);
       const without = splitPhoneRule(renderedStyles());
