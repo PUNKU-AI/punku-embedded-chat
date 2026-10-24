@@ -192,20 +192,40 @@ test.describe('the on-screen keyboard', () => {
 });
 
 test.describe('a touch drag on the window', () => {
-  // Playwright sends touch scroll gestures only to Chromium (CDP).
+  // Playwright sends touch moves only to Chromium (CDP).
   test.beforeEach(({ page }, testInfo) => {
     test.skip(!chromiumPhones.includes(testInfo.project.name), 'The Chromium phone profiles run the touch drags.');
   });
 
-  async function drag(page: Page, cdp: CDPSession, selector: string, yDistance: number) {
-    const point = await page.evaluate((selector) => {
-      const box = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector(selector)!.getBoundingClientRect();
-      return { x: Math.round(box.left + box.width / 3), y: Math.round(box.top + box.height / 2) };
-    }, selector);
-    await cdp.send('Input.synthesizeScrollGesture', { ...point, yDistance, gestureSourceType: 'touch', speed: 800 });
-    // Let a fling end.
-    await page.waitForTimeout(300);
+  // One finger moves yDistance px (negative is up) from `point` in 12 moves,
+  // one per frame. Input.dispatchTouchEvent goes through the browser's own
+  // touch and scroll handling. Input.synthesizeScrollGesture does not: in the
+  // Linux CI image it sends no touchmove and scrolls nothing, not even the
+  // host page, so every "the page did not scroll" check passed for nothing.
+  async function drag(page: Page, cdp: CDPSession, point: { x: number; y: number }, yDistance: number) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    for (let step = 1; step <= 12; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y + (yDistance * step) / 12 }] });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    // Wait until a fling ends: the page and the list keep their place in two reads.
+    let previous = '';
+    await expect.poll(async () => {
+      const current = await page.evaluate(() => {
+        const list = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>('.cl-messages_container')!;
+        return `${window.scrollY},${list.scrollTop}`;
+      });
+      const settled = current === previous;
+      previous = current;
+      return settled;
+    }, { intervals: [150] }).toBe(true);
   }
+
+  const pointIn = (page: Page, selector: string) => page.evaluate((selector) => {
+    const box = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector(selector)!.getBoundingClientRect();
+    return { x: Math.round(box.left + box.width / 3), y: Math.round(box.top + box.height / 2) };
+  }, selector);
 
   const listScrollTop = (page: Page) => page.evaluate(() => (
     window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>('.cl-messages_container')!.scrollTop
@@ -226,17 +246,25 @@ test.describe('a touch drag on the window', () => {
       const cdp = await page.context().newCDPSession(page);
 
       // Before PR 7, a drag up on the header scrolled the page by 200 px.
-      await drag(page, cdp, '.cl-header', -200);
-      await drag(page, cdp, '.cl-header', 200);
+      // Check after each drag: a drag up and a drag down can cancel out.
+      await drag(page, cdp, await pointIn(page, '.cl-header'), -200);
+      expect(await page.evaluate(() => window.scrollY)).toBe(400);
+      await drag(page, cdp, await pointIn(page, '.cl-header'), 200);
+      expect(await page.evaluate(() => window.scrollY)).toBe(400);
       // The list is at its end: a drag up cannot scroll it further.
-      await drag(page, cdp, '.cl-messages_container', -200);
+      await drag(page, cdp, await pointIn(page, '.cl-messages_container'), -200);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
 
       // A drag down scrolls the list back, not the page.
       const end = await listScrollTop(page);
-      await drag(page, cdp, '.cl-messages_container', 150);
+      await drag(page, cdp, await pointIn(page, '.cl-messages_container'), 150);
       expect(await listScrollTop(page)).toBeLessThan(end);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
+
+      // Control: the same drag on the host page above the window scrolls the
+      // page, so the checks above did test touch scrolling.
+      await drag(page, cdp, { x: 30, y: 30 }, -200);
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
     });
   }
 });
