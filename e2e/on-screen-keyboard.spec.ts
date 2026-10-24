@@ -9,6 +9,10 @@ import {
 // screen, the closed trigger must stay behind the keyboard, as before, so it
 // cannot cover a host form field. The open window, its header, close X and
 // send button, and the trigger must stay inside the visible area.
+// Since PR 7, a short landscape screen (641-1023 px wide, at most 500 px
+// tall) hides the header while the keyboard is open: the trigger beside the
+// window closes it. On a phone in portrait, the window ends at the keyboard
+// and covers the trigger; its close X stays (phone-keyboard.spec.ts).
 
 const pageErrors = new WeakMap<Page, string[]>();
 // A phone keyboard covers about the lower 45 % of the screen.
@@ -26,10 +30,14 @@ test.afterEach(({ page }) => {
 
 async function expectOpenWindowOnScreen(page: Page, isMobile: boolean) {
   await waitForInputFocus(page);
+  const { width, height } = page.viewportSize()!;
+  const shortLandscape = width >= 641 && width <= 1023 && height <= 500;
   // Desktop layouts hide the close X unless show_close_button_on_desktop is set.
-  const parts = ['.cl-chat-window', '.cl-header', '.cl-send-button', '.cl-trigger', ...(isMobile ? ['.cl-close-btn'] : [])];
+  const header = shortLandscape ? [] : ['.cl-header', ...(isMobile ? ['.cl-close-btn'] : [])];
+  const parts = ['.cl-chat-window', '.cl-send-button', '.cl-trigger', ...header];
   await waitForSettledBoxes(page, parts);
   expect(await partsOutsideScreen(page, parts)).toEqual([]);
+  if (shortLandscape) expect(await partsOutsideScreen(page, ['.cl-header'])).toEqual(['.cl-header is not shown']);
 }
 
 test('the closed trigger stays behind the keyboard on a page that fits the screen', async ({ page, viewport }) => {
