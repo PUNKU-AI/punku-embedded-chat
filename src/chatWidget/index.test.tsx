@@ -95,6 +95,7 @@ jest.mock('./utils', () => ({
 // Import after mocks
 import ChatWidget from './index';
 import { SessionStorage } from '../utils/sessionStorage';
+import { PAGE_DIALOG_CHECK_MS } from './pageDialogs';
 
 describe('ChatWidget', () => {
   const defaultProps = {
@@ -207,9 +208,10 @@ describe('ChatWidget', () => {
       const newSessionButton = screen.getByTestId('new-session');
       fireEvent.click(newSessionButton);
 
-      // Fast-forward timers for the setTimeout in startNewSession
+      // Fast-forward timers for the setTimeout in startNewSession. Only the
+      // pending ones: the check for page dialogs repeats every second.
       act(() => {
-        jest.runAllTimers();
+        jest.runOnlyPendingTimers();
       });
 
       jest.useRealTimers();
@@ -333,6 +335,130 @@ describe('ChatWidget', () => {
       render(<ChatWidget {...defaultProps} start_open={true} />);
 
       expect(screen.getByTestId('message-count').textContent).toBe('2');
+    });
+  });
+
+  describe('Stacking on the page', () => {
+    // jsdom has no popovers: record the calls of the top layer.
+    function mockPopovers() {
+      const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+      const had = { show: 'showPopover' in proto, hide: 'hidePopover' in proto };
+      const original = { show: proto.showPopover, hide: proto.hidePopover };
+      const showPopover = jest.fn();
+      const hidePopover = jest.fn();
+      proto.showPopover = showPopover;
+      proto.hidePopover = hidePopover;
+      const restore = () => {
+        if (had.show) proto.showPopover = original.show; else delete proto.showPopover;
+        if (had.hide) proto.hidePopover = original.hide; else delete proto.hidePopover;
+      };
+      return { showPopover, hidePopover, restore };
+    }
+
+    // A consent dialog in its own layer. jsdom has no layout: give the
+    // dialog a box on the screen.
+    function addConsentDialog(zIndex: number) {
+      const layer = document.createElement('div');
+      layer.style.cssText = `position: fixed; z-index: ${zIndex};`;
+      layer.innerHTML = '<div role="alertdialog" aria-modal="true">Privacy settings</div>';
+      layer.firstElementChild!.getBoundingClientRect = () => ({
+        x: 20, y: 40, left: 20, top: 40, width: 280, height: 300, right: 300, bottom: 340, toJSON: () => ({}),
+      }) as DOMRect;
+      document.body.appendChild(layer);
+      return layer;
+    }
+
+    const windowLayer = () => document.querySelector('.cl-window-layer') as HTMLElement;
+    const widgetRoot = () => document.querySelector('.cl-widget-root') as HTMLElement;
+
+    it('should lift the open window to the top layer and take it back when it closes', () => {
+      const popovers = mockPopovers();
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(windowLayer().getAttribute('popover')).toBe('manual');
+        expect(popovers.showPopover).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+        expect(windowLayer().hasAttribute('popover')).toBe(false);
+        expect(popovers.hidePopover).toHaveBeenCalledTimes(1);
+      } finally {
+        popovers.restore();
+      }
+    });
+
+    it('should lift the window that the page opens through the API', () => {
+      // The Swarovski page hides the trigger and opens the window with its own button.
+      const popovers = mockPopovers();
+      try {
+        render(<ChatWidget {...defaultProps} chat_trigger_style={{ display: 'none' }} />);
+        expect(windowLayer().hasAttribute('popover')).toBe(false);
+
+        act(() => {
+          (window as any)['punku-chat-widget_api'].open();
+        });
+        expect(windowLayer().getAttribute('popover')).toBe('manual');
+
+        act(() => {
+          (window as any)['punku-chat-widget_api'].close();
+        });
+        expect(windowLayer().hasAttribute('popover')).toBe(false);
+        expect(popovers.showPopover).toHaveBeenCalledTimes(1);
+        expect(popovers.hidePopover).toHaveBeenCalledTimes(1);
+      } finally {
+        popovers.restore();
+      }
+    });
+
+    it('should keep the z-index in browsers without popovers', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+      expect(windowLayer().hasAttribute('popover')).toBe(false);
+      expect(widgetRoot()).toHaveStyle({ zIndex: '9998' });
+    });
+
+    it('should keep the open window under a consent dialog of the page', () => {
+      const popovers = mockPopovers();
+      // Usercentrics on Swarovski: a layer at 2147483646, above the widget already.
+      const dialog = addConsentDialog(2147483646);
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(windowLayer().hasAttribute('popover')).toBe(false);
+        expect(popovers.showPopover).not.toHaveBeenCalled();
+        expect(widgetRoot()).toHaveStyle({ zIndex: '9998' });
+      } finally {
+        popovers.restore();
+        dialog.remove();
+      }
+    });
+
+    it('should go below a consent dialog in a lower layer', () => {
+      const dialog = addConsentDialog(5000);
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        expect(widgetRoot()).toHaveStyle({ zIndex: '4999' });
+      } finally {
+        dialog.remove();
+      }
+    });
+
+    it('should lift the open window when the consent dialog closes', () => {
+      jest.useFakeTimers();
+      const popovers = mockPopovers();
+      const dialog = addConsentDialog(2147483646);
+      try {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+        expect(windowLayer().hasAttribute('popover')).toBe(false);
+
+        dialog.remove();
+        act(() => {
+          jest.advanceTimersByTime(PAGE_DIALOG_CHECK_MS);
+        });
+        expect(windowLayer().getAttribute('popover')).toBe('manual');
+        expect(popovers.showPopover).toHaveBeenCalledTimes(1);
+      } finally {
+        popovers.restore();
+        dialog.remove();
+        jest.useRealTimers();
+      }
     });
   });
 

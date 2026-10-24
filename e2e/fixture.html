@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Widget browser fixture</title>
+  <style>body{margin:0;font-family:Arial,sans-serif;background:#eef2f6}main{padding:24px}h1{font-size:22px}</style>
+</head>
+<body>
+  <main><h1>Museum information</h1><p>Synthetic widget test. No customer data.</p></main>
+  <script>
+    // The same layout props as the Swarovski embed: a hidden trigger (the
+    // page opens the window through the widget API) and the phone window
+    // above the page's bottom bar.
+    const widget = document.createElement('punku-chat');
+    const props = {
+      host_url: location.origin, flow_id: 'browser-fixture', widget_id: 'browser-fixture',
+      window_title: 'Museum information', theme: 'swarovski', default_language: 'en',
+      welcome_message: 'Welcome to the museum. How can I help you today?',
+      chat_trigger_style: '{"display":"none"}', chat_window_style: '{"maxHeight":"550px"}',
+      mobile_chat_window_style: '{"bottom":"65px","height":"calc(98vh - 120px)"}',
+    };
+    const params = new URLSearchParams(location.search);
+    for (const [key, value] of Object.entries(props)) widget.setAttribute(key, value);
+    for (const [key, value] of params) widget.setAttribute(key, value);
+    document.body.append(widget);
+    const script = document.createElement('script');
+    script.src = '/bundle.js';
+    document.head.append(script);
+  </script>
+</body>
+</html>

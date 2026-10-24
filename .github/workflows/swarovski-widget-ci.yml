@@ -1,0 +1,37 @@
+name: Swarovski widget CI
+
+# Checks every PR into swarovski-widget and every push to it. The Swarovski
+# page loads dist/build/static/js/bundle.min.js of this branch from jsDelivr
+# (@swarovski-widget), so a push to the branch goes live there.
+#
+# That file is now a small forwarder to the v1 release channel
+# (cdn.punku.ai/chat/v1, fallback jsDelivr @v1). The widget is built, tested
+# and released from main. The source on this branch no longer makes the file
+# that the page runs, so this job checks only the forwarder.
+
+on:
+  push:
+    branches: [swarovski-widget]
+  pull_request:
+    branches: [swarovski-widget]
+
+concurrency:
+  group: swarovski-widget-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check the forwarder
+        run: node --test scripts/forwarder.test.cjs

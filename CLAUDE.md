@@ -11,7 +11,10 @@ npm test           # Run tests in watch mode
 npm run build      # Build for production (React + Webpack bundle)
 npm run build:react   # Build React app only
 npm run build:bundle  # Bundle with Webpack only
+npm run test:browser  # Playwright tests of the committed bundle (e2e/)
 ```
+
+Install with `npm ci --legacy-peer-deps`: `uglifyjs-webpack-plugin` asks for webpack 4.
 
 ### Project Structure
 ```
