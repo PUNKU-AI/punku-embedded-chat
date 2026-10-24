@@ -4,6 +4,7 @@ declare global {
   interface Window {
     __widgetRoots: WeakMap<Element, ShadowRoot>;
     __hostDiagnostics: { cancellations: number; replays: number; opens: number; settled: number; target?: string };
+    __setKeyboard: (height: number) => void;
   }
 }
 
@@ -151,16 +152,28 @@ export async function fakeKeyboard(page: Page, height: number) {
   // Playwright cannot open an on-screen keyboard. On iOS Safari and in Chrome
   // on Android 108+, the keyboard makes only the visual viewport shorter.
   // Install a visual viewport that is `height` px shorter than the real one.
+  // setKeyboard opens and closes the keyboard later.
   await page.addInitScript((height) => {
     const real = window.visualViewport!;
     const fake = new EventTarget();
+    let keyboard = height;
     for (const key of ['offsetLeft', 'offsetTop', 'width', 'scale', 'pageLeft', 'pageTop'] as const) {
       Object.defineProperty(fake, key, { get: () => real[key] });
     }
-    Object.defineProperty(fake, 'height', { get: () => real.height - height });
+    Object.defineProperty(fake, 'height', { get: () => real.height - keyboard });
     for (const type of ['resize', 'scroll']) real.addEventListener(type, () => fake.dispatchEvent(new Event(type)));
     Object.defineProperty(window, 'visualViewport', { configurable: true, get: () => fake });
+    // The browser fires only a visual viewport resize for the keyboard.
+    window.__setKeyboard = (value: number) => {
+      keyboard = value;
+      fake.dispatchEvent(new Event('resize'));
+    };
   }, height);
+}
+
+export async function setKeyboard(page: Page, height: number) {
+  // Needs fakeKeyboard. 0 closes the keyboard.
+  await page.evaluate((height) => window.__setKeyboard(height), height);
 }
 
 export async function waitForSettledBoxes(page: Page, selectors: string[]) {

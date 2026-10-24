@@ -1,5 +1,14 @@
 import { ArrowUp, RefreshCw, Send, X } from "lucide-react";
-import { extractMessageFromOutput, getAnimationOrigin, getChatPosition, trackVisualViewport, visualViewportInset } from "../utils";
+import {
+  extractMessageFromOutput,
+  getAnimationOrigin,
+  getChatPosition,
+  KEYBOARD_ATTRIBUTE,
+  safeAreaGap,
+  safeAreaInset,
+  trackVisualViewport,
+  visualViewportInset,
+} from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
 import { phoneWindowDeclarations, phoneWindowStyle } from "../mobileChatWindowStyle";
@@ -8,7 +17,7 @@ import { ChatMessageType, LoadingMessages } from "../../types/chatWidget";
 import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
-import { containScrollEvents } from "../scrollContainment";
+import { containScrollEvents, keepTouchScrollInside } from "../scrollContainment";
 import { guardControlColors } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
@@ -277,17 +286,21 @@ export default function ChatWindow({
   // Place the window from the visible corner. In Chrome on Android, the
   // layout viewport corner can be outside the screen (#77). The 641 px and
   // wider styles set --cl-window-gap, the gap above the visible bottom edge.
+  // The offsets also clear the safe areas, as the trigger does.
   const fixedWindowHorizontalStyle: React.CSSProperties = position?.endsWith("-left")
-    ? { left: visualViewportInset("left", `${left_offset}px`), right: "auto" }
-    : { left: "auto", right: visualViewportInset("right", `${right_offset}px`) };
+    ? { left: visualViewportInset("left", safeAreaGap("left", `${left_offset}px`)), right: "auto" }
+    : { left: "auto", right: visualViewportInset("right", safeAreaGap("right", `${right_offset}px`)) };
   /*
    * Short landscape screens place the window beside the trigger, on its inner
-   * side (#77). The gap uses the rendered trigger size.
+   * side (#77). The gap uses the rendered trigger size. The other side keeps
+   * 8 px, or the safe area of a notch there.
    */
   const besideTriggerSide = position?.endsWith("-left") ? "left" : "right";
+  const awayFromTriggerSide = besideTriggerSide === "left" ? "right" : "left";
   const besideTriggerOffset = besideTriggerSide === "left" ? left_offset : right_offset;
   const { triggerSize } = useAnchorMetrics(open && !positionOverrideStyle, triggerRef);
-  const besideTriggerInset = `calc(${besideTriggerOffset}px + ${triggerSize.width}px + 12px)`;
+  const besideTriggerInset = `calc(${safeAreaGap(besideTriggerSide, `${besideTriggerOffset}px`)} + ${triggerSize.width}px + 12px)`;
+  const awayFromTriggerGap = `max(8px, ${safeAreaInset(awayFromTriggerSide)})`;
   const defaultWindowPositionStyle: React.CSSProperties = {
     bottom: visualViewportInset("bottom", "var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))"),
     ...fixedWindowHorizontalStyle,
@@ -735,6 +748,32 @@ export default function ChatWindow({
     return () => list.removeEventListener("scroll", handleScroll);
   }, []);
 
+  /*
+   * The list gets shorter when the on-screen keyboard opens, when the window
+   * follows a smaller visible area, or when the input grows. The browser
+   * keeps the scroll position, so the newest message slid under the input.
+   * A visitor who reads at the bottom stays there. A resize fires no scroll
+   * event, so a visitor who scrolled up gets the jump button here.
+   */
+  useEffect(() => {
+    const list = messagesContainer.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    let height = list.clientHeight;
+    const observer = new ResizeObserver(() => {
+      const shorter = list.clientHeight < height;
+      height = list.clientHeight;
+      if (!shorter) return;
+      if (followNewest.current) {
+        list.scrollTop = list.scrollHeight;
+        lastListScrollTop.current = list.scrollTop;
+      } else {
+        setShowJumpToLatest(list.scrollHeight - list.clientHeight - list.scrollTop > 120);
+      }
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const el = messagesContainer.current;
     if (!el) return;
@@ -770,6 +809,12 @@ export default function ChatWindow({
    * composer applies the same rule; see scrollContainment.ts.
    */
   useEffect(() => containScrollEvents(messagesContainer.current), []);
+
+  /*
+   * A touch drag on the window must not scroll the host page behind it, nor
+   * pan the visible part of the page while the on-screen keyboard is open.
+   */
+  useEffect(() => keepTouchScrollInside(chatWindowRef.current), []);
 
   /*
    * Refocus the User input whenever a new response is returned from the LLM.
@@ -968,7 +1013,8 @@ export default function ChatWindow({
         (open ? " cl-scale-100" : " cl-scale-0")
       }
       style={{
-        "--cl-bottom-offset": `${Number(bottom_offset) || 20}px`,
+        // The trigger's gap to the bottom edge, also over the home indicator.
+        "--cl-bottom-offset": safeAreaGap("bottom", `${Number(bottom_offset) || 20}px`),
         "--cl-top-offset": `${Number(top_offset) || 0}px`,
         ...(scaledPage ? getScaledFrameVisualViewport(scaledPage) : {}),
         position: "fixed",
@@ -1075,10 +1121,17 @@ export default function ChatWindow({
              */
             .cl-chat-window {
               ${phoneWindowBox}
-              padding-top: env(safe-area-inset-top, 0px);
               /* Follow the visible area at once. Animate only the open and close
                  (the fade and the rise). */
               transition-property: opacity, transform, visibility;
+            }
+
+            /* While the on-screen keyboard is open, the window ends at the
+               keyboard, so that the newest message has room above the input.
+               It covers the trigger; the header has a close button
+               (mobileChatWindowStyle.ts). */
+            .cl-chat-window[${KEYBOARD_ATTRIBUTE}] {
+              --cl-trigger-room: 0px;
             }
 
             .cl-window {
@@ -1124,11 +1177,13 @@ export default function ChatWindow({
             .cl-chat-window {
               --cl-visible-height: var(--cl-visual-viewport-height, ${vh(100)});
               --cl-trigger-gap: calc(var(--cl-bottom-offset) + 80px);
+              /* 8 px above the window, or the safe area of a notch there. */
+              --cl-top-gap: max(8px, ${safeAreaInset("top")});
               --cl-window-room: max(
-                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
-                min(200px, var(--cl-window-height), calc(var(--cl-visible-height) - 16px))
+                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - var(--cl-top-gap)),
+                min(200px, var(--cl-window-height), calc(var(--cl-visible-height) - var(--cl-top-gap) - 8px))
               );
-              --cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));
+              --cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - var(--cl-top-gap) - var(--cl-window-room)));
             }
           `, scaledPage)}
 
@@ -1188,23 +1243,30 @@ export default function ChatWindow({
            * one message line and input), or the visible height if less.
            * Else it moves down (--cl-window-gap of the 641 px rule). An
            * anchored window (setTriggerPosition) keeps its own place.
+           * With the on-screen keyboard open, about 140 px stay visible: the
+           * window hides its header, so that the input and the newest
+           * message fit. The trigger beside the window still closes it.
            */
           ${positionOverrideStyle ? '' : screenRules({ minWidth: 641, maxWidth: 1023, maxHeight: 500 }, `
             .cl-chat-window {
               --cl-trigger-gap: var(--cl-bottom-offset);
               --cl-window-room: max(
-                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px),
-                min(240px, calc(var(--cl-visible-height) - 16px))
+                calc(var(--cl-visible-height) - var(--cl-trigger-gap) - var(--cl-top-gap)),
+                min(240px, calc(var(--cl-visible-height) - var(--cl-top-gap) - 8px))
               );
-              top: ${visualViewportInset("top", "8px")} !important;
+              top: ${visualViewportInset("top", "var(--cl-top-gap)")} !important;
               bottom: ${visualViewportInset("bottom", "var(--cl-window-gap)")} !important;
               ${besideTriggerSide}: ${visualViewportInset(besideTriggerSide, besideTriggerInset)} !important;
-              width: min(420px, ${vw(85)}, calc(var(--cl-visual-viewport-width, ${vw(100)}) - ${besideTriggerInset} - 8px)) !important;
+              width: min(420px, ${vw(85)}, calc(var(--cl-visual-viewport-width, ${vw(100)}) - ${besideTriggerInset} - ${awayFromTriggerGap})) !important;
               height: auto !important;
               max-height: none !important;
               /* Follow the visible area at once. Animate only the open and close
                  (the fade and the rise). */
               transition-property: opacity, transform, visibility;
+            }
+
+            .cl-chat-window[${KEYBOARD_ATTRIBUTE}] .cl-header {
+              display: none !important;
             }
           `, scaledPage)}
 

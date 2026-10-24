@@ -5,7 +5,7 @@ import { ChatMessageType, LoadingMessages } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language, toLanguage, translations } from "../translations";
-import { chooseLanguage, subscribeVisualViewport, VisualViewportBox } from "./utils";
+import { chooseLanguage, safeAreaGap, subscribeVisualViewport, ViewportEdge, VisualViewportBox } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -119,6 +119,22 @@ const getAnchoredChatWindowStyle = (
 };
 
 type CornerOffsets = { top: number; right: number; bottom: number; left: number };
+
+/*
+ * The distances of a fixed box from the layout viewport edges, as the
+ * browser resolves its insets, so with the safe areas. `fallback` gives an
+ * edge that does not resolve to px, as in jsdom.
+ */
+export const readCornerOffsets = (element: HTMLElement, fallback: CornerOffsets): CornerOffsets => {
+  const style = getComputedStyle(element);
+  const read = (value: string, otherwise: number) => (/^-?[\d.]+px$/.test(value) ? parseFloat(value) : otherwise);
+  return {
+    top: read(style.top, fallback.top),
+    right: read(style.right, fallback.right),
+    bottom: read(style.bottom, fallback.bottom),
+    left: read(style.left, fallback.left),
+  };
+};
 
 /*
  * The shift from a box at a layout viewport corner to the same corner of the
@@ -1047,6 +1063,16 @@ video {
 .cl-window {
   font-size: 16px;
   line-height: 1.5;
+}
+
+/* The safe areas of the screen: the notch, the rounded corners and the home
+   indicator. They are 0 unless the host page sets viewport-fit=cover. The
+   widget reads them through these variables (safeAreaInset in utils.ts). */
+.cl-widget-root {
+  --cl-safe-area-top: env(safe-area-inset-top, 0px);
+  --cl-safe-area-right: env(safe-area-inset-right, 0px);
+  --cl-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --cl-safe-area-left: env(safe-area-inset-left, 0px);
 }
 
 *, ::before, ::after {
@@ -4247,17 +4273,20 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const effectiveRightOffset = pagePx(right_offset ?? 20);
   const cornerTopOffset = pagePx(CORNER_TOP_OFFSET);
 
+  // The trigger also clears the safe areas: the notch, the rounded corners
+  // and the home indicator. They are 0 unless the page sets viewport-fit=cover.
+  const cornerGap = (edge: ViewportEdge, offset: number) => safeAreaGap(edge, `${offset}px`);
   const getCornerStyle = (position = "bottom-right") => {
     switch(position) {
       case "top-left":
-        return { top: `${cornerTopOffset}px`, left: `${effectiveLeftOffset}px`, bottom: "", right: "" };
+        return { top: cornerGap("top", cornerTopOffset), left: cornerGap("left", effectiveLeftOffset), bottom: "", right: "" };
       case "top-right":
-        return { top: `${cornerTopOffset}px`, right: `${effectiveRightOffset}px`, bottom: "", left: "" };
+        return { top: cornerGap("top", cornerTopOffset), right: cornerGap("right", effectiveRightOffset), bottom: "", left: "" };
       case "bottom-left":
-        return { bottom: `${effectiveBottomOffset}px`, left: `${effectiveLeftOffset}px`, top: "", right: "" };
+        return { bottom: cornerGap("bottom", effectiveBottomOffset), left: cornerGap("left", effectiveLeftOffset), top: "", right: "" };
       case "bottom-right":
       default:
-        return { bottom: `${effectiveBottomOffset}px`, right: `${effectiveRightOffset}px`, top: "", left: "" };
+        return { bottom: cornerGap("bottom", effectiveBottomOffset), right: cornerGap("right", effectiveRightOffset), top: "", left: "" };
     }
   };
 
@@ -4354,7 +4383,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     // The scaled page frame is already on the visible screen.
     if (!root || !anchor || isRelocated || scaledPage) return;
 
-    const offsets = {
+    const propOffsets = {
       top: CORNER_TOP_OFFSET,
       right: effectiveRightOffset,
       bottom: effectiveBottomOffset,
@@ -4366,6 +4395,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       const box = root.getBoundingClientRect();
       const shown = box.width > 0 || box.height > 0;
       if (screen && shown && (open || document.documentElement.scrollWidth > screen.width + 1)) {
+        // The resolved insets include the safe areas (getCornerStyle).
+        const offsets = readCornerOffsets(root, propOffsets);
         const { x, y } = getVisibleCornerShift(box, screen, cornerPosition, offsets);
         if (Math.abs(x) >= 0.5 || Math.abs(y) >= 0.5) transform = `translate(${x}px, ${y}px)`;
       }

@@ -118,7 +118,8 @@ jest.mock('./utils', () => ({
 }));
 
 // Import after mocks
-import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX } from './index';
+import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX, readCornerOffsets } from './index';
+import { safeAreaGap } from './utils';
 import { PAGE_DIALOG_CHECK_MS } from './pageDialogs';
 import { THEME_COLORS } from './controlColors';
 import { SessionStorage } from '../utils/sessionStorage';
@@ -273,7 +274,7 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        left: '48px',
+        left: safeAreaGap('left', '48px'),
         right: '',
       });
     });
@@ -283,7 +284,7 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '36px',
+        right: safeAreaGap('right', '36px'),
         left: '',
       });
     });
@@ -927,8 +928,8 @@ describe('ChatWidget', () => {
 
       const widgetRoot = document.querySelector('.cl-widget-root');
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '20px',
-        bottom: '20px',
+        right: safeAreaGap('right', '20px'),
+        bottom: safeAreaGap('bottom', '20px'),
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -982,8 +983,8 @@ describe('ChatWidget', () => {
 
       expect(api.trigger.position).toBeNull();
       expect((widgetRoot as HTMLElement).style).toMatchObject({
-        right: '20px',
-        bottom: '20px',
+        right: safeAreaGap('right', '20px'),
+        bottom: safeAreaGap('bottom', '20px'),
         left: '',
         top: '',
         zIndex: String(DEFAULT_Z_INDEX),
@@ -1381,7 +1382,7 @@ describe('ChatWidget', () => {
       });
 
       expect(anchorTransform()).toBe('');
-      expect(root().style).toMatchObject({ right: '20px', bottom: '20px' });
+      expect(root().style).toMatchObject({ right: safeAreaGap('right', '20px'), bottom: safeAreaGap('bottom', '20px') });
     });
 
     it('moves the closed trigger to the visible corner on a page wider than the screen, and follows a pan', () => {
@@ -1396,7 +1397,7 @@ describe('ChatWidget', () => {
 
       expect(anchorTransform()).toBe('');
       // The root keeps its plain offsets. Only the anchor moves, so the widget is not restyled.
-      expect(root().style).toMatchObject({ right: '20px', bottom: '20px' });
+      expect(root().style).toMatchObject({ right: safeAreaGap('right', '20px'), bottom: safeAreaGap('bottom', '20px') });
       expect(root().style.getPropertyValue('--cl-visual-viewport-top')).toBe('');
     });
 
@@ -1516,7 +1517,9 @@ describe('ChatWidget', () => {
       expect(root().style.getPropertyValue('--cl-frame-width')).toBe('740px');
       // The trigger takes the frame corner and gets the taps.
       // The offsets stay in page px: 20 page px are 46.25 frame px.
-      expect(anchor().style).toMatchObject({ position: 'absolute', right: '46.25px', bottom: '46.25px', pointerEvents: 'auto', transform: '' });
+      expect(anchor().style).toMatchObject({
+        position: 'absolute', right: safeAreaGap('right', '46.25px'), bottom: safeAreaGap('bottom', '46.25px'), pointerEvents: 'auto', transform: '',
+      });
     });
 
     it('keeps the closed frame on the layout viewport and follows the keyboard while open', () => {
@@ -1553,6 +1556,28 @@ describe('ChatWidget', () => {
       expect(getVisibleCornerShift({ left: 377, top: 20, right: 425, bottom: 68 }, screen, 'top-right', offsets)).toEqual({ x: 0, y: 88 });
       expect(getVisibleCornerShift({ left: 50, top: 839, right: 98, bottom: 887 }, screen, 'bottom-left', offsets)).toEqual({ x: 43, y: 0 });
       expect(getVisibleCornerShift({ left: 377, top: 839, right: 425, bottom: 887 }, screen, 'bottom-right', offsets)).toEqual({ x: 0, y: 0 });
+    });
+  });
+
+  describe('readCornerOffsets', () => {
+    const fallback = { top: 20, right: 30, bottom: 40, left: 50 };
+
+    it('takes the insets that the browser resolves, with the safe areas', () => {
+      // A browser resolves calc(20px + var(--cl-safe-area-bottom, 0px)) to px:
+      // 54 px over a 34 px home indicator.
+      const element = document.createElement('div');
+      const computed = jest.spyOn(window, 'getComputedStyle').mockReturnValue(
+        { top: '780px', right: '79px', bottom: '54px', left: 'auto' } as CSSStyleDeclaration
+      );
+      expect(readCornerOffsets(element, fallback)).toEqual({ top: 780, right: 79, bottom: 54, left: 50 });
+      computed.mockRestore();
+    });
+
+    it('keeps the prop offsets where the inset does not resolve to px', () => {
+      // jsdom keeps the calc() text.
+      const element = document.createElement('div');
+      element.style.bottom = safeAreaGap('bottom', '40px');
+      expect(readCornerOffsets(element, fallback)).toEqual(fallback);
     });
   });
 

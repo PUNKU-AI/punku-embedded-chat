@@ -267,10 +267,33 @@ export function subscribeVisualViewport(listener: VisualViewportListener) {
 	};
 }
 
+// Below this share of the layout viewport's shape, a keyboard covers the page.
+const KEYBOARD_SHAPE = 0.8;
+
+/*
+ * True while the on-screen keyboard covers the lower part of the page. On
+ * iOS Safari and in Chrome on Android 108+, the keyboard makes only the
+ * visual viewport shorter, so the visible box gets much flatter than the
+ * layout viewport. A host page wider than the screen (#77) makes both boxes
+ * larger by the same factor, and the browser toolbars change the height by
+ * less than a fifth, so only the keyboard counts. A browser that makes the
+ * layout viewport shorter too (interactive-widget=resizes-content) already
+ * fits the page above the keyboard: this stays false there.
+ */
+export function isKeyboardOpen(box: VisualViewportBox | null, layout = getLayoutViewportSize()) {
+	if (!box || !(box.width > 0) || !(layout.width > 0) || !(layout.height > 0)) return false;
+	return box.height * layout.width < KEYBOARD_SHAPE * layout.height * box.width;
+}
+
+/* Set on the tracked element while the on-screen keyboard is open. */
+export const KEYBOARD_ATTRIBUTE = 'data-cl-keyboard';
+
 /*
  * Copy the visual viewport box to CSS variables on `element`, now and after
  * each change. When the visitor pinch-zooms in, remove the variables: the
  * element then stays on the layout viewport, and the visitor can pan over it.
+ * While the on-screen keyboard is open, set KEYBOARD_ATTRIBUTE. The same
+ * event sets both, so the styles that use them change in the same frame.
  * Returns a function that stops the updates. The last box stays.
  */
 export function trackVisualViewport(element: HTMLElement) {
@@ -282,10 +305,30 @@ export function trackVisualViewport(element: HTMLElement) {
 			if (value) element.style.setProperty(property, value);
 			else element.style.removeProperty(property);
 		}
+		const keyboard = isKeyboardOpen(box);
+		if (element.hasAttribute(KEYBOARD_ATTRIBUTE) !== keyboard) {
+			if (keyboard) element.setAttribute(KEYBOARD_ATTRIBUTE, '');
+			else element.removeAttribute(KEYBOARD_ATTRIBUTE);
+		}
 	});
 }
 
 export type ViewportEdge = 'top' | 'right' | 'bottom' | 'left';
+
+/*
+ * The safe area at an edge of the screen: the part that the notch, the
+ * rounded corners or the home indicator cover (env(safe-area-inset-*)). The
+ * widget root sets the variables. The insets are 0 unless the host page sets
+ * viewport-fit=cover.
+ */
+export function safeAreaInset(edge: ViewportEdge) {
+	return `var(--cl-safe-area-${edge}, 0px)`;
+}
+
+/* A gap from an edge of the screen that also clears the safe area there. */
+export function safeAreaGap(edge: ViewportEdge, gap: string) {
+	return `calc(${gap} + ${safeAreaInset(edge)})`;
+}
 
 /*
  * A CSS inset that places a position: fixed box `offset` from one edge of the
