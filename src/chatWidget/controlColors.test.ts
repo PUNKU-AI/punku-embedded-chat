@@ -351,6 +351,33 @@ describe('dark themes on a light site bubble', () => {
   );
 });
 
+describe('link button focus marks', () => {
+  const focusMarks = (props: Parameters<typeof guardControlColors>[0]) => Object.fromEntries(
+    guardControlColors(props).pairs
+      .filter((pair) => pair.control.endsWith('focus mark'))
+      .map((pair) => [pair.control, pair]),
+  );
+
+  // The dark themes on a white site bubble: the theme accent (the old ring
+  // colour) reads at about 2:1 there. The ring takes the guarded fill.
+  it.each([['dark', '#a5b4fc', '#5558e8'], ['ocean', '#7dd3fc', '#0369a1'], ['aurora', '#f0abfc', '#7c3aed']] as const)(
+    'draws the %s ring in the fill, not the light accent', (theme, oldRing, fill) => {
+      expect(ratio(oldRing, '#ffffff')).toBeLessThan(BOUNDARY_MIN);
+      const marks = focusMarks({ theme, bot_message_color: '#ffffff' });
+      expect(marks['filled link button focus mark']).toMatchObject({ foreground: fill, background: '#ffffff' });
+      expect(marks['filled link button focus mark'].ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+      expect(marks['outlined link button focus mark'].ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    },
+  );
+
+  it('draws the rings in a site button colour and link colour', () => {
+    const marks = focusMarks({ button_color: '#9e183b', bot_message_color: '#9e183b', bot_message_text_color: '#ffffff', link_color: '#FFD700' });
+    // The fill in the bubble colour falls back to the gold link colour.
+    expect(marks['filled link button focus mark']).toMatchObject({ foreground: '#ffd700', background: '#9e183b' });
+    expect(marks['outlined link button focus mark']).toMatchObject({ foreground: '#ffd700', background: '#9e183b' });
+  });
+});
+
 describe('header subtitle with button_color', () => {
   it.each([
     // 85% of the site's text colour reads at 4.5:1: the subtitle keeps it.

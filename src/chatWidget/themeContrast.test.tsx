@@ -67,9 +67,12 @@ const NAMES: Record<string, string> = { white: '#ffffff', black: '#000000', tran
 /** The colours of a value: one, or each stop of a gradient. var() takes the theme token. */
 function paints(theme: ThemeName, value: string | undefined): Paint[] {
   if (!value) throw new Error('The stylesheet sets no colour here.');
-  const resolved = value
-    .replace(/var\(--tw-[a-z-]+-opacity\)/g, '1')
-    .replace(/var\((--cl-[a-z-]+)(?:, ([^)]+))?\)/g, (_match, name: string, fallback?: string) => token(theme, name) ?? fallback ?? '');
+  let resolved = value.replace(/var\(--tw-[a-z-]+-opacity\)/g, '1');
+  // A fallback can be a var() too: var(--a, var(--b)) resolves in two passes.
+  for (let previous = ''; previous !== resolved;) {
+    previous = resolved;
+    resolved = resolved.replace(/var\((--cl-[a-z-]+)(?:, ([^)]+))?\)/g, (_match, name: string, fallback?: string) => token(theme, name) ?? fallback ?? '');
+  }
   const tokens = resolved.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)|\b(?:white|black|transparent)\b/gi) ?? [];
   return tokens.map((color) => {
     const parsed = parseColor(NAMES[color.toLowerCase()] ?? color);
@@ -110,6 +113,13 @@ function palette(theme: ThemeName) {
   const launcher = paints(theme, declared([`.theme-${theme}.cl-trigger`, 'background'], ['.cl-trigger', 'background-color']));
   const white: Paint[] = [{ rgb: [255, 255, 255], alpha: 1 }];
   const color = (name: string) => paints(theme, token(theme, name));
+  // The colour of a focus ring; currentColor is the link colour.
+  const ring = (selector: string) => {
+    const outline = declared([selector, 'outline']);
+    const shown = outline?.includes('currentColor') ? color('--cl-link') : paints(theme, outline);
+    if (!shown.length) throw new Error(`No colour in the outline of ${selector}.`);
+    return shown;
+  };
   const pairs: Pair[] = [
     { what: 'header title and icons', foreground: of('.cl-header', 'color'), background: header, minimum: TEXT_MIN },
     { what: 'header subtitle', foreground: subtitle, background: header, minimum: TEXT_MIN },
@@ -130,7 +140,9 @@ function palette(theme: ThemeName) {
       background: bubble, minimum: BOUNDARY_MIN,
     },
     { what: 'outlined link button', foreground: color('--cl-link'), background: bubble, minimum: BOUNDARY_MIN },
-    { what: 'filled link button and focus mark', foreground: color('--cl-accent'), background: bubble, minimum: BOUNDARY_MIN },
+    { what: 'outlined link button focus mark', foreground: ring('.cl-window .cl-bot_message .markdown-body li.cl-link-only a:focus-visible'), background: bubble, minimum: BOUNDARY_MIN },
+    { what: 'filled link button', foreground: color('--cl-accent'), background: bubble, minimum: BOUNDARY_MIN },
+    { what: 'filled link button focus mark', foreground: ring('.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:focus-visible'), background: bubble, minimum: BOUNDARY_MIN },
     { what: 'filled link button on hover', foreground: color('--cl-accent-hover'), background: bubble, minimum: BOUNDARY_MIN },
     { what: 'filled link button label', foreground: color('--cl-on-accent'), background: onTop(color('--cl-accent'), bubble), minimum: TEXT_MIN },
     { what: 'filled link button label on hover', foreground: color('--cl-on-accent'), background: onTop(color('--cl-accent-hover'), bubble), minimum: TEXT_MIN },
@@ -233,13 +245,22 @@ describe('built-in theme contrast (WCAG AA)', () => {
     });
   });
 
+  it('draws the link button focus rings in the colours the contrast guard checks', () => {
+    // The guard measures the filled ring as the fill (--cl-link-button-fill
+    // where it changes the fill) and the outlined ring as the link colour.
+    expect(declared(['.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:focus-visible', 'outline']))
+      .toBe('2px solid var(--cl-link-button-fill, var(--cl-accent))');
+    expect(declared(['.cl-window .cl-bot_message .markdown-body li.cl-link-only a:focus-visible', 'outline']))
+      .toBe('2px solid currentColor');
+  });
+
   it('keeps the colours of the swarovski theme', () => {
     const { pairs } = palette('swarovski');
     const shown = Object.fromEntries(pairs.map((pair) => [pair.what, worst(pair).foreground]));
     expect(shown).toMatchObject({
       'visitor text': '#ffffff',
       'link in an answer': '#0969da',
-      'filled link button and focus mark': '#2563eb',
+      'filled link button': '#2563eb',
       'feedback icons': '#9ca3af',
       'chosen thumbs up': '#10b981',
       placeholder: '#9ca3af',

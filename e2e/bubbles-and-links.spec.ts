@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { loadWidget } from './widget-helpers';
+import { loadWidget, waitForInputFocus } from './widget-helpers';
 
 // Bubbles and links in answers. Visitor text is left-aligned in a right-aligned
 // bubble, bubbles have an 18px radius with a 6px tail, a change of sender gets
@@ -34,7 +34,7 @@ const conversation = [
   },
 ];
 
-async function openConversation(page: Page, props: Record<string, string> = {}) {
+async function openConversation(page: Page, props: Record<string, string> = {}, messages = conversation) {
   // A stored session: the chat opens with the conversation, no request is sent.
   await page.addInitScript((messages) => {
     const now = Date.now();
@@ -42,11 +42,14 @@ async function openConversation(page: Page, props: Record<string, string> = {}) 
       sessionId: 'synthetic-session', messages, createdAt: now, lastActiveAt: now,
       expiresAt: now + 60 * 60 * 1000, domain: window.location.hostname, flowId: 'browser-fixture',
     }));
-  }, conversation);
+  }, messages);
   await loadWidget(page, {
     start_open: 'true', show_closed_widget_hint: 'false', width: '380', height: '640', ...props,
   });
-  await expect.poll(async () => (await layout(page)).linkButton).not.toBeNull();
+  await expect.poll(() => page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    return root.querySelectorAll('.cl-link-only a').length;
+  })).toBeGreaterThan(0);
 }
 
 function layout(page: Page) {
@@ -166,4 +169,77 @@ test('the dark theme fills link buttons with its light link colour and dark text
   // 7.3:1 on the dark bubble, its dark indigo text #1e1b4b at 8:1 on it. The
   // indigo of the visitor bubbles (#5558e8) reads at only 2.8:1 on the bubble.
   expect(result.linkButton).toMatchObject({ background: 'rgb(165, 180, 252)', color: 'rgb(30, 27, 75)' });
+});
+
+// The agent writes checkout links in bold: **[x](url)**. In a list they are
+// outlined buttons, in a tight and in a loose list. In a list with a link that
+// is not a checkout link, the button keeps the bullet and the indent.
+const checkoutUrl = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
+const agentLists = [
+  { message: 'Which dates are free?', isSend: true },
+  { message: `Two dates are free:\n\n- **[Saturday, 10:00](${checkoutUrl})**\n- **[Sunday, 14:00](${checkoutUrl})**`, isSend: false, message_id: 'synthetic-tight' },
+  { message: `Or later:\n\n- **[Monday, 10:00](${checkoutUrl})**\n\n- 👉 **[Tuesday, 14:00](${checkoutUrl})**`, isSend: false, message_id: 'synthetic-loose' },
+  { message: `Also:\n\n- **[Book Saturday](${checkoutUrl})**\n- **[Gift voucher](https://example.com/voucher)**`, isSend: false, message_id: 'synthetic-mixed' },
+];
+
+function listItems(page: Page) {
+  return page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const answers = Array.from(root.querySelectorAll('.cl-bot_message')).slice(-3);
+    return answers.map((answer) => Array.from(answer.querySelectorAll('li')).map((item) => {
+      const link = item.querySelector('a')!;
+      const style = getComputedStyle(link);
+      const arrow = getComputedStyle(link, '::after');
+      return {
+        button: item.classList.contains('cl-link-only'),
+        display: style.display,
+        border: style.borderTopWidth,
+        padding: `${style.paddingTop} ${style.paddingLeft}`,
+        arrow: arrow.content !== 'none' && arrow.width === '15px',
+        bullet: getComputedStyle(item).listStyleType,
+        left: Math.round(item.getBoundingClientRect().left),
+      };
+    }));
+  });
+}
+
+test('bold checkout links in a list are outlined buttons, in a tight and a loose list', async ({ page }) => {
+  await openConversation(page, {}, agentLists);
+  const [tight, loose, mixed] = await listItems(page);
+  const outlined = { button: true, display: 'inline-flex', border: '1px', padding: '8px 14px', arrow: true, bullet: 'none' };
+  for (const item of [...tight, ...loose]) expect(item).toMatchObject(outlined);
+  expect(tight).toHaveLength(2);
+  expect(loose).toHaveLength(2);
+
+  // A mixed list: the button keeps the bullet and lines up with the text link.
+  expect(mixed[0]).toMatchObject({ ...outlined, bullet: 'disc' });
+  expect(mixed[1]).toMatchObject({ button: false, display: 'inline', border: '0px', arrow: false, bullet: 'disc' });
+  expect(mixed[0].left).toBe(mixed[1].left);
+});
+
+// A dark theme on a white site bubble: the theme's light accent reads at
+// about 2:1 there. The guard fills the button with the theme's mid accent;
+// the focus ring takes the same colour, the outlined button's ring the link colour.
+test('a focused link button shows its ring in the button colour', async ({ page, hasTouch }) => {
+  test.skip(hasTouch, 'Keyboard focus runs on the three desktop engines.');
+  const messages = [
+    { message: 'Book tickets', isSend: true },
+    { message: `[Book now](${checkoutUrl})\n\n- **[Saturday, 10:00](${checkoutUrl})**`, isSend: false, message_id: 'synthetic-focus' },
+  ];
+  await openConversation(page, { theme: 'dark', bot_message_color: '#ffffff' }, messages);
+  await waitForInputFocus(page);
+  const ring = (selector: string) => page.evaluate((selector) => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const link = root.querySelector<HTMLAnchorElement>(selector)!;
+    link.focus();
+    const style = getComputedStyle(link);
+    return { focusVisible: link.matches(':focus-visible'), ring: style.outlineColor, width: style.outlineWidth, fill: style.backgroundColor, color: style.color };
+  }, selector);
+  // A key press makes the next focus a keyboard focus (:focus-visible).
+  await page.keyboard.press('Shift');
+  const filled = await ring('.markdown-body > p.cl-link-only a');
+  expect(filled).toEqual({ focusVisible: true, ring: 'rgb(85, 88, 232)', width: '2px', fill: 'rgb(85, 88, 232)', color: 'rgb(255, 255, 255)' });
+  const outlined = await ring('.markdown-body li.cl-link-only a');
+  expect(outlined.focusVisible).toBe(true);
+  expect(outlined.ring).toBe(outlined.color);
 });

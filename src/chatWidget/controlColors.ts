@@ -473,8 +473,9 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
       }
     }
     measure("link", link, bubble, TEXT_MIN);
-    // Outlined link buttons draw their outline in the link colour.
+    // Outlined link buttons draw their outline and their focus ring in the link colour.
     measure("outlined link button", link, bubble, BOUNDARY_MIN);
+    measure("outlined link button focus mark", link, bubble, BOUNDARY_MIN);
   } else {
     // An answer colour the widget cannot read (a gradient): links take the text colour.
     colors.linksTakeTextColor = !ownLink;
@@ -506,6 +507,8 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
       colors.linkButtonLabel = toHex(guarded.label);
     }
     measure("filled link button", guarded.fill, bubble, BOUNDARY_MIN);
+    // The stylesheet draws the focus ring in the fill colour, on the bubble.
+    measure("filled link button focus mark", guarded.fill, bubble, BOUNDARY_MIN);
     measure("filled link button label", guarded.label, guarded.fill, TEXT_MIN);
   }
 

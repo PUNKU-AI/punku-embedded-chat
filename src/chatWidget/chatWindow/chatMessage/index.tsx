@@ -148,6 +148,16 @@ export function isLinkOnlyListItem(node: unknown): boolean {
   return children.length === 1 && isElement(children[0], "p") && isLinkOnly(children[0]);
 }
 
+/** True when every item of a list holds only a link: the list of buttons drops its bullets. */
+export function isLinkList(node: unknown): boolean {
+  const items = meaningfulChildren(node);
+  return items.length > 0 && items.every((item) => isElement(item, "li") && isLinkOnlyListItem(item));
+}
+
+/** The class names of an element, with `added` when it is a string. */
+const withClass = (className: string | undefined, added: string | false) =>
+  [className, added].filter(Boolean).join(" ") || undefined;
+
 export default function ChatMessage({
   message,
   message_id,
@@ -208,12 +218,20 @@ export default function ChatMessage({
     p: ({ node, children, ...props }) => (
       <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
     ),
-    // react-markdown 8 passes ordered, checked and index to list items; they
-    // are not DOM attributes.
+    // react-markdown 8 passes ordered, checked, index and depth to lists and
+    // list items; they are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={[className, linkButtons && isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+      <li {...props} className={withClass(className, linkButtons && isLinkOnlyListItem(node) && "cl-link-only")}>
         {children}
       </li>
+    ),
+    // A list of only link buttons drops its bullets (.cl-link-list). In a
+    // mixed list, the buttons keep the bullets and the indent of the others.
+    ul: ({ node, children, ordered, depth, className, ...props }) => (
+      <ul {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ul>
+    ),
+    ol: ({ node, children, ordered, depth, className, ...props }) => (
+      <ol {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ol>
     ),
   }), [onCheckout, linkButtons]);
 

@@ -3037,8 +3037,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   background: var(--cl-hover);
 }
 
-/* A list of link buttons drops its bullets and stacks the buttons. */
-.cl-window .cl-bot_message .markdown-body li.cl-link-only {
+/* A list of only link buttons drops its bullets and stacks the buttons. In a
+   mixed list (ChatMessage isLinkList), the buttons keep the bullets and the
+   indent of the other items. */
+.cl-window .cl-bot_message .markdown-body .cl-link-list > li.cl-link-only {
   list-style: none;
   margin-left: -1.25em;
 }
@@ -3051,9 +3053,16 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   margin-top: 6px;
 }
 
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:focus-visible,
+/* The focus ring takes the colour of the button, which the contrast guard
+   checks at 3:1 on the bubble (controlColors.ts): the fill of a filled
+   button, the outline (link) colour of an outlined one. */
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:focus-visible {
+  outline: 2px solid var(--cl-link-button-fill, var(--cl-accent));
+  outline-offset: 2px;
+}
+
 .cl-window .cl-bot_message .markdown-body li.cl-link-only a:focus-visible {
-  outline: 2px solid var(--cl-accent);
+  outline: 2px solid currentColor;
   outline-offset: 2px;
 }
 

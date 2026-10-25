@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import ChatMessage, { isCheckoutLinkOnly, isLinkOnly, isLinkOnlyListItem } from './index';
+import ChatMessage, { isCheckoutLinkOnly, isLinkList, isLinkOnly, isLinkOnlyListItem } from './index';
 
 // Real markdown rendering: a link that stands alone in a paragraph or a list
 // item gets the cl-link-only class, so the stylesheet draws it as a button.
@@ -40,6 +40,16 @@ describe('link buttons in answers', () => {
 
     const items = Array.from(document.querySelectorAll('.markdown-body li'));
     expect(items.map((item) => item.classList.contains('cl-link-only'))).toEqual([true, true, false]);
+    // A mixed list keeps its bullets: the buttons line up with the other items.
+    expect(document.querySelector('.markdown-body ul')).not.toHaveClass('cl-link-list');
+  });
+
+  it('drops the bullets only of a list that holds nothing but link buttons', () => {
+    renderAnswer('- [Prices](https://example.com/prices)\n- [Opening hours](https://example.com/hours)\n\n'
+      + 'Steps:\n\n1. [Choose a date](https://example.com/date)\n2. [Pay](https://example.com/pay)');
+
+    expect(document.querySelector('.markdown-body ul')).toHaveClass('cl-link-list');
+    expect(document.querySelector('.markdown-body ol')).toHaveClass('cl-link-list');
   });
 
   it('marks the items of a loose list, where each link sits in a paragraph', () => {
@@ -114,6 +124,15 @@ describe('checkout links in the agent format', () => {
     expect(items).toHaveLength(4);
     items.forEach((item) => expect(item).toHaveClass('cl-link-only'));
     expect(items[2].querySelector('p > strong > a')).not.toBeNull();
+    document.querySelectorAll('.markdown-body ul').forEach((list) => expect(list).toHaveClass('cl-link-list'));
+  });
+
+  it('keeps the bullets of a list with a checkout button and a bold text link', () => {
+    renderAnswer(`- **[Book Saturday](${checkout})**\n- **[Gift voucher](https://example.com/voucher)**`);
+
+    const items = Array.from(document.querySelectorAll('.markdown-body li'));
+    expect(items.map((item) => item.classList.contains('cl-link-only'))).toEqual([true, false]);
+    expect(document.querySelector('.markdown-body ul')).not.toHaveClass('cl-link-list');
   });
 
   it('keeps text links for the swarovski theme', () => {
@@ -137,6 +156,7 @@ describe('text links only (linkButtons false, the swarovski theme)', () => {
 
     expect(document.querySelectorAll('.markdown-body a')).toHaveLength(6);
     expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+    expect(document.querySelectorAll('.cl-link-list')).toHaveLength(0);
   });
 });
 
@@ -195,5 +215,22 @@ describe('isCheckoutLinkOnly', () => {
     expect(isCheckoutLinkOnly(wrap('p', text('2 '), link(checkout)))).toBe(false);
     expect(isCheckoutLinkOnly(wrap('p', text('🚀')))).toBe(false);
     expect(isCheckoutLinkOnly(undefined)).toBe(false);
+  });
+});
+
+describe('isLinkList', () => {
+  const text = (value: string) => ({ type: 'text', value });
+  const item = (...children: object[]) => ({ type: 'element', tagName: 'li', children });
+  const link = { type: 'element', tagName: 'a', children: [text('Prices')] };
+  const list = (...items: object[]) => ({ type: 'element', tagName: 'ul', children: [text('\n'), ...items, text('\n')] });
+
+  it('accepts a list whose items all hold only a link', () => {
+    expect(isLinkList(list(item(link), text('\n'), item(link)))).toBe(true);
+  });
+
+  it('rejects a mixed list and an empty list', () => {
+    expect(isLinkList(list(item(link), item(text('See '), link)))).toBe(false);
+    expect(isLinkList(list())).toBe(false);
+    expect(isLinkList(undefined)).toBe(false);
   });
 });
