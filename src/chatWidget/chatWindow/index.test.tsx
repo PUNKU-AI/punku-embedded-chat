@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ChatWindow from './index';
-import { visualViewportInset } from '../utils';
+import { safeAreaGap, visualViewportInset } from '../utils';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
 
@@ -179,7 +179,8 @@ describe('ChatWindow', () => {
       const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
       expect(chatWindow.style).toMatchObject({
         left: 'auto',
-        right: visualViewportInset('right', '20px'),
+        // The gaps also clear the safe areas, as the trigger does.
+        right: visualViewportInset('right', safeAreaGap('right', '20px')),
         bottom: visualViewportInset('bottom', 'var(--cl-window-gap, calc(var(--cl-bottom-offset) + 80px))'),
       });
     });
@@ -191,7 +192,8 @@ describe('ChatWindow', () => {
       // eslint-disable-next-line testing-library/no-node-access
       const styles = Array.from(document.querySelectorAll('style'), (style) => style.textContent).join('\n');
       expect(styles).toContain('--cl-visible-height: var(--cl-visual-viewport-height, 100vh);');
-      expect(styles).toContain('--cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - 8px - var(--cl-window-room)));');
+      expect(styles).toContain('--cl-top-gap: max(8px, var(--cl-safe-area-top, 0px));');
+      expect(styles).toContain('--cl-window-gap: min(var(--cl-trigger-gap), calc(var(--cl-visible-height) - var(--cl-top-gap) - var(--cl-window-room)));');
       for (const cap of ['min(75vh, var(--cl-window-room))', 'min(70vh, var(--cl-window-room))']) {
         expect(styles).toContain(`max-height: ${cap} !important;`);
       }
@@ -201,21 +203,21 @@ describe('ChatWindow', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" />);
 
       const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
-      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '20px'), right: 'auto' });
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', safeAreaGap('left', '20px')), right: 'auto' });
     });
 
     it('should apply custom left offset for left-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-left" left_offset={64} />);
 
       const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
-      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', '64px'), right: 'auto' });
+      expect(chatWindow.style).toMatchObject({ left: visualViewportInset('left', safeAreaGap('left', '64px')), right: 'auto' });
     });
 
     it('should apply custom right offset for right-side window placement', () => {
       render(<ChatWindow {...defaultProps} position="bottom-right" right_offset={52} />);
 
       const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
-      expect(chatWindow.style).toMatchObject({ right: visualViewportInset('right', '52px'), left: 'auto' });
+      expect(chatWindow.style).toMatchObject({ right: visualViewportInset('right', safeAreaGap('right', '52px')), left: 'auto' });
     });
 
     it('should use position override style when provided', () => {
@@ -294,16 +296,17 @@ describe('ChatWindow', () => {
 
         const styles = renderedStyles();
         expect(styles).toContain(shortLandscapeQuery);
-        expect(styles).toContain(`top: ${visualViewportInset('top', '8px')} !important`);
+        expect(styles).toContain(`top: ${visualViewportInset('top', 'var(--cl-top-gap)')} !important`);
         expect(styles).toContain(`bottom: ${visualViewportInset('bottom', 'var(--cl-window-gap)')} !important`);
         // jsdom has no layout, so the trigger size is the 48 px default.
-        expect(styles).toContain(`right: ${visualViewportInset('right', 'calc(52px + 48px + 12px)')} !important`);
+        const besideTrigger = `calc(${safeAreaGap('right', '52px')} + 48px + 12px)`;
+        expect(styles).toContain(`right: ${visualViewportInset('right', besideTrigger)} !important`);
         expect(styles).toContain(
-          'width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - calc(52px + 48px + 12px) - 8px)) !important'
+          `width: min(420px, 85vw, calc(var(--cl-visual-viewport-width, 100vw) - ${besideTrigger} - max(8px, var(--cl-safe-area-left, 0px)))) !important`
         );
         expect(styles).not.toContain(`left: ${visualViewportInset('left', 'calc(')}`);
         const chatWindow = document.querySelector<HTMLElement>('.cl-chat-window')!;
-        expect(chatWindow.style.getPropertyValue('--cl-bottom-offset')).toBe('60px');
+        expect(chatWindow.style.getPropertyValue('--cl-bottom-offset')).toBe(safeAreaGap('bottom', '60px'));
       });
 
       it('should keep the bottom level with the trigger while 240 px fit', () => {
@@ -311,8 +314,8 @@ describe('ChatWindow', () => {
 
         const styles = renderedStyles();
         expect(styles).toContain('--cl-trigger-gap: var(--cl-bottom-offset);');
-        expect(styles).toContain('calc(var(--cl-visible-height) - var(--cl-trigger-gap) - 8px)');
-        expect(styles).toContain('min(240px, calc(var(--cl-visible-height) - 16px))');
+        expect(styles).toContain('calc(var(--cl-visible-height) - var(--cl-trigger-gap) - var(--cl-top-gap))');
+        expect(styles).toContain('min(240px, calc(var(--cl-visible-height) - var(--cl-top-gap) - 8px))');
       });
 
       it('should fill the visible height to the right of a left-side trigger', () => {
@@ -320,7 +323,7 @@ describe('ChatWindow', () => {
 
         const styles = renderedStyles();
         expect(styles).toContain(shortLandscapeQuery);
-        expect(styles).toContain(`left: ${visualViewportInset('left', 'calc(64px + 48px + 12px)')} !important`);
+        expect(styles).toContain(`left: ${visualViewportInset('left', `calc(${safeAreaGap('left', '64px')} + 48px + 12px)`)} !important`);
         expect(styles).not.toContain(`right: ${visualViewportInset('right', 'calc(')}`);
       });
 
@@ -330,7 +333,7 @@ describe('ChatWindow', () => {
         } as unknown as React.RefObject<HTMLButtonElement>;
         render(<ChatWindow {...defaultProps} triggerRef={largeTriggerRef} />);
 
-        expect(renderedStyles()).toContain(`right: ${visualViewportInset('right', 'calc(20px + 64px + 12px)')} !important`);
+        expect(renderedStyles()).toContain(`right: ${visualViewportInset('right', `calc(${safeAreaGap('right', '20px')} + 64px + 12px)`)} !important`);
       });
 
       it('should keep an anchored window in its place', () => {
@@ -360,19 +363,19 @@ describe('ChatWindow', () => {
         expect(styles).not.toMatch(/@media \((min|max)-(width|height)/);
         expect(styles).not.toMatch(/[0-9]v[wh]\b/);
         expect(styles).toContain('--cl-trigger-gap: var(--cl-bottom-offset);');
-        expect(styles).toContain(`top: ${visualViewportInset('top', '8px')} !important`);
+        expect(styles).toContain(`top: ${visualViewportInset('top', 'var(--cl-top-gap)')} !important`);
         expect(styles).toContain(
-          'width: min(420px, 629px, calc(var(--cl-visual-viewport-width, 740px) - calc(20px + 48px + 12px) - 8px)) !important'
+          `width: min(420px, 629px, calc(var(--cl-visual-viewport-width, 740px) - calc(${safeAreaGap('right', '20px')} + 48px + 12px) - max(8px, var(--cl-safe-area-left, 0px)))) !important`
         );
         // The phone rules of the 320 px page are gone.
-        expect(styles).not.toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+        expect(styles).not.toContain('--cl-trigger-room');
       });
 
       it('should use the phone rules on a scaled portrait page', () => {
         render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.21875, width: 390, height: 843 }} />);
 
         const styles = renderedStyles();
-        expect(styles).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px');
+        expect(styles).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - var(--cl-trigger-room');
         expect(styles).not.toContain('--cl-window-room');
       });
 
@@ -619,6 +622,75 @@ describe('ChatWindow', () => {
 
       rerender(<ChatWindow {...defaultProps} messages={[...answered, { message: 'Next question', isSend: true }]} />);
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+    });
+
+    describe('when the list gets shorter (the on-screen keyboard opens)', () => {
+      // jsdom has no ResizeObserver. This one reports a resize of the list on demand.
+      const resized: Array<() => void> = [];
+      beforeEach(() => {
+        class FakeResizeObserver {
+          constructor(private callback: ResizeObserverCallback) {}
+          observe(element: Element) {
+            if (element.classList?.contains('cl-messages_container')) {
+              resized.push(() => this.callback([], this as unknown as ResizeObserver));
+            }
+          }
+          disconnect() {}
+        }
+        (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = FakeResizeObserver;
+      });
+      afterEach(() => {
+        resized.splice(0);
+        delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+      });
+
+      const answered: ChatMessageType[] = [
+        { message: 'Question', isSend: true },
+        { message: 'Answer', isSend: false },
+      ];
+
+      it('should keep the newest message in view for a visitor at the end', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(500);
+        render(<ChatWindow {...defaultProps} messages={answered} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        scrollListTo(list, 140);
+
+        // The keyboard takes 300 px. The browser keeps scrollTop, so the end is hidden.
+        clientHeight.mockReturnValue(200);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(640);
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      });
+
+      it('should keep the place of a visitor who scrolled up, and lead back', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(300);
+        render(<ChatWindow {...defaultProps} messages={answered} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        // 100 px above the end (640 - 300 - 240): the list stops following, no button yet.
+        scrollListTo(list, 340);
+        scrollListTo(list, 240);
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+
+        // The keyboard takes 150 px: the newest message is 250 px below the visible list.
+        clientHeight.mockReturnValue(150);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(240);
+        expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+      });
+
+      it('should not scroll when the list gets taller (the keyboard closes)', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        render(<ChatWindow {...defaultProps} messages={answered} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        scrollListTo(list, 300);
+
+        clientHeight.mockReturnValue(500);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(300);
+      });
     });
   });
 
@@ -2680,7 +2752,8 @@ describe('ChatWindow', () => {
       const box = chatWindowRule(splitPhoneRule(renderedStyles()).phone);
       expect(box).toContain('top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;');
       expect(box).toContain('bottom: auto !important;');
-      expect(box).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;');
+      // 80 px for the trigger over the home indicator, none while the keyboard is open.
+      expect(box).toContain('height: calc(var(--cl-visual-viewport-height, 100%) - var(--cl-trigger-room, calc(80px + var(--cl-safe-area-bottom, 0px))) - var(--cl-top-offset, 0px)) !important;');
     });
 
     it('places the phone window from the visible bottom with the live styles', () => {
@@ -2691,7 +2764,7 @@ describe('ChatWindow', () => {
       expect(box).toContain(`bottom: ${visualViewportInset('bottom', 'round(max(0px, 65px), 1px)')} !important;`);
       expect(box).toContain('height: round(calc(calc(98 * var(--cl-visual-viewport-height, 100vh) / 100) - 120px), 1px) !important;');
       // The phone rule keeps its other declarations.
-      expect(box).toContain('padding-top: env(safe-area-inset-top, 0px);');
+      expect(box).toContain('padding-top: var(--cl-safe-area-top, 0px) !important;');
       expect(box).toContain('transition-property: opacity, transform, visibility;');
     });
 
@@ -2815,6 +2888,42 @@ describe('ChatWindow', () => {
         viewport.dispatchEvent(new Event('resize'));
       });
       expect(box()).toEqual(['43px', '88px', '412px', '839px']);
+    });
+  });
+
+  describe('Phone keyboard', () => {
+    const renderedStyles = () => Array.from(document.querySelectorAll('style'))
+      .map((style) => style.textContent || '')
+      .join('\n');
+    const rule = (styles: string, selector: string) => {
+      const start = styles.indexOf(`${selector} {`);
+      return start < 0 ? '' : styles.slice(start, styles.indexOf('}', start) + 1);
+    };
+
+    it('lets the phone window end at the keyboard, over the trigger', () => {
+      render(<ChatWindow {...defaultProps} />);
+      const phone = renderedStyles().slice(renderedStyles().indexOf('@media (max-width: 640px) {'));
+      expect(rule(phone, '.cl-chat-window[data-cl-keyboard]')).toContain('--cl-trigger-room: 0px;');
+    });
+
+    it('hides the header on a short landscape screen while the keyboard is open', () => {
+      render(<ChatWindow {...defaultProps} />);
+      const styles = renderedStyles();
+      const landscape = styles.slice(styles.indexOf('@media (min-width: 641px) and (max-width: 1023px) and (max-height: 500px)'));
+      expect(rule(landscape, '.cl-chat-window[data-cl-keyboard] .cl-header')).toContain('display: none !important;');
+    });
+
+    it('keeps a touch drag on the header from scrolling the page behind', () => {
+      render(<ChatWindow {...defaultProps} window_title="Museum information" />);
+      const title = screen.getByText('Museum information');
+      const touch = (type: string, y: number) => {
+        const event = new Event(type, { bubbles: true, composed: true, cancelable: true });
+        Object.defineProperty(event, 'touches', { value: [{ clientX: 100, clientY: y }] });
+        title.dispatchEvent(event);
+        return event;
+      };
+      touch('touchstart', 200);
+      expect(touch('touchmove', 120).defaultPrevented).toBe(true);
     });
   });
 });

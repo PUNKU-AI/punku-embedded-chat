@@ -14,9 +14,12 @@
  *   units measure the screen, not the small page.
  * - The window never leaves the visible area. Its header, close X and send
  *   button stay on the screen.
+ * - The keys are the site's own lengths: they do not add the safe areas
+ *   (notch, home indicator). A value can use env(safe-area-inset-*). The
+ *   window gets paddings for the safe areas that its gaps do not clear.
  */
 import { ScaledPage, viewportLength } from "./scaledPage";
-import { visualViewportInset } from "./utils";
+import { safeAreaGap, safeAreaInset, ViewportEdge, visualViewportInset } from "./utils";
 
 export const MOBILE_CHAT_WINDOW_STYLE_KEYS = ["top", "right", "bottom", "left", "width", "height", "maxHeight"] as const;
 export type MobileChatWindowStyleKey = typeof MOBILE_CHAT_WINDOW_STYLE_KEYS[number];
@@ -131,9 +134,15 @@ const VISIBLE_LEFT = "var(--cl-visual-viewport-left, 0px)";
 const VISIBLE_WIDTH = "var(--cl-visual-viewport-width, 100%)";
 const VISIBLE_HEIGHT = "var(--cl-visual-viewport-height, 100%)";
 // The phone defaults: the window starts top_offset below the top of the
-// visible area and keeps 80 px above its bottom for the trigger.
+// visible area and keeps 80 px above its bottom for the trigger, plus the
+// safe area of the home indicator. While the on-screen keyboard is open, the
+// chat window styles set --cl-trigger-room to 0: the window then ends at the
+// keyboard and covers the trigger. Its header has a close button.
 const DEFAULT_TOP_GAP = "var(--cl-top-offset, 0px)";
-const DEFAULT_BOTTOM_GAP = "80px";
+const DEFAULT_BOTTOM_GAP = `var(--cl-trigger-room, ${safeAreaGap("bottom", "80px")})`;
+
+// Padding for the part of the safe area that a gap does not clear.
+const safeAreaBeyond = (edge: ViewportEdge, gap: string) => `max(0px, ${safeAreaInset(edge)} - ${gap})`;
 
 /*
  * The place and size declarations of .cl-chat-window in the phone layout,
@@ -145,6 +154,8 @@ const DEFAULT_BOTTOM_GAP = "80px";
  * - maxHeight defaults to height, as on the swarovski-widget branch.
  * - The window is at most as large as the visible area minus its gap, so no
  *   part of it leaves the screen. Gaps are 0 or more.
+ * - Paddings keep the content out of the safe areas that the gaps do not
+ *   clear. Without the prop, the bottom gap clears the home indicator.
  * - The lengths of the prop are rounded to whole px. 98vh - 120px put the
  *   window top at y 69.81 on a 360 x 740 phone, and Chromium then showed the
  *   page through a 1 px gap above the input. A browser without CSS round()
@@ -181,6 +192,24 @@ export function phoneWindowDeclarations(
       ? `calc(${VISIBLE_WIDTH} - ${fromRight ? right : left})`
       : VISIBLE_WIDTH;
 
+    /*
+     * The window background reaches the gaps. The paddings keep the header,
+     * the input and the messages out of the safe areas (notch, rounded
+     * corners, home indicator) that a gap does not clear. An edge without a
+     * known gap gets no padding. A window placed from the bottom keeps the
+     * whole top inset, as before.
+     */
+    const padding: [string, string][] = [
+      ["padding-top", fromBottom ? safeAreaInset("top") : safeAreaBeyond("top", topGap)],
+    ];
+    if (bottom !== undefined) padding.push(["padding-bottom", safeAreaBeyond("bottom", bottom)]);
+    if (!horizontalGaps) {
+      padding.push(["padding-left", safeAreaInset("left")], ["padding-right", safeAreaInset("right")]);
+    } else {
+      if (left !== undefined) padding.push(["padding-left", safeAreaBeyond("left", left)]);
+      if (right !== undefined) padding.push(["padding-right", safeAreaBeyond("right", right)]);
+    }
+
     return [
       ["top", fromBottom ? "auto" : visualViewportInset("top", topGap)],
       ["left", fromRight ? "auto" : left === undefined ? VISIBLE_LEFT : visualViewportInset("left", left)],
@@ -190,6 +219,7 @@ export function phoneWindowDeclarations(
       ["height", height ?? fillHeight],
       ["max-height", maxHeight === undefined ? fillHeight : `min(${maxHeight}, ${heightRoom})`],
       ["max-width", widthRoom],
+      ...padding,
     ];
   };
   const plain = box((length) => length);

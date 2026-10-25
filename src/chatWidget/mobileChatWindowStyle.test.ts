@@ -1,17 +1,23 @@
 import { phoneWindowDeclarations, phoneWindowStyle, readMobileChatWindowStyle } from './mobileChatWindowStyle';
 import { visualViewportInset } from './utils';
 
-// The phone window box of v1.0.22, before mobile_chat_window_style. Pages
-// without the prop must get exactly these declarations.
+// The phone window box without the prop. Without safe areas and with the
+// keyboard closed, it is the box of v1.0.22: 80 px for the trigger at the
+// bottom, no padding. The window ends at an open keyboard
+// (--cl-trigger-room: 0px) and clears the safe areas.
+const TRIGGER_GAP = 'var(--cl-trigger-room, calc(80px + var(--cl-safe-area-bottom, 0px)))';
 const PHONE_DEFAULTS = [
   'top: calc(var(--cl-visual-viewport-top, 0px) + var(--cl-top-offset, 0px)) !important;',
   'left: var(--cl-visual-viewport-left, 0px) !important;',
   'right: auto !important;',
   'bottom: auto !important;',
   'width: var(--cl-visual-viewport-width, 100%) !important;',
-  'height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;',
-  'max-height: calc(var(--cl-visual-viewport-height, 100%) - 80px - var(--cl-top-offset, 0px)) !important;',
+  `height: calc(var(--cl-visual-viewport-height, 100%) - ${TRIGGER_GAP} - var(--cl-top-offset, 0px)) !important;`,
+  `max-height: calc(var(--cl-visual-viewport-height, 100%) - ${TRIGGER_GAP} - var(--cl-top-offset, 0px)) !important;`,
   'max-width: var(--cl-visual-viewport-width, 100%) !important;',
+  'padding-top: max(0px, var(--cl-safe-area-top, 0px) - var(--cl-top-offset, 0px)) !important;',
+  'padding-left: var(--cl-safe-area-left, 0px) !important;',
+  'padding-right: var(--cl-safe-area-right, 0px) !important;',
 ];
 
 // The phone styles of a live embed (no flow ID, host or texts).
@@ -140,6 +146,11 @@ describe('phoneWindowDeclarations', () => {
       right: 'auto',
       width: 'var(--cl-visual-viewport-width, 100%)',
       'max-width': 'var(--cl-visual-viewport-width, 100%)',
+      // The whole top inset, as before. The 65 px gap clears the home indicator.
+      'padding-top': 'var(--cl-safe-area-top, 0px)',
+      'padding-bottom': 'max(0px, var(--cl-safe-area-bottom, 0px) - round(max(0px, 65px), 1px))',
+      'padding-left': 'var(--cl-safe-area-left, 0px)',
+      'padding-right': 'var(--cl-safe-area-right, 0px)',
     });
   });
 
@@ -203,6 +214,24 @@ describe('phoneWindowDeclarations', () => {
     expect(lines.slice(0, 8).map((line) => line.split(':')[0])).toEqual(
       ['top', 'left', 'right', 'bottom', 'width', 'height', 'max-height', 'max-width']
     );
+  });
+
+  it('pads the safe areas that the gaps of the prop do not clear', () => {
+    const gap = (length: string) => `round(max(0px, ${length}), 1px)`;
+    const box = declarations({ top: '72px', bottom: '65px', left: '8px', right: '8px' });
+    expect(box['padding-top']).toBe(`max(0px, var(--cl-safe-area-top, 0px) - ${gap('72px')})`);
+    expect(box['padding-bottom']).toBe(`max(0px, var(--cl-safe-area-bottom, 0px) - ${gap('65px')})`);
+    expect(box['padding-left']).toBe(`max(0px, var(--cl-safe-area-left, 0px) - ${gap('8px')})`);
+    expect(box['padding-right']).toBe(`max(0px, var(--cl-safe-area-right, 0px) - ${gap('8px')})`);
+  });
+
+  it('pads no edge whose gap it does not know', () => {
+    // The swarovski box: 8 px on the left, the width sets the right edge.
+    // top and height set the bottom edge.
+    const box = declarations({ left: '8px', width: '300px', top: '72px', height: '400px' });
+    expect(box['padding-left']).toBe('max(0px, var(--cl-safe-area-left, 0px) - round(max(0px, 8px), 1px))');
+    expect(box).not.toHaveProperty('padding-right');
+    expect(box).not.toHaveProperty('padding-bottom');
   });
 
   it('keeps negative gaps at 0, so the header stays on the screen', () => {
