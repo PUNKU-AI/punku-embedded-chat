@@ -77,6 +77,19 @@ You can still apply custom styling to themed widgets using the style properties:
 
 Custom styles will be merged with the theme styles, allowing you to override specific properties while keeping the theme's overall look.
 
+### Contrast (WCAG AA)
+
+The `default`, `dark`, `ocean`, `aurora` and `punku-ai-bookingkit` themes meet WCAG AA without your colours: all text reaches 4.5:1 on the colour behind it, and every icon, control and focus mark reaches 3:1. This covers the header, answers and their links and link buttons, visitor bubbles, suggestions, feedback icons, the input field with its placeholder and send button, the AI notice, error messages and the launcher icon, also on hover. `src/chatWidget/themeContrast.test.tsx` measures each pair in the stylesheet. `e2e/theme-contrast.spec.ts` measures the rendered widget in every browser profile.
+
+- The dark themes (`dark`, `ocean`, `aurora`) fill link buttons in their light link colour with dark text. The same colour marks focus. Their mid accents do not reach 3:1 on the dark answer bubble. On your own light answer colour (`bot_message_color`), link buttons take the mid accent with white text, as before.
+- On the dark themes, the send button and the launcher turn lighter on hover. A darker shade would vanish in the dark input field.
+- The focus ring of a link in an answer takes the link colour, which reaches 4.5:1 on the answer bubble.
+- With `button_color`, the subtitle under the title shows `button_text_color` at 85% opacity, as before. Where 85% falls below 4.5:1 on `button_color`, it shows at full opacity.
+- The confirm button of the new-conversation dialog is red `#dc2626` with white text (4.8:1). Without `button_color`, a dark `button_text_color` keeps the lighter red `#ef4444` of earlier versions, where it reads at 4.5:1.
+- The `swarovski` theme keeps the look of the swarovski-widget branch and is not changed.
+
+Your own colours (`button_color`, `bot_message_color`, `send_button_style` and others) replace the theme colours. The widget keeps them where they read and corrects only the controls that would vanish (see [Readable controls on your colours](#color-customization)).
+
 ## Color Customization
 
 The chat widget provides simple color properties for easy customization of the interface:
@@ -665,7 +678,7 @@ The header is one row: the header icon, the title with the online status and "Po
 
 The header icon sits directly on the header, in the colour of the title: the theme's header text colour, or `button_text_color` with `button_color`. Only where that colour would vanish on the header (below 3:1, WCAG 1.4.11), for example a white icon on a white `button_color`, the icon sits on a round plate. The plate is a darker or lighter shade of the header colour, just enough for 3:1. A `header_icon` image never gets a plate.
 
-The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button and the link buttons.
+The default theme uses one blue, `#0969da` (5.2:1 with white text), for the visitor bubbles, the launcher, the send button and the link buttons. The other themes use one colour for the visitor bubbles, the launcher and the send button: `dark` `#5558e8`, `ocean` `#0277b6` (visitor bubbles `#0369a1` to `#0277b6`), `aurora` a violet-to-pink gradient, `punku-ai-bookingkit` `#2563eb`. See [Contrast (WCAG AA)](#contrast-wcag-aa).
 
 The input bar holds a bordered input field with the arrow-up send button inside, and the AI notice under it. See `ai_notice_text` and `show_ai_notice`. The send button is dimmed until the field has text.
 

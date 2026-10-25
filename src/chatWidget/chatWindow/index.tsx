@@ -9,7 +9,7 @@ import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents } from "../scrollContainment";
-import { guardControlColors } from "../controlColors";
+import { guardControlColors, guardDialogConfirm } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import type { StreamTerminal } from "../../controllers";
@@ -893,6 +893,7 @@ export default function ChatWindow({
   // guard keeps every colour that reads and replaces the others
   // (controlColors.ts). The style props are objects, so compare their contents.
   const colorStyles = JSON.stringify([bot_message_style, input_style, input_container_style, send_button_style, send_icon_style, error_message_style]);
+  const dialogConfirm = useMemo(() => guardDialogConfirm(button_text_color), [button_text_color]);
   const guarded = useMemo(() => guardControlColors({
     theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color,
     bot_message_style, background_color, input_style, input_container_style, send_button_style, send_icon_style,
@@ -1264,7 +1265,7 @@ export default function ChatWindow({
           ...(background_color ? {backgroundColor: background_color} : {}),
           // A site's button colour is the accent for link buttons in answers,
           // and its button text colour is the text on them.
-          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {}),
+          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF", "--cl-accent-on-light": button_color} : {}),
           // Readable replacements where a colour would vanish (controlColors.ts).
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
@@ -1307,7 +1308,10 @@ export default function ChatWindow({
             )}
             <div className="cl-header-titles">
               <div className="cl-header-title">{displayTitle}</div>
-              <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
+              <div
+                className="cl-header-subtitle"
+                style={button_color ? {color: button_text_color || '#FFFFFF', ...(guarded.subtitleOpaque ? {opacity: 1} : {})} : undefined}
+              >
                 <span className={online ? "cl-online-message" : "cl-offline-message"} aria-hidden="true"></span>
                 <span className="cl-header-status">
                   {online ? (online_message || statusBranding) : (offline_message || t.offlineMessage)}
@@ -1577,8 +1581,10 @@ export default function ChatWindow({
           message={t.newSessionConfirm}
           confirmText={t.confirmButton}
           cancelText={t.cancelButton}
-          buttonColor={button_color}
-          buttonTextColor={button_text_color}
+          // The swarovski theme keeps the branch's red (#ef4444). Else a
+          // site text colour without button_color gets a red it reads on.
+          buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}
+          buttonTextColor={(!button_color && !branchLook && dialogConfirm.label) || button_text_color}
         />
 
         <style>{`
@@ -1606,7 +1612,8 @@ export default function ChatWindow({
             width: 16px;
             height: 16px;
             border: 2px solid #e5e7eb;
-            border-top: 2px solid var(--cl-accent, #0969da);
+            /* The accent for light surfaces: the dark themes' --cl-accent is light. */
+            border-top: 2px solid var(--cl-accent-on-light, #0969da);
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }

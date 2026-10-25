@@ -54,7 +54,7 @@ export default function ConfirmationModal({
             onClick={onConfirm}
             className="cl-modal-btn cl-modal-btn-confirm"
             style={{
-              backgroundColor: buttonColor || '#ef4444',
+              ...(buttonColor ? { backgroundColor: buttonColor } : {}),
               color: buttonTextColor || 'white'
             }}
           >
@@ -166,13 +166,14 @@ export default function ConfirmationModal({
           border-color: #9ca3af;
         }
 
+        /* White text reads at 4.8:1 on #dc2626 (WCAG 1.4.3). */
         .cl-modal-btn-confirm {
-          background-color: #ef4444;
+          background-color: #dc2626;
           color: white;
         }
 
         .cl-modal-btn-confirm:hover {
-          background-color: #dc2626;
+          background-color: #b91c1c;
         }
       `}</style>
     </div>

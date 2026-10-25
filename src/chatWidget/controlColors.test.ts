@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
-  BOUNDARY_MIN, guardControlColors, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN, TEXT_MIN,
-  THEME_COLORS, ThemeName,
+  BOUNDARY_MIN, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN,
+  TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -306,6 +306,74 @@ describe('guardHintColors', () => {
 
 // The header icon sits on the header without a plate. It gets a plate only
 // where its colour would vanish on the header (WCAG 1.4.11, 3:1).
+describe('guardDialogConfirm', () => {
+  it('keeps the stylesheet red #dc2626 for white text', () => {
+    expect(guardDialogConfirm()).toEqual({});
+    expect(guardDialogConfirm('#FFFFFF')).toEqual({});
+    expect(ratio('#ffffff', '#dc2626')).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('keeps the lighter red #ef4444 for a dark site text that reads on it', () => {
+    // A saved customer sets button_text_color #1C1C1C without button_color:
+    // 4.5:1 on #ef4444 (v1.0.24), but below that on #dc2626.
+    expect(ratio('#1c1c1c', '#dc2626')).toBeLessThan(TEXT_MIN);
+    expect(guardDialogConfirm('#1C1C1C')).toEqual({ fill: '#ef4444' });
+    expect(ratio('#1c1c1c', '#ef4444')).toBeGreaterThanOrEqual(TEXT_MIN);
+  });
+
+  it('gives a text that reads on neither red white or black', () => {
+    expect(guardDialogConfirm('#888888')).toEqual({ label: '#ffffff' });
+  });
+
+  it('reads white and black by name', () => {
+    expect(guardDialogConfirm('white')).toEqual({});
+    // Black reads at 5.6:1 on #ef4444 (v1.0.24), at 4.35:1 on #dc2626.
+    expect(ratio('#000000', '#dc2626')).toBeLessThan(TEXT_MIN);
+    expect(guardDialogConfirm('Black')).toEqual({ fill: '#ef4444' });
+  });
+
+  it('keeps the red of v1.0.24 for a text colour it cannot read', () => {
+    expect(guardDialogConfirm('navy')).toEqual({ fill: '#ef4444' });
+    expect(guardDialogConfirm('hsl(0 0% 10%)')).toEqual({ fill: '#ef4444' });
+  });
+});
+
+describe('dark themes on a light site bubble', () => {
+  // The dark themes fill link buttons in their light link colour, which
+  // vanishes on a white bubble. Their mid accent with white text reads there,
+  // as on v1.0.24.
+  it.each([['dark', '#5558e8'], ['ocean', '#0369a1'], ['aurora', '#7c3aed']] as const)(
+    'gives a %s link button its mid accent %s with white text', (theme, accent) => {
+      const { colors, pairs } = guardControlColors({ theme, bot_message_color: '#ffffff' });
+      expect(colors).toMatchObject({ linkButtonFill: accent, linkButtonLabel: '#ffffff' });
+      expect(pairs.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
+    },
+  );
+});
+
+describe('header subtitle with button_color', () => {
+  it.each([
+    // 85% of the site's text colour reads at 4.5:1: the subtitle keeps it.
+    ['white on dark red', '#9e183b', '#ffffff', undefined],
+    ['white on slate', '#2E3440', undefined, undefined],
+    ['black on orange', '#ff8000', '#000000', undefined],
+    // 85% white on a mid green falls below 4.5:1: full opacity reads better.
+    ['white on mid green', '#3F9B47', '#FFFFFF', true],
+  ])('%s', (_case, button_color, button_text_color, opaque) => {
+    expect(guardControlColors({ button_color, button_text_color }).colors.subtitleOpaque).toBe(opaque);
+  });
+
+  it('keeps the 85% subtitle of the swarovski theme', () => {
+    expect(guardControlColors({ theme: 'swarovski', button_color: '#3F9B47' }).colors.subtitleOpaque).toBeUndefined();
+  });
+
+  it('leaves the theme headers to the stylesheet', () => {
+    for (const theme of Object.keys(THEME_COLORS)) {
+      expect(guardControlColors({ theme }).colors.subtitleOpaque).toBeUndefined();
+    }
+  });
+});
+
 describe('header icon plate', () => {
   const headerIcon = (props: Parameters<typeof guardControlColors>[0]) => {
     const { colors, pairs } = guardControlColors(props);
