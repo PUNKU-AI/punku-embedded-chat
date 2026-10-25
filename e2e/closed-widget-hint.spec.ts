@@ -201,7 +201,7 @@ test('desktop-first hidden embed does not consume the phone hint', async ({ page
   expect((await states(page))[0].hintVisible).toBe(false);
 });
 
-async function resizeHintFixture(page: Page, viewport: { width: number; height: number }) {
+async function resizeHintFixture(page: Page, viewport: { width: number; height: number }, webkitMobile: boolean) {
   await page.setViewportSize(viewport);
   // Mobile WebKit emulation can retain its device width after a viewport resize.
   // Keep the fixture's CSS viewport explicit without remounting either widget.
@@ -216,25 +216,36 @@ async function resizeHintFixture(page: Page, viewport: { width: number; height: 
   // innerHeight). Linux WebKit mobile emulation in CI can keep the old visible
   // area after setViewportSize: the desktop trigger at x 1212 then seemed off
   // a 390 px screen (release v1.0.23, iphone). False: the area kept its size.
-  return page.waitForFunction(({ width, height }) => window.innerWidth === width && window.innerHeight === height,
+  const resized = await page.waitForFunction(({ width, height }) => window.innerWidth === width && window.innerHeight === height,
     viewport, { timeout: 3000 }).then(() => true, () => false);
+  // Linux WebKit mobile emulation fires its resize event before it lays the
+  // page out for the new meta viewport, and none after. Back at 1280 px, the
+  // widget's last read was the 390 px layout on the 1280 px screen, a page
+  // scaled up 3.28 times, so it framed the page (scaledPage.ts) and drew the
+  // desktop trigger at a third of its size below the screen (iphone and
+  // phone-landscape in CI, about 4 in 5 runs in the CI image). A browser fires
+  // resize once the layout viewport has its new size: send that event now.
+  // Other engines fire it themselves and get no extra event.
+  if (resized && webkitMobile) await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  return resized;
 }
 
 test('responsive switch does not repeat a consumed hint', async ({ page, browserName, isMobile }) => {
   // Only WebKit mobile emulation may keep the old visible area. On every other
   // engine an old visible area is a failure, so an off-screen trigger still fails.
+  const webkitMobile = browserName === 'webkit' && !!isMobile;
   const expectVisibleAreaResized = (resized: boolean) => {
-    test.skip(!resized && browserName === 'webkit' && !!isMobile,
+    test.skip(!resized && webkitMobile,
       'WebKit mobile emulation kept the old visible area after setViewportSize (Linux CI), so the triggers cannot be measured against the screen.');
     expect(resized, 'innerWidth and innerHeight have the new size').toBe(true);
   };
   await page.setViewportSize({ width: 1280, height: 720 });
   await loadHints(page, { scene: 'responsive-mobile-first' });
   await expectVisible(page, 1);
-  expectVisibleAreaResized(await resizeHintFixture(page, { width: 390, height: 844 }));
+  expectVisibleAreaResized(await resizeHintFixture(page, { width: 390, height: 844 }, webkitMobile));
   await expect.poll(async () => (await states(page))[0].triggerVisible).toBe(true);
   await expect.poll(async () => (await states(page)).some((state) => state.hintVisible)).toBe(false);
-  expectVisibleAreaResized(await resizeHintFixture(page, { width: 1280, height: 720 }));
+  expectVisibleAreaResized(await resizeHintFixture(page, { width: 1280, height: 720 }, webkitMobile));
   await expect.poll(async () => (await states(page))[1].triggerVisible).toBe(true);
   // The desktop exposure already owns its timer. Returning does not create another exposure.
   expect((await states(page))[0].opacity).toBe(0);
