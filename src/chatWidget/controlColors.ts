@@ -49,6 +49,11 @@ type ThemeColors = {
   window: string | null;
   accent: string;
   onAccent: string;
+  /**
+   * The dark themes: their mid accent, with white text, for a fill on a
+   * light site colour (--cl-accent-on-light). Their accent is light.
+   */
+  accentOnLight?: string;
   link: string;
   send: string | null;
   sendIcon: string;
@@ -111,6 +116,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     // Link buttons in the light link colour with dark text.
     accent: "#a5b4fc",
     onAccent: "#1e1b4b",
+    accentOnLight: "#5558e8",
     link: "#a5b4fc",
     send: "#5558e8",
     sendIcon: "#ffffff",
@@ -132,6 +138,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     window: "#0f172a",
     accent: "#7dd3fc",
     onAccent: "#082f49",
+    accentOnLight: "#0369a1",
     link: "#7dd3fc",
     send: "#0277b6",
     sendIcon: "#ffffff",
@@ -153,6 +160,7 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     window: "#2e1065",
     accent: "#f0abfc",
     onAccent: "#3b0764",
+    accentOnLight: "#7c3aed",
     link: "#f0abfc",
     // A gradient (#7c3aed to #db2777).
     send: null,
@@ -204,6 +212,11 @@ export type GuardedColors = {
   noticeInk?: string;
   /** A plate behind the header icon, only where the icon would vanish on the header. */
   headerIconPlate?: string;
+  /**
+   * With button_color: the subtitle shows button_text_color at full opacity,
+   * only where the stylesheet's 85% would fall below 4.5:1 on the header.
+   */
+  subtitleOpaque?: boolean;
 };
 
 /** One measured pair: a control's colour and the colour behind it. */
@@ -357,19 +370,26 @@ function surfaces(props: ControlColorProps) {
   return { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk };
 }
 
+/** The opacity of a subtitle in a site's button_text_color (.cl-header-subtitle). */
+const SUBTITLE_OPACITY = 0.85;
+
 /** The red of the confirm button in the new-conversation dialog (ConfirmationModal). */
 const DIALOG_REDS = ["#dc2626", "#ef4444"];
+/** Colour names that a site may give as button_text_color. */
+const DIALOG_NAMES: Record<string, string> = { white: "#ffffff", black: "#000000" };
 
 /**
  * The confirm button of the new-conversation dialog without button_color: its
  * text (button_text_color, else white) on the dialog red (4.5:1). White reads
  * on the stylesheet red #dc2626. A dark site text reads on the lighter #ef4444
  * of v1.0.24 and keeps it. A text that reads on neither red turns white or
- * black. Returns only the colours that change.
+ * black. A colour the widget cannot read (a name other than white or black,
+ * hsl()) keeps the #ef4444 of v1.0.24. Returns only the colours that change.
  */
 export function guardDialogConfirm(text?: string): { fill?: string; label?: string } {
-  const label = parseColor(text || "#ffffff");
-  if (!label) return {};
+  const value = (text || "#ffffff").trim();
+  const label = parseColor(DIALOG_NAMES[value.toLowerCase()] || value);
+  if (!label) return { fill: DIALOG_REDS[1] };
   for (const red of DIALOG_REDS) {
     const fill = resolve(red, null)!;
     if (contrast(paintOver(label.rgb, label.alpha, fill), fill) >= TEXT_MIN) {
@@ -460,6 +480,12 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     colors.linksTakeTextColor = !ownLink;
   }
 
+  // A theme colour that fails on a surface falls back to the theme's link
+  // colour, else (dark themes on a light site colour) its mid accent.
+  const themeFallback = (surface: Rgb) => [theme.link, theme.accentOnLight]
+    .map((color) => resolve(color, surface))
+    .find((color): color is Rgb => !!color && contrast(color, surface) >= BOUNDARY_MIN) ?? null;
+
   // Filled link buttons on the answer bubble. A colour that the widget cannot
   // read (a gradient, a colour name) leaves the button as it is.
   const ownAccent = resolve(props.button_color, bubble);
@@ -469,7 +495,7 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     const guarded = guardFilled({
       fill: accent, label: accentLabel.rgb, labelAlpha: accentLabel.alpha, surface: bubble, labelMin: TEXT_MIN,
       own: !!props.button_color, linkColor: link && ownLink ? link : null,
-      themeFallback: resolve(theme.link, bubble),
+      themeFallback: themeFallback(bubble),
     });
     const fillChanged = !same(guarded.fill, accent);
     if (fillChanged) colors.linkButtonFill = toHex(guarded.fill);
@@ -519,7 +545,7 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     const guarded = guardFilled({
       fill: sendFill, label: sendIcon.rgb, labelAlpha: sendIcon.alpha, surface: field, labelMin: ICON_MIN,
       own: !!(sendStyle || props.button_color),
-      linkColor: ownLink && resolve(props.link_color, field), themeFallback: resolve(theme.link, field),
+      linkColor: ownLink && resolve(props.link_color, field), themeFallback: themeFallback(field),
     });
     const fillChanged = !same(guarded.fill, sendFill);
     if (fillChanged) colors.sendFill = toHex(guarded.fill);
@@ -568,6 +594,15 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
       }
     }
     measure("header icon", inkOn(backdrop), backdrop, ICON_MIN);
+
+    // The subtitle shows button_text_color at 85% (the stylesheet). Where
+    // that falls below 4.5:1, it shows at full opacity. The swarovski theme
+    // keeps the branch's 85%.
+    const header = headers[0];
+    const subtitle = paintOver(headerInk.rgb, headerInk.alpha * SUBTITLE_OPACITY, header);
+    if (props.button_color && props.theme !== "swarovski" && contrast(subtitle, header) < TEXT_MIN) {
+      colors.subtitleOpaque = true;
+    }
   }
 
   return { colors, pairs };

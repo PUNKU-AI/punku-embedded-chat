@@ -2632,8 +2632,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   text-overflow: ellipsis;
 }
 
-/* The subtitle shows in its own colour, without the old 85% opacity, so it
-   reads at 4.5:1 on the header. */
 .cl-window .cl-header-subtitle {
   display: flex;
   align-items: flex-start;
@@ -2643,6 +2641,12 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   font-size: 12.5px;
   font-weight: 400;
   line-height: 1.3;
+}
+
+/* A theme subtitle shows in its own colour, without the old 85% opacity, so
+   it reads at 4.5:1 on the header. A site's button_text_color keeps 85%
+   unless that falls below 4.5:1 (controlColors.ts, then inline opacity 1). */
+.cl-window .cl-header:not(.cl-header--colored) .cl-header-subtitle {
   opacity: 1;
 }
 
@@ -2859,11 +2863,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
    (THEME_COLORS in controlColors.ts) repeats these values: change both
    together. The dark themes fill link buttons in their light link colour
    with dark text: their mid accents do not reach 3:1 on the dark answer
-   bubble. */
+   bubble. --cl-accent-on-light keeps the mid accent (white text reads on
+   it) for light surfaces. */
 .cl-window {
   --cl-accent: #2563eb;
   --cl-accent-hover: #1d4ed8;
   --cl-on-accent: #ffffff;
+  /* The accent on light surfaces, for example the session refresh card. */
+  --cl-accent-on-light: var(--cl-accent);
   --cl-link: #1d4ed8;
   --cl-hover: rgba(15, 23, 42, 0.06);
   --cl-bot-line: transparent;
@@ -2880,6 +2887,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   --cl-accent: #a5b4fc;
   --cl-accent-hover: #c7d2fe;
   --cl-on-accent: #1e1b4b;
+  --cl-accent-on-light: #5558e8;
   --cl-link: #a5b4fc;
   --cl-hover: rgba(255, 255, 255, 0.08);
   --cl-bot-line: #2d3a4d;
@@ -2889,6 +2897,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   --cl-accent: #7dd3fc;
   --cl-accent-hover: #bae6fd;
   --cl-on-accent: #082f49;
+  --cl-accent-on-light: #0369a1;
   --cl-link: #7dd3fc;
   --cl-hover: rgba(255, 255, 255, 0.08);
   --cl-bot-line: #2a3a52;
@@ -2898,6 +2907,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   --cl-accent: #f0abfc;
   --cl-accent-hover: #f5d0fe;
   --cl-on-accent: #3b0764;
+  --cl-accent-on-light: #7c3aed;
   --cl-link: #f0abfc;
   --cl-hover: rgba(255, 255, 255, 0.1);
   --cl-bot-line: rgba(109, 40, 217, 0.6);
@@ -2935,6 +2945,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window .cl-bot_message .markdown-body a:hover {
   text-decoration-color: currentColor !important;
+}
+
+/* The focus ring of a link takes the link colour, which reads at 4.5:1 on
+   the answer bubble (the theme's colour, or a site colour the contrast guard
+   checked). The markdown default follows the system colour scheme, not the
+   widget theme. Link buttons have their own ring below. */
+.cl-window .cl-bot_message .markdown-body a:focus-visible {
+  outline-color: currentColor;
 }
 
 /* A link on its own line is an action, so it renders as a button: filled
@@ -3033,7 +3051,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* The header subtitle keeps the branch's 85% opacity. */
-.cl-window.theme-swarovski .cl-header-subtitle {
+.cl-window.theme-swarovski .cl-header .cl-header-subtitle {
   opacity: 0.85;
 }
 

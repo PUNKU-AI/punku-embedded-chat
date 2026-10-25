@@ -81,8 +81,11 @@ Custom styles will be merged with the theme styles, allowing you to override spe
 
 The `default`, `dark`, `ocean`, `aurora` and `punku-ai-bookingkit` themes meet WCAG AA without your colours: all text reaches 4.5:1 on the colour behind it, and every icon, control and focus mark reaches 3:1. This covers the header, answers and their links and link buttons, visitor bubbles, suggestions, feedback icons, the input field with its placeholder and send button, the AI notice, error messages and the launcher icon, also on hover. `src/chatWidget/themeContrast.test.tsx` measures each pair in the stylesheet. `e2e/theme-contrast.spec.ts` measures the rendered widget in every browser profile.
 
-- The dark themes (`dark`, `ocean`, `aurora`) fill link buttons in their light link colour with dark text. The same colour marks focus. Their mid accents do not reach 3:1 on the dark answer bubble.
+- The dark themes (`dark`, `ocean`, `aurora`) fill link buttons in their light link colour with dark text. The same colour marks focus. Their mid accents do not reach 3:1 on the dark answer bubble. On your own light answer colour (`bot_message_color`), link buttons take the mid accent with white text, as before.
 - On the dark themes, the send button and the launcher turn lighter on hover. A darker shade would vanish in the dark input field.
+- The focus ring of a link in an answer takes the link colour, which reaches 4.5:1 on the answer bubble.
+- With `button_color`, the subtitle under the title shows `button_text_color` at 85% opacity, as before. Where 85% falls below 4.5:1 on `button_color`, it shows at full opacity.
+- The confirm button of the new-conversation dialog is red `#dc2626` with white text (4.8:1). Without `button_color`, a dark `button_text_color` keeps the lighter red `#ef4444` of earlier versions, where it reads at 4.5:1.
 - The `swarovski` theme keeps the look of the swarovski-widget branch and is not changed.
 
 Your own colours (`button_color`, `bot_message_color`, `send_button_style` and others) replace the theme colours. The widget keeps them where they read and corrects only the controls that would vanish (see [Readable controls on your colours](#color-customization)).

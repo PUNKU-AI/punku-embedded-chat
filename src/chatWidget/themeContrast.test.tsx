@@ -97,8 +97,10 @@ function palette(theme: ThemeName) {
   const field = onTop(paints(theme, token(theme, '--cl-field')), bar);
   const bubble = onTop(of('.cl-bot_message', 'background', '.cl-bot_message', 'background-color'), listRgb);
   const header = onTop(of('.cl-header', 'background', '.cl-header', 'background-color'), [[255, 255, 255]]);
+  // The theme subtitle (a header without button_color), on top of the base 85%.
   const opacity = Number(declared(
-    [`.cl-window.theme-${theme} .cl-header-subtitle`, 'opacity'], ['.cl-window .cl-header-subtitle', 'opacity'],
+    [`.cl-window.theme-${theme} .cl-header .cl-header-subtitle`, 'opacity'],
+    ['.cl-window .cl-header:not(.cl-header--colored) .cl-header-subtitle', 'opacity'],
     ['.cl-header-subtitle', 'opacity'],
   ) ?? 1);
   const subtitle = of('.cl-header-subtitle', 'color').map((paint) => ({ ...paint, alpha: paint.alpha * opacity }));
@@ -119,6 +121,14 @@ function palette(theme: ThemeName) {
       background: bubble, minimum: TEXT_MIN,
     },
     { what: 'link in an answer', foreground: color('--cl-link'), background: bubble, minimum: TEXT_MIN },
+    // The focus ring of a link takes the link colour (currentColor). Without
+    // that rule, it takes the markdown default: #0969da on a light system.
+    {
+      what: 'focus ring of a link in an answer',
+      foreground: declared(['.cl-window .cl-bot_message .markdown-body a:focus-visible', 'outline-color']) === 'currentColor'
+        ? color('--cl-link') : paints(theme, '#0969da'),
+      background: bubble, minimum: BOUNDARY_MIN,
+    },
     { what: 'outlined link button', foreground: color('--cl-link'), background: bubble, minimum: BOUNDARY_MIN },
     { what: 'filled link button and focus mark', foreground: color('--cl-accent'), background: bubble, minimum: BOUNDARY_MIN },
     { what: 'filled link button on hover', foreground: color('--cl-accent-hover'), background: bubble, minimum: BOUNDARY_MIN },
@@ -157,6 +167,11 @@ function palette(theme: ThemeName) {
       background: errorBg, minimum: TEXT_MIN,
     },
   ];
+  // The session refresh card: the arc on the grey track and the light card (chatWindow).
+  pairs.push({
+    what: 'session refresh spinner arc', foreground: color('--cl-accent-on-light'),
+    background: [[229, 231, 235], [243, 244, 246]], minimum: BOUNDARY_MIN,
+  });
   return { list: listRgb, bar, field, bubble, header, send, pairs };
 }
 
@@ -201,6 +216,8 @@ describe('built-in theme contrast (WCAG AA)', () => {
       const { list, bar, bubble, header, send } = palette(theme);
       expect(colors.accent).toBe(token(theme, '--cl-accent'));
       expect(colors.onAccent).toBe(token(theme, '--cl-on-accent'));
+      // The dark themes keep their mid accent for light surfaces; the others use the accent.
+      expect(toHex(paints(theme, token(theme, '--cl-accent-on-light'))[0].rgb)).toBe(colors.accentOnLight ?? colors.accent);
       expect(colors.link).toBe(token(theme, '--cl-link'));
       expect(colors.muted).toBe(token(theme, '--cl-muted'));
       expect(colors.field).toBe(token(theme, '--cl-field'));
@@ -231,6 +248,6 @@ describe('built-in theme contrast (WCAG AA)', () => {
     });
     const backgrounds = Object.fromEntries(pairs.map((pair) => [pair.what, worst(pair).background]));
     expect(backgrounds).toMatchObject({ 'visitor text': '#3b82f6', 'answer text': '#e5e7eb', 'header title and icons': '#1a1a1a' });
-    expect(declared(['.cl-window.theme-swarovski .cl-header-subtitle', 'opacity'])).toBe('0.85');
+    expect(declared(['.cl-window.theme-swarovski .cl-header .cl-header-subtitle', 'opacity'])).toBe('0.85');
   });
 });

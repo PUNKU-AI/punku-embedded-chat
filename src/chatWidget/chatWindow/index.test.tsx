@@ -2259,6 +2259,26 @@ describe('ChatWindow', () => {
 
     const avatar = () => document.querySelector('.cl-header-avatar') as HTMLElement;
 
+    it.each([
+      // 85% white on dark red still reads at 4.5:1: the site colour stays as on v1.0.24.
+      ['#9e183b', '#ffffff', ''],
+      // 85% white on a mid green does not: the subtitle shows at full opacity.
+      ['#3F9B47', '#FFFFFF', '1'],
+    ])('shows the subtitle on a %s header at full opacity only where 85%% fails', (button_color, button_text_color, opacity) => {
+      renderHeader({ button_color, button_text_color });
+
+      const subtitle = document.querySelector('.cl-header-subtitle') as HTMLElement;
+      expect(subtitle.style.color).not.toBe('');
+      expect(subtitle.style.opacity).toBe(opacity);
+    });
+
+    it('draws the session refresh arc in the accent for light surfaces', () => {
+      renderHeader({ theme: 'ocean', isRefreshingSession: true });
+
+      const styles = Array.from(document.querySelectorAll('style')).map((style) => style.textContent || '').join('\n');
+      expect(styles).toMatch(/\.cl-refresh-spinner \{[^}]*border-top: 2px solid var\(--cl-accent-on-light, #0969da\);/);
+    });
+
     it.each(themeHeaderColors)('uses the %s theme header colour without custom colours', (theme, color) => {
       renderHeader({ theme });
 

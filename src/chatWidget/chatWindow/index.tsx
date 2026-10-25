@@ -1265,7 +1265,7 @@ export default function ChatWindow({
           ...(background_color ? {backgroundColor: background_color} : {}),
           // A site's button colour is the accent for link buttons in answers,
           // and its button text colour is the text on them.
-          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF"} : {}),
+          ...(button_color ? {"--cl-accent": button_color, "--cl-accent-hover": button_color, "--cl-on-accent": button_text_color || "#FFFFFF", "--cl-accent-on-light": button_color} : {}),
           // Readable replacements where a colour would vanish (controlColors.ts).
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
@@ -1308,7 +1308,10 @@ export default function ChatWindow({
             )}
             <div className="cl-header-titles">
               <div className="cl-header-title">{displayTitle}</div>
-              <div className="cl-header-subtitle" style={button_color ? {color: button_text_color || '#FFFFFF'} : undefined}>
+              <div
+                className="cl-header-subtitle"
+                style={button_color ? {color: button_text_color || '#FFFFFF', ...(guarded.subtitleOpaque ? {opacity: 1} : {})} : undefined}
+              >
                 <span className={online ? "cl-online-message" : "cl-offline-message"} aria-hidden="true"></span>
                 <span className="cl-header-status">
                   {online ? (online_message || statusBranding) : (offline_message || t.offlineMessage)}
@@ -1609,7 +1612,8 @@ export default function ChatWindow({
             width: 16px;
             height: 16px;
             border: 2px solid #e5e7eb;
-            border-top: 2px solid var(--cl-accent, #0969da);
+            /* The accent for light surfaces: the dark themes' --cl-accent is light. */
+            border-top: 2px solid var(--cl-accent-on-light, #0969da);
             border-radius: 50%;
             animation: spin 1s linear infinite;
           }
