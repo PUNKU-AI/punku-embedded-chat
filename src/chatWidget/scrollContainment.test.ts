@@ -74,6 +74,8 @@ describe('keepTouchScrollInside', () => {
     expect(drag(title, [[0, -80]])).toEqual([true]);
     expect(drag(title, [[80, 0]])).toEqual([true]);
     expect(drag(title, [[5, -3], [12, -40], [20, -90]])).toEqual([false, true, true]);
+    // Straight sideways: nothing on the header scrolls either way up or down.
+    expect(drag(title, [[7, 0]])).toEqual([true]);
   });
 
   it('lets the message list scroll in both directions from the middle', () => {
@@ -111,11 +113,33 @@ describe('keepTouchScrollInside', () => {
     expect(drag(answer, [[2, -1], [7, -3], [12, -60]])).toEqual([false, true, true]);
   });
 
-  it('decides once per touch: a list scroll is not cancelled when the finger turns', () => {
+  it('decides once per touch, also when the finger turns', () => {
     const { chatWindow, list } = setup();
-    list.scrollTop = 300;
     const answer = chatWindow.querySelector('.list p')!;
-    expect(drag(answer, [[0, -80], [0, -10], [0, 40]])).toEqual([false, false, false]);
+    // At the top, a finger that moves up scrolls the list. It turns and ends
+    // below its start, which alone would be cancelled: the touch keeps scrolling.
+    list.scrollTop = 0;
+    expect(drag(answer, [[0, -80], [0, 40]])).toEqual([false, false]);
+    // A finger that moves down at the top is cancelled, also after it turns up.
+    expect(drag(answer, [[0, 40], [0, -80]])).toEqual([true, true]);
+  });
+
+  it('waits for the vertical direction when a touch starts straight sideways', () => {
+    // The list at its end, as after an answer. The thumb moves 7 px sideways,
+    // then down to read older messages: the list must scroll.
+    const { chatWindow, list } = setup();
+    const answer = chatWindow.querySelector('.list p')!;
+    list.scrollTop = 600;
+    expect(drag(answer, [[7, 0], [7, 40]])).toEqual([false, false]);
+    expect(drag(answer, [[3, 0], [8, -1], [11, 25], [13, 90]])).toEqual([false, false, false, false]);
+    // Up at the end scrolls nothing: cancelled once the direction is known.
+    expect(drag(answer, [[4, 1], [8, 1], [10, -30], [11, -90]])).toEqual([false, false, true, true]);
+    // A drag that stays sideways is decided at 10 px.
+    expect(drag(answer, [[7, 0], [12, 1], [20, 1]])).toEqual([false, false, false]);
+    expect(drag(answer, [[7, 0], [12, 0], [20, 0]])).toEqual([false, true, true]);
+    // In the middle, both vertical directions scroll: decided at once.
+    list.scrollTop = 300;
+    expect(drag(answer, [[7, 0], [7, 40]])).toEqual([false, false]);
   });
 
   it('cancels a drag on a field whose text fits, so the page behind stays', () => {

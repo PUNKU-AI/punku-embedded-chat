@@ -24,6 +24,10 @@ const SCROLLS = /auto|scroll|overlay/;
 // A finger moves this far before the browser starts to scroll. Moves inside
 // it stay with the browser, and the first move past it decides the gesture.
 const DIRECTION_SLOP = 6;
+// Below this vertical movement, the finger's vertical direction is not known
+// yet. The gesture is decided at the latest when it has moved DECIDE_BY px.
+const VERTICAL_SLOP = 3;
+const DECIDE_BY = 10;
 
 /*
  * True if the touched element, an ancestor up to `boundary`, or `boundary`
@@ -60,6 +64,11 @@ function touchCanScroll(target: EventTarget | null, boundary: HTMLElement, dx: n
  * scrolling for the rest of the touch, so a single sideways sample at the
  * start of a flick must not decide it. The gesture scrolls if either axis of
  * the movement can scroll something. Else every move of it is cancelled.
+ * While the finger has moved less than VERTICAL_SLOP up or down, both
+ * vertical directions are checked: if they agree (nothing scrolls on the
+ * header, the list scrolls both ways in its middle), the gesture is decided.
+ * Else (the list at its end) it waits, without a cancel, until the vertical
+ * direction is known or the finger has moved DECIDE_BY px.
  *
  * Returns the cleanup function, so it can be returned from a `useEffect`.
  */
@@ -78,8 +87,15 @@ export function keepTouchScrollInside(element: HTMLElement | null): () => void {
     if (scrolls === null) {
       const dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < DIRECTION_SLOP) return;
-      scrolls = touchCanScroll(event.target, element, dx, dy);
+      const moved = Math.max(Math.abs(dx), Math.abs(dy));
+      if (moved < DIRECTION_SLOP) return;
+      if (Math.abs(dy) < VERTICAL_SLOP && moved < DECIDE_BY) {
+        const down = touchCanScroll(event.target, element, dx, 1);
+        if (down !== touchCanScroll(event.target, element, dx, -1)) return;
+        scrolls = down;
+      } else {
+        scrolls = touchCanScroll(event.target, element, dx, dy);
+      }
     }
     if (!scrolls && event.cancelable) event.preventDefault();
   };
