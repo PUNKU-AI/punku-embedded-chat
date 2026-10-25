@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import ChatMessage, { isLinkOnly, isLinkOnlyListItem } from './index';
+import ChatMessage, { isCheckoutLinkOnly, isLinkOnly, isLinkOnlyListItem } from './index';
 
 // Real markdown rendering: a link that stands alone in a paragraph or a list
 // item gets the cl-link-only class, so the stylesheet draws it as a button.
@@ -63,6 +63,65 @@ describe('link buttons in answers', () => {
   });
 });
 
+// The agent writes checkout links as **[Book now](url)**, bold outside the
+// link (p > strong > a), and about one answer in ten puts an emoji next to it.
+describe('checkout links in the agent format', () => {
+  const checkout = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
+  const linkOnlyParagraph = (message: string, linkButtons = true) => {
+    render(<ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons} />);
+    const link = document.querySelector<HTMLAnchorElement>('.markdown-body a')!;
+    expect(link).toHaveAttribute('href', checkout);
+    return link.closest('p')!.classList.contains('cl-link-only');
+  };
+
+  it.each([
+    ['a plain link', `[Book now](${checkout})`],
+    ['bold around the link', `**[Book now](${checkout})**`],
+    ['italics around the link', `*[Book now](${checkout})*`],
+    ['bold inside the link', `[**Book now**](${checkout})`],
+    ['an emoji before the bold link', `👉 **[Book now](${checkout})**`],
+    ['emoji after the bold link', `**[Book now](${checkout})** 🚀✨`],
+    ['an emoji inside the bold', `**👉 [Book now](${checkout})**`],
+    ['an emoji with a variation selector', `[Book now](${checkout}) 🎟️`],
+    ['an arrow and a skin tone', `➡️ **[Book now](${checkout})** 👍🏽`],
+  ])('makes a button of %s', (_, message) => {
+    expect(linkOnlyParagraph(message)).toBe(true);
+  });
+
+  it.each([
+    ['text before the link', `You can book here: **[Book now](${checkout})**`],
+    ['text after the link', `**[Book now](${checkout})** (€26.00 total for 2 adults).`],
+    ['text inside the bold', `**Book here: [Book now](${checkout})**`],
+    ['two links', `**[Book now](${checkout})** **[Gift card](${checkout})**`],
+  ])('keeps a link inline with %s', (_, message) => {
+    expect(linkOnlyParagraph(message)).toBe(false);
+  });
+
+  it('keeps a bold link that is not a checkout link as a bold text link', () => {
+    renderAnswer('**[Opening hours](https://example.com/hours)**\n\n👉 [Prices](https://example.com/prices)\n\n'
+      + '**[Book now](https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef)**');
+
+    expect(document.querySelectorAll('.markdown-body a')).toHaveLength(3);
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+    expect(document.querySelector('.markdown-body strong > a')).toHaveTextContent('Opening hours');
+  });
+
+  it('marks list items that hold a bold checkout link, also in a loose list', () => {
+    renderAnswer(`- **[Book Saturday](${checkout})**\n- 👉 *[Book Sunday](${checkout})*\n\n`
+      + `More dates:\n\n- **[Book Monday](${checkout})** 🎟️\n\n- **[Book Tuesday](${checkout})**`);
+
+    const items = Array.from(document.querySelectorAll('.markdown-body li'));
+    expect(items).toHaveLength(4);
+    items.forEach((item) => expect(item).toHaveClass('cl-link-only'));
+    expect(items[2].querySelector('p > strong > a')).not.toBeNull();
+  });
+
+  it('keeps text links for the swarovski theme', () => {
+    expect(linkOnlyParagraph(`👉 **[Book now](${checkout})**`, false)).toBe(false);
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+});
+
 describe('text links only (linkButtons false, the swarovski theme)', () => {
   it('marks no paragraph or list item, also for a bold link and a loose list', () => {
     render(
@@ -113,5 +172,28 @@ describe('isLinkOnlyListItem', () => {
   it('rejects a paragraph with text next to the link, and two paragraphs', () => {
     expect(isLinkOnlyListItem({ type: 'element', tagName: 'li', children: [paragraph(text('See '), link)] })).toBe(false);
     expect(isLinkOnlyListItem({ type: 'element', tagName: 'li', children: [paragraph(link), paragraph(link)] })).toBe(false);
+  });
+});
+
+describe('isCheckoutLinkOnly', () => {
+  const checkout = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat';
+  const text = (value: string) => ({ type: 'text', value });
+  const link = (href: unknown) => ({ type: 'element', tagName: 'a', properties: { href }, children: [text('Book')] });
+  const wrap = (tagName: string, ...children: object[]) => ({ type: 'element', tagName, children });
+
+  it('accepts a checkout link in one strong or em, between emoji', () => {
+    expect(isCheckoutLinkOnly(wrap('p', wrap('strong', link(checkout))))).toBe(true);
+    expect(isCheckoutLinkOnly(wrap('p', text('👉 '), wrap('em', link(checkout)), text(' 🚀✨\n')))).toBe(true);
+    expect(isCheckoutLinkOnly(wrap('li', text('👍🏽 '), link(checkout)))).toBe(true);
+  });
+
+  it('rejects other links, two wrappers, text, and nodes without a link', () => {
+    expect(isCheckoutLinkOnly(wrap('p', wrap('strong', link('https://example.com/book'))))).toBe(false);
+    expect(isCheckoutLinkOnly(wrap('p', wrap('strong', link(undefined))))).toBe(false);
+    expect(isCheckoutLinkOnly(wrap('p', wrap('strong', wrap('em', link(checkout)))))).toBe(false);
+    expect(isCheckoutLinkOnly(wrap('p', wrap('strong', link(checkout)), text('.')))).toBe(false);
+    expect(isCheckoutLinkOnly(wrap('p', text('2 '), link(checkout)))).toBe(false);
+    expect(isCheckoutLinkOnly(wrap('p', text('🚀')))).toBe(false);
+    expect(isCheckoutLinkOnly(undefined)).toBe(false);
   });
 });

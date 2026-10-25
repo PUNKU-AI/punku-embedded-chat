@@ -103,14 +103,14 @@ test('the trigger stays on the screen next to the open window on a wide host pag
 });
 
 test('the checkout dialog fits the screen on a wide host page', async ({ page, hasTouch }) => {
-  const view = await loadOnWidePage(page, { start_open: 'true', welcome_message: `[**Book tickets**](${checkoutUrl})` });
+  const view = await loadOnWidePage(page, { start_open: 'true', welcome_message: `**[Book tickets](${checkoutUrl})**` });
   // Register after loadWidget's external-request blocker. Never contact Bookingkit.
   await page.context().route(checkoutUrl, (route) => route.fulfill({
     contentType: 'text/html',
     body: '<!doctype html><title>Synthetic checkout</title><h1>Synthetic checkout</h1>',
   }));
   await waitForInputFocus(page);
-  await activate(page, '.markdown-body a strong', hasTouch);
+  await activate(page, '.markdown-body a', hasTouch);
   await expect.poll(() => page.evaluate((selector) => {
     const host = document.querySelector('punku-chat')!;
     return window.__widgetRoots.get(host)?.querySelector<HTMLDialogElement>(selector)?.open;

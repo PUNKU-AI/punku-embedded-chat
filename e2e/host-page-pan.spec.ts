@@ -16,7 +16,7 @@ const widgetId = 'browser-fixture';
 const checkoutUrl = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
 const lastLine = 'Line 24 of the synthetic answer.';
 const longAnswer = Array.from({ length: 24 }, (_, index) => `Line ${index + 1} of the synthetic answer.`).join('\n\n');
-const checkoutAnswer = `Tickets are available. [**Book tickets**](${checkoutUrl})`;
+const checkoutAnswer = `Tickets are available. **[Book tickets](${checkoutUrl})**`;
 const pageErrors = new WeakMap<Page, string[]>();
 
 test.beforeEach(({ page }) => {

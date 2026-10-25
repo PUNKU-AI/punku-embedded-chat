@@ -217,7 +217,7 @@ test.describe('width=320 page on a 740 x 360 screen', () => {
 
   test('the checkout dialog opens and its close button closes it', async ({ page, hasTouch, browserName }) => {
     const checkoutUrl = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
-    await openWindow(page, { welcome_message: `[**Book tickets**](${checkoutUrl})` });
+    await openWindow(page, { welcome_message: `**[Book tickets](${checkoutUrl})**` });
     // Register after loadWidget's external-request blocker. Never contact Bookingkit.
     await page.context().route(checkoutUrl, (route) => route.fulfill({
       contentType: 'text/html',
@@ -228,7 +228,7 @@ test.describe('width=320 page on a 740 x 360 screen', () => {
       return !!window.__widgetRoots.get(host)?.querySelector<HTMLDialogElement>('.cl-bk-checkout-dialog')?.open;
     });
 
-    await tapWidget(page, '.markdown-body a strong', hasTouch, browserName);
+    await tapWidget(page, '.markdown-body a', hasTouch, browserName);
     await expect.poll(dialogOpen).toBe(true);
     expect(await partsOutsideScreen(page, ['.cl-bk-checkout-dialog', '.cl-bk-checkout-dialog button'])).toEqual([]);
     // The dialog undoes the page scale too: it fills the screen, and its close button keeps its 40 px.

@@ -2984,10 +2984,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 /* A link on its own line is an action, so it renders as a button: filled
    when it stands alone in a top-level paragraph, outlined when it is a list
    item. In a loose list (blank lines between the items) the link sits in a
-   paragraph inside the item: li > p > a. */
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
+   paragraph inside the item: li > p > a. A checkout link can also sit in a
+   strong or em, as in the agent's **[Book now](url)** (isCheckoutLinkOnly),
+   so the rules select the link at any depth. */
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3001,9 +3002,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* An arrow shows that the button opens a page. */
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a::after,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a::after,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a::after {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a::after,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only a::after {
   content: "";
   flex: 0 0 auto;
   width: 15px;
@@ -3015,27 +3015,25 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 /* --cl-link-button-fill and --cl-link-button-label are set only where the
    accent would vanish on the answer bubble (controlColors.ts). */
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover,
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:visited {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:hover,
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:visited {
   background: var(--cl-link-button-fill, var(--cl-accent));
   color: var(--cl-link-button-label, var(--cl-on-accent)) !important;
 }
 
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:hover {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:hover {
   background: var(--cl-link-button-fill, var(--cl-accent-hover));
   opacity: 1 !important;
 }
 
 /* The outline takes the full link colour: a lighter outline would not reach
    3:1 against the bubble (WCAG 1.4.11). */
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a {
+.cl-window .cl-bot_message .markdown-body li.cl-link-only a {
   border: 1px solid currentColor;
 }
 
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:hover,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:hover {
+.cl-window .cl-bot_message .markdown-body li.cl-link-only a:hover {
   background: var(--cl-hover);
 }
 
@@ -3053,9 +3051,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   margin-top: 6px;
 }
 
-.cl-window .cl-bot_message .markdown-body > p.cl-link-only > a:focus-visible,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > a:focus-visible,
-.cl-window .cl-bot_message .markdown-body li.cl-link-only > p > a:focus-visible {
+.cl-window .cl-bot_message .markdown-body > p.cl-link-only a:focus-visible,
+.cl-window .cl-bot_message .markdown-body li.cl-link-only a:focus-visible {
   outline: 2px solid var(--cl-accent);
   outline-offset: 2px;
 }
