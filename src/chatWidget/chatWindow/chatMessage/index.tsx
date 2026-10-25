@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
+import { getBookingkitCheckoutUrl } from "../../bookingkitCheckout";
 
 // Pins a readable base text size on every message. The widget renders inside a
 // closed shadow root, so without this the font-size inherits from the host page
@@ -85,17 +86,56 @@ function parseMessage(message: any): string {
   }
 }
 
-type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+type HastNode = {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: { href?: unknown };
+  children?: HastNode[];
+};
 
 const meaningfulChildren = (node: unknown) =>
   ((node as HastNode | undefined)?.children || []).filter(
     (child) => !(child.type === "text" && !(child.value || "").trim())
   );
 
-/** True when an element holds exactly one link and nothing else but whitespace. */
+const isElement = (node: HastNode | undefined, tagName: string) =>
+  node?.type === "element" && node.tagName === tagName;
+
+// Whitespace and emoji: the symbol blocks (arrows, ☀ ✨ ➡ ⭐) and, as surrogate
+// pairs, U+1F000 to U+1FAFF (👉 🚀 🎟 and the skin tones), with joiners,
+// variation selectors and flag tags. No u flag: the bundle targets ES5.
+const EMOJI_OR_SPACE =
+  /^(?:[\s‍️←-⇿⌀-⏿■-➿⤀-⥿⬀-⯿]|[\ud83c\ud83d][\udc00-\udfff]|\ud83e[\udc00-\udeff]|\udb40[\udc20-\udc7f])*$/;
+
+/** The children that are not only emoji or whitespace, such as "👉 " or " 🚀✨". */
+const nonEmojiChildren = (node: unknown) =>
+  ((node as HastNode | undefined)?.children || []).filter(
+    (child) => !(child.type === "text" && EMOJI_OR_SPACE.test(child.value || ""))
+  );
+
+/**
+ * True when an element holds one Bookingkit checkout link and nothing else but
+ * emoji or whitespace. The link may sit in one strong or em: the agent writes
+ * **[Book now](url)**, which gives p > strong > a.
+ */
+export function isCheckoutLinkOnly(node: unknown): boolean {
+  let children = nonEmojiChildren(node);
+  if (children.length === 1 && (isElement(children[0], "strong") || isElement(children[0], "em"))) {
+    children = nonEmojiChildren(children[0]);
+  }
+  const href = children[0]?.properties?.href;
+  return children.length === 1 && isElement(children[0], "a") &&
+    getBookingkitCheckoutUrl(typeof href === "string" ? href : undefined) !== null;
+}
+
+/**
+ * True when an element holds exactly one link and nothing else but whitespace,
+ * or a checkout link as isCheckoutLinkOnly allows.
+ */
 export function isLinkOnly(node: unknown): boolean {
   const children = meaningfulChildren(node);
-  return children.length === 1 && children[0].type === "element" && children[0].tagName === "a";
+  return (children.length === 1 && isElement(children[0], "a")) || isCheckoutLinkOnly(node);
 }
 
 /**
@@ -105,8 +145,18 @@ export function isLinkOnly(node: unknown): boolean {
 export function isLinkOnlyListItem(node: unknown): boolean {
   if (isLinkOnly(node)) return true;
   const children = meaningfulChildren(node);
-  return children.length === 1 && children[0].type === "element" && children[0].tagName === "p" && isLinkOnly(children[0]);
+  return children.length === 1 && isElement(children[0], "p") && isLinkOnly(children[0]);
 }
+
+/** True when every item of a list holds only a link: the list of buttons drops its bullets. */
+export function isLinkList(node: unknown): boolean {
+  const items = meaningfulChildren(node);
+  return items.length > 0 && items.every((item) => isElement(item, "li") && isLinkOnlyListItem(item));
+}
+
+/** The class names of an element, with `added` when it is a string. */
+const withClass = (className: string | undefined, added: string | false) =>
+  [className, added].filter(Boolean).join(" ") || undefined;
 
 export default function ChatMessage({
   message,
@@ -157,7 +207,8 @@ export default function ChatMessage({
   // Keep the opener mounted so checkout can capture and restore its focus.
   // A link that stands alone in a paragraph or list item is an action: it
   // renders as a button (see .cl-link-only in the widget stylesheet), unless
-  // linkButtons is false.
+  // linkButtons is false. A checkout link also does in the agent's bold
+  // format, next to emoji (isCheckoutLinkOnly).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
@@ -167,12 +218,20 @@ export default function ChatMessage({
     p: ({ node, children, ...props }) => (
       <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
     ),
-    // react-markdown 8 passes ordered, checked and index to list items; they
-    // are not DOM attributes.
+    // react-markdown 8 passes ordered, checked, index and depth to lists and
+    // list items; they are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={[className, linkButtons && isLinkOnlyListItem(node) ? "cl-link-only" : ""].filter(Boolean).join(" ") || undefined}>
+      <li {...props} className={withClass(className, linkButtons && isLinkOnlyListItem(node) && "cl-link-only")}>
         {children}
       </li>
+    ),
+    // A list of only link buttons drops its bullets (.cl-link-list). In a
+    // mixed list, the buttons keep the bullets and the indent of the others.
+    ul: ({ node, children, ordered, depth, className, ...props }) => (
+      <ul {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ul>
+    ),
+    ol: ({ node, children, ordered, depth, className, ...props }) => (
+      <ol {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ol>
     ),
   }), [onCheckout, linkButtons]);
 

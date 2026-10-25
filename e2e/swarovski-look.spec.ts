@@ -22,11 +22,11 @@ const swarovskiEmbed = {
 };
 
 // The links of the release test answers: a link alone in a paragraph, a list
-// of links, a loose list, and the bold checkout link.
+// of links, a loose list, and the checkout link in the agent's bold format.
 const answer = 'You can find more details here:\n\n[See all prices and tickets](https://example.com/tickets)\n\n'
   + '- [Directions and parking](https://example.com/directions)\n- [Frequently asked questions](https://example.com/faq)\n\n'
   + 'More to see:\n\n- [Gift shop](https://example.com/gifts)\n\n- [Museum café](https://example.com/cafe)\n\n'
-  + 'I prepared 2 tickets for you.\n\n[**Book now**](https://eu5.bookingkit.de/cart/set/feedfacefeedfacefeedfacefeedface)';
+  + 'I prepared 2 tickets for you.\n\n**[Book now](https://eu5.bookingkit.de/cart/set/feedfacefeedfacefeedfacefeedface?utm_source=web_chat&c=%5B%5D)** 🎟️';
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {

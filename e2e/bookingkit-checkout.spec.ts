@@ -2,7 +2,11 @@ import { expect, Page, test } from '@playwright/test';
 import { activate, elementState, loadWidget, waitForInputFocus } from './widget-helpers';
 
 const checkoutUrl = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
-const checkoutLink = '.markdown-body a strong';
+// The agent writes the bold outside the link: p > strong > a. Older tests used
+// [**Book tickets**](url), which hid that real answers showed no button.
+const agentFormat = `**[Book tickets](${checkoutUrl})**`;
+const boldInsideLink = `[**Book tickets**](${checkoutUrl})`;
+const checkoutLink = '.markdown-body a';
 const dialogSelector = '.cl-bk-checkout-dialog';
 const pageErrors = new WeakMap<Page, string[]>();
 
@@ -16,10 +20,10 @@ test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
 
-async function loadCheckout(page: Page, nitro = true) {
+async function loadCheckout(page: Page, nitro = true, message = agentFormat) {
   await loadWidget(page, {
     start_open: 'true', nitro: String(nitro),
-    welcome_message: `[**Book tickets**](${checkoutUrl})`,
+    welcome_message: message,
   });
   // Register after loadWidget's external-request blocker. Never contact Bookingkit.
   await page.context().route(checkoutUrl, (route) => route.fulfill({
@@ -38,6 +42,15 @@ async function waitForCheckout(page: Page) {
   await expect(frame.getByRole('heading')).toBeVisible();
   await expect(frame.getByRole('heading')).toHaveText('Synthetic checkout');
   return frame;
+}
+
+async function assertFilledButton(page: Page) {
+  expect(await page.evaluate(() => {
+    const host = document.querySelector('punku-chat')!;
+    const anchor = window.__widgetRoots.get(host)!.querySelector<HTMLAnchorElement>('.markdown-body a')!;
+    const style = getComputedStyle(anchor);
+    return { linkOnly: !!anchor.closest('p.cl-link-only'), display: style.display, filled: style.backgroundColor !== 'rgba(0, 0, 0, 0)' };
+  })).toEqual({ linkOnly: true, display: 'inline-flex', filled: true });
 }
 
 async function assertCheckoutLinkFocused(page: Page) {
@@ -89,6 +102,7 @@ async function assertCheckoutPopup(popup: Page) {
 
 test('Nitro checkout opens a modal and its external link opens exactly one tab', async ({ page, context, hasTouch }) => {
   await loadCheckout(page);
+  await assertFilledButton(page);
   await activate(page, checkoutLink, hasTouch);
   await waitForCheckout(page);
   await assertSettled(page, 1, 0);
@@ -153,6 +167,18 @@ for (const nitro of [false, true]) {
     await assertNoPopup(page, nitro ? 3 : 0);
   });
 }
+
+test('a link with the bold inside is still a filled button that opens checkout', async ({ page, hasTouch }) => {
+  await loadCheckout(page, true, boldInsideLink);
+  await assertFilledButton(page);
+  await waitForInputFocus(page);
+  await activate(page, '.markdown-body a strong', hasTouch);
+  await waitForCheckout(page);
+  await assertSettled(page, 1, 0);
+  await activate(page, `${dialogSelector} button`, hasTouch);
+  await assertCheckoutClosed(page);
+  await assertNoPopup(page, 2);
+});
 
 test('Nitro checkout falls back to exactly one tab without modal support', async ({ page, context, hasTouch }) => {
   await page.addInitScript(() => {
