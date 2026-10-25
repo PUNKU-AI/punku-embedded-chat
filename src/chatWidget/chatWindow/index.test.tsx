@@ -667,13 +667,16 @@ describe('ChatWindow', () => {
         const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(300);
         render(<ChatWindow {...defaultProps} messages={answered} />);
         const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        // 100 px above the end (640 - 300 - 240): the list stops following, no button yet.
         scrollListTo(list, 340);
-        scrollListTo(list, 200);
+        scrollListTo(list, 240);
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
 
+        // The keyboard takes 150 px: the newest message is 250 px below the visible list.
         clientHeight.mockReturnValue(150);
         act(() => resized.forEach((resize) => resize()));
 
-        expect(list.scrollTop).toBe(200);
+        expect(list.scrollTop).toBe(240);
         expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
       });
 

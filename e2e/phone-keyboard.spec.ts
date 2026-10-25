@@ -11,6 +11,12 @@ import {
 // - On a page with viewport-fit=cover, the trigger and the window clear the
 //   notch and the home indicator (env(safe-area-inset-*)).
 
+declare global {
+  interface Window {
+    __touchMoves: { moves: number; cancelable: number; cancelled: number };
+  }
+}
+
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
   const errors: string[] = [];
@@ -202,10 +208,21 @@ test.describe('a touch drag on the window', () => {
   // touch and scroll handling. Input.synthesizeScrollGesture does not: in the
   // Linux CI image it sends no touchmove and scrolls nothing, not even the
   // host page, so every "the page did not scroll" check passed for nothing.
-  async function drag(page: Page, cdp: CDPSession, point: { x: number; y: number }, yDistance: number) {
+  // `sideways`: the first sample goes 20 px sideways and 10 px along, as at
+  // the start of a fast diagonal thumb flick, and the finger then drifts
+  // 24 px sideways in all. Chromium does not pass moves inside its touch slop
+  // (about 15 px) to the page, so a smaller first sample would never reach
+  // the widget here; iOS passes them all.
+  async function drag(page: Page, cdp: CDPSession, point: { x: number; y: number }, yDistance: number, { sideways = false } = {}) {
+    await page.evaluate(() => { window.__touchMoves = { moves: 0, cancelable: 0, cancelled: 0 }; });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    if (sideways) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x + 20, y: point.y + 10 * Math.sign(yDistance) }] });
+      await page.waitForTimeout(16);
+    }
     for (let step = 1; step <= 12; step += 1) {
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: point.x, y: point.y + (yDistance * step) / 12 }] });
+      const x = point.x + (sideways ? 20 + (4 * step) / 12 : 0);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: point.y + (yDistance * step) / 12 }] });
       await page.waitForTimeout(16);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -220,6 +237,25 @@ test.describe('a touch drag on the window', () => {
       previous = current;
       return settled;
     }, { intervals: [150] }).toBe(true);
+    return page.evaluate(() => window.__touchMoves);
+  }
+
+  // Count the touch moves, the ones the widget could cancel, and the ones it
+  // cancelled. On iOS a cancelled move stops scrolling for the rest of the
+  // touch; Chromium scrolls after a later move, so the count shows what iOS
+  // would do. Chromium merges moves while it scrolls, so the number of moves
+  // varies. The count is read after each dispatch, when every listener has run.
+  async function countTouchMoves(page: Page) {
+    await page.addInitScript(() => {
+      window.__touchMoves = { moves: 0, cancelable: 0, cancelled: 0 };
+      window.addEventListener('touchmove', (event) => {
+        setTimeout(() => {
+          window.__touchMoves.moves += 1;
+          if (event.cancelable) window.__touchMoves.cancelable += 1;
+          if (event.defaultPrevented) window.__touchMoves.cancelled += 1;
+        });
+      }, { capture: true, passive: true });
+    });
   }
 
   const pointIn = (page: Page, selector: string) => page.evaluate((selector) => {
@@ -234,6 +270,7 @@ test.describe('a touch drag on the window', () => {
   for (const keyboard of [false, true]) {
     test(`does not scroll the page behind${keyboard ? ' with the keyboard open' : ''}`, async ({ page, viewport }) => {
       await fakeKeyboard(page, 0);
+      await countTouchMoves(page);
       await storeConversation(page);
       await routeHostPage(page);
       await openChat(page);
@@ -247,18 +284,33 @@ test.describe('a touch drag on the window', () => {
 
       // Before PR 7, a drag up on the header scrolled the page by 200 px.
       // Check after each drag: a drag up and a drag down can cancel out.
-      await drag(page, cdp, await pointIn(page, '.cl-header'), -200);
+      expect((await drag(page, cdp, await pointIn(page, '.cl-header'), -200)).cancelled).toBeGreaterThan(0);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
-      await drag(page, cdp, await pointIn(page, '.cl-header'), 200);
+      expect((await drag(page, cdp, await pointIn(page, '.cl-header'), 200)).cancelled).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.scrollY)).toBe(400);
+      // The field's text fits, so the field cannot scroll: nor does the page.
+      // Chromium does not pass this drag to the page anyway; iOS pans the
+      // visible area unless the moves are cancelled.
+      expect((await drag(page, cdp, await pointIn(page, '.cl-input-element'), -150)).cancelled).toBeGreaterThan(0);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
       // The list is at its end: a drag up cannot scroll it further.
-      await drag(page, cdp, await pointIn(page, '.cl-messages_container'), -200);
+      expect((await drag(page, cdp, await pointIn(page, '.cl-messages_container'), -200)).cancelled).toBeGreaterThan(0);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
 
       // A drag down scrolls the list back, not the page.
       const end = await listScrollTop(page);
-      await drag(page, cdp, await pointIn(page, '.cl-messages_container'), 150);
+      expect(await drag(page, cdp, await pointIn(page, '.cl-messages_container'), 150)).toMatchObject({ cancelled: 0 });
       expect(await listScrollTop(page)).toBeLessThan(end);
+      expect(await page.evaluate(() => window.scrollY)).toBe(400);
+
+      // A flick that starts sideways scrolls the list too, and no move of it
+      // is cancelled. The list cannot scroll sideways, so the first sample
+      // alone must not decide the flick.
+      const before = await listScrollTop(page);
+      const flick = await drag(page, cdp, await pointIn(page, '.cl-messages_container'), 150, { sideways: true });
+      expect(flick.cancelable).toBeGreaterThan(0);
+      expect(flick.cancelled).toBe(0);
+      expect(await listScrollTop(page)).toBeLessThan(before - 50);
       expect(await page.evaluate(() => window.scrollY)).toBe(400);
 
       // Control: the same drag on the host page above the window scrolls the

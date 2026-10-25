@@ -21,28 +21,25 @@ export function containScrollEvents(element: HTMLElement | null): () => void {
 }
 
 const SCROLLS = /auto|scroll|overlay/;
+// A finger moves this far before the browser starts to scroll. Moves inside
+// it stay with the browser, and the first move past it decides the gesture.
+const DIRECTION_SLOP = 6;
 
 /*
  * True if the touched element, an ancestor up to `boundary`, or `boundary`
- * itself can scroll by a finger move of (dx, dy). A field takes every move:
- * the visitor moves the caret or selects text there.
+ * itself can scroll by a finger move of (dx, dy) on either axis. A field
+ * counts only when its own text scrolls.
  */
 function touchCanScroll(target: EventTarget | null, boundary: HTMLElement, dx: number, dy: number) {
-  const vertical = Math.abs(dy) >= Math.abs(dx);
-  const move = vertical ? dy : dx;
-  if (move === 0) return true;
   for (let node = target instanceof Element ? target : null; node; node = node.parentElement) {
-    if (node instanceof HTMLElement && (node.isContentEditable || node.tagName === "TEXTAREA" || node.tagName === "INPUT")) {
-      return true;
-    }
     const style = getComputedStyle(node);
     // A finger that moves down or right shows the content above or on the left.
-    if (vertical && SCROLLS.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
-      if (move > 0 ? node.scrollTop > 0 : node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
+    if (dy !== 0 && SCROLLS.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
+      if (dy > 0 ? node.scrollTop > 0 : node.scrollTop + node.clientHeight < node.scrollHeight - 1) return true;
     }
-    if (!vertical && SCROLLS.test(style.overflowX) && node.scrollWidth > node.clientWidth + 1) {
+    if (dx !== 0 && SCROLLS.test(style.overflowX) && node.scrollWidth > node.clientWidth + 1) {
       const left = Math.abs(node.scrollLeft);
-      if (move > 0 ? left > 0 : left + node.clientWidth < node.scrollWidth - 1) return true;
+      if (dx > 0 ? left > 0 : left + node.clientWidth < node.scrollWidth - 1) return true;
     }
     if (node === boundary) break;
   }
@@ -51,31 +48,40 @@ function touchCanScroll(target: EventTarget | null, boundary: HTMLElement, dx: n
 
 /**
  * Keep touch scrolling that starts in `element` inside it. A drag on a part
- * that cannot scroll (the header, the bar under the messages), or past the
- * end of the message list, scrolled the host page behind the window. With
- * the on-screen keyboard open, it also panned the visible part of the page,
- * and the window followed one frame late: it jumped. Scrolling the message
- * list and other scrolling parts, text editing in a field and pinch zoom
- * (two fingers) keep working. Only one-finger moves that nothing in
- * `element` can follow are cancelled.
+ * that cannot scroll (the header, the bar under the messages, a field whose
+ * text fits), or past the end of the message list, scrolled the host page
+ * behind the window. With the on-screen keyboard open, it also panned the
+ * visible part of the page, and the window followed one frame late: it
+ * jumped. Scrolling the message list and other scrolling parts, and pinch
+ * zoom (two fingers) keep working.
+ *
+ * The first move past DIRECTION_SLOP decides the whole gesture, from the
+ * movement since the touch started. On iOS, a cancelled touchmove stops
+ * scrolling for the rest of the touch, so a single sideways sample at the
+ * start of a flick must not decide it. The gesture scrolls if either axis of
+ * the movement can scroll something. Else every move of it is cancelled.
  *
  * Returns the cleanup function, so it can be returned from a `useEffect`.
  */
 export function keepTouchScrollInside(element: HTMLElement | null): () => void {
   if (!element) return () => {};
-  let last: { x: number; y: number } | null = null;
+  let start: { x: number; y: number } | null = null;
+  let scrolls: boolean | null = null;
   const handleTouchStart = (event: TouchEvent) => {
     const touch = event.touches.length === 1 ? event.touches[0] : undefined;
-    last = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    start = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    scrolls = null;
   };
   const handleTouchMove = (event: TouchEvent) => {
     const touch = event.touches.length === 1 ? event.touches[0] : undefined;
-    if (!touch || !last) return;
-    const dx = touch.clientX - last.x;
-    const dy = touch.clientY - last.y;
-    last = { x: touch.clientX, y: touch.clientY };
-    if (!event.cancelable || touchCanScroll(event.target, element, dx, dy)) return;
-    event.preventDefault();
+    if (!touch || !start) return;
+    if (scrolls === null) {
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < DIRECTION_SLOP) return;
+      scrolls = touchCanScroll(event.target, element, dx, dy);
+    }
+    if (!scrolls && event.cancelable) event.preventDefault();
   };
   // Capture: the message list and the input stop touchmove from bubbling
   // (containScrollEvents), and this check must see the moves there too.

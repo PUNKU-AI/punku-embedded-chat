@@ -37,8 +37,8 @@ describe('keepTouchScrollInside', () => {
   const setup = () => {
     const chatWindow = document.createElement('div');
     chatWindow.innerHTML = '<div class="header"><span>Title</span></div>'
-      + '<div class="list" style="overflow-y: auto"><p>Answer</p></div>'
-      + '<textarea></textarea>';
+      + '<div class="list" style="overflow-y: auto; overflow-x: hidden"><p>Answer</p></div>'
+      + '<textarea style="overflow-y: hidden"></textarea>';
     document.body.append(chatWindow);
     const list = chatWindow.querySelector<HTMLElement>('.list')!;
     Object.defineProperty(list, 'clientHeight', { configurable: true, value: 300 });
@@ -47,16 +47,21 @@ describe('keepTouchScrollInside', () => {
     return { chatWindow, list, stop };
   };
 
-  // One finger (or more) from `from` to `to`. Returns true if the move was cancelled.
-  const drag = (target: Element, from: number[], to: number[], fingers = 1) => {
-    const touches = (y: number) => Array.from({ length: fingers }, (_, index) => ({ clientX: 100 + index * 50, clientY: y }));
+  // One touch sequence: the finger starts at (100, 200) and moves by each
+  // [dx, dy] from there, in order. `fingers` touch at once. Returns, for each
+  // move, whether it was cancelled.
+  const drag = (target: Element, moves: number[][], fingers = 1) => {
+    const touches = (dx: number, dy: number) =>
+      Array.from({ length: fingers }, (_, index) => ({ clientX: 100 + index * 50 + dx, clientY: 200 + dy }));
     const start = new Event('touchstart', { bubbles: true, composed: true });
-    Object.defineProperty(start, 'touches', { value: touches(from[1]) });
+    Object.defineProperty(start, 'touches', { value: touches(0, 0) });
     target.dispatchEvent(start);
-    const move = new Event('touchmove', { bubbles: true, composed: true, cancelable: true });
-    Object.defineProperty(move, 'touches', { value: touches(to[1]).map((touch) => ({ ...touch, clientX: touch.clientX + to[0] - from[0] })) });
-    target.dispatchEvent(move);
-    return move.defaultPrevented;
+    return moves.map(([dx, dy]) => {
+      const move = new Event('touchmove', { bubbles: true, composed: true, cancelable: true });
+      Object.defineProperty(move, 'touches', { value: touches(dx, dy) });
+      target.dispatchEvent(move);
+      return move.defaultPrevented;
+    });
   };
 
   afterEach(() => {
@@ -66,45 +71,80 @@ describe('keepTouchScrollInside', () => {
   it('cancels a drag on a part that cannot scroll, so the page behind stays', () => {
     const { chatWindow } = setup();
     const title = chatWindow.querySelector('.header span')!;
-    expect(drag(title, [100, 200], [100, 120])).toBe(true);
-    expect(drag(title, [100, 200], [180, 200])).toBe(true);
+    expect(drag(title, [[0, -80]])).toEqual([true]);
+    expect(drag(title, [[80, 0]])).toEqual([true]);
+    expect(drag(title, [[5, -3], [12, -40], [20, -90]])).toEqual([false, true, true]);
   });
 
   it('lets the message list scroll in both directions from the middle', () => {
     const { chatWindow, list } = setup();
     list.scrollTop = 300;
     const answer = chatWindow.querySelector('.list p')!;
-    expect(drag(answer, [100, 200], [100, 120])).toBe(false);
-    expect(drag(answer, [100, 200], [100, 280])).toBe(false);
+    expect(drag(answer, [[0, -80]])).toEqual([false]);
+    expect(drag(answer, [[0, 80]])).toEqual([false]);
   });
 
-  it('cancels a drag past the end of the message list', () => {
+  it('lets a flick scroll the list when its first samples go sideways', () => {
+    // A thumb flick often starts with a sideways sample, such as (2, -1).
+    // The list cannot scroll sideways. A cancelled move would stop the
+    // whole flick on iOS.
+    const { chatWindow, list } = setup();
+    const answer = chatWindow.querySelector('.list p')!;
+    list.scrollTop = 300;
+    expect(drag(answer, [[2, -1], [5, -3], [9, -7], [12, -60]])).toEqual([false, false, false, false]);
+    expect(drag(answer, [[7, -3], [12, -60]])).toEqual([false, false]);
+    // At the end, the list can still scroll back up.
+    list.scrollTop = 600;
+    expect(drag(answer, [[2, 1], [9, 4], [12, 60]])).toEqual([false, false, false]);
+  });
+
+  it('cancels a drag past the end of the message list, also when it starts sideways', () => {
     const { chatWindow, list } = setup();
     const answer = chatWindow.querySelector('.list p')!;
     // At the top, a finger that moves down would scroll the page.
     list.scrollTop = 0;
-    expect(drag(answer, [100, 200], [100, 280])).toBe(true);
-    expect(drag(answer, [100, 200], [100, 120])).toBe(false);
+    expect(drag(answer, [[0, 80]])).toEqual([true]);
+    expect(drag(answer, [[0, -80]])).toEqual([false]);
     // At the bottom, a finger that moves up would scroll the page.
     list.scrollTop = 600;
-    expect(drag(answer, [100, 200], [100, 120])).toBe(true);
-    expect(drag(answer, [100, 200], [100, 280])).toBe(false);
+    expect(drag(answer, [[0, -80]])).toEqual([true]);
+    expect(drag(answer, [[2, -1], [7, -3], [12, -60]])).toEqual([false, true, true]);
   });
 
-  it('leaves moves in a field to the browser, for the caret and the selection', () => {
-    const { chatWindow } = setup();
-    expect(drag(chatWindow.querySelector('textarea')!, [100, 200], [100, 120])).toBe(false);
+  it('decides once per touch: a list scroll is not cancelled when the finger turns', () => {
+    const { chatWindow, list } = setup();
+    list.scrollTop = 300;
+    const answer = chatWindow.querySelector('.list p')!;
+    expect(drag(answer, [[0, -80], [0, -10], [0, 40]])).toEqual([false, false, false]);
   });
 
-  it('leaves two-finger moves to the browser, so the visitor can pinch-zoom', () => {
+  it('cancels a drag on a field whose text fits, so the page behind stays', () => {
     const { chatWindow } = setup();
-    expect(drag(chatWindow.querySelector('.header span')!, [100, 200], [100, 120], 2)).toBe(false);
+    expect(drag(chatWindow.querySelector('textarea')!, [[0, -80]])).toEqual([true]);
+  });
+
+  it('lets a field scroll its own text when the text does not fit', () => {
+    const { chatWindow } = setup();
+    const field = chatWindow.querySelector('textarea')!;
+    field.style.overflowY = 'auto';
+    Object.defineProperty(field, 'clientHeight', { configurable: true, value: 120 });
+    Object.defineProperty(field, 'scrollHeight', { configurable: true, value: 300 });
+    field.scrollTop = 60;
+    expect(drag(field, [[0, -40]])).toEqual([false]);
+    expect(drag(field, [[0, 40]])).toEqual([false]);
+  });
+
+  it('leaves moves inside the slop and two-finger moves to the browser', () => {
+    const { chatWindow } = setup();
+    const title = chatWindow.querySelector('.header span')!;
+    expect(drag(title, [[3, -2], [-4, 5]])).toEqual([false, false]);
+    expect(drag(title, [[0, -80]], 2)).toEqual([false]);
   });
 
   it('stops after cleanup', () => {
     const { chatWindow, stop } = setup();
     stop();
-    expect(drag(chatWindow.querySelector('.header span')!, [100, 200], [100, 120])).toBe(false);
+    expect(drag(chatWindow.querySelector('.header span')!, [[0, -80]])).toEqual([false]);
   });
 
   it('accepts a missing element', () => {
