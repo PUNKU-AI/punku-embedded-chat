@@ -116,11 +116,21 @@ export default function BookingkitCheckoutModal({
         if (typeof dialog.close === "function") dialog.close();
         else dialog.removeAttribute("open");
       }
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+      // The opener can leave the page while the checkout is open: when the
+      // answer completes, its link button becomes a checkout card. Focus then
+      // goes to the newest link with the same checkout URL, outside a dialog.
+      const opener = previousFocus instanceof HTMLElement && previousFocus.isConnected
+        ? previousFocus
+        : previousFocus instanceof HTMLAnchorElement && (root instanceof ShadowRoot || root instanceof Document)
+          ? Array.from(root.querySelectorAll<HTMLAnchorElement>("a[href]"))
+            .filter((anchor) => anchor.getAttribute("href") === url && !anchor.closest("dialog"))
+            .pop()
+          : undefined;
+      if (opener) {
         // preventScroll keeps the host page still (#69). The message list can
         // move while the modal is open, so scroll only the list to the opener.
-        previousFocus.focus({ preventScroll: true });
-        revealInScrollContainer(previousFocus);
+        opener.focus({ preventScroll: true });
+        revealInScrollContainer(opener);
       }
     };
   }, [url, returnFocusTo]);

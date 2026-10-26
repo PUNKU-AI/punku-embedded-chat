@@ -21,6 +21,10 @@
  * The header icon sits on the header without a plate. Only where its colour
  * would vanish on the header (below 3:1), it gets a plate: a shade of the
  * header colour on which the icon reaches 3:1.
+ *
+ * The checkout card sits on the answer bubble. On a site's own bubble colour
+ * it is a lighter shade of that colour (cardSurface). Its button takes the
+ * fill of the filled link buttons, checked again on the card.
  */
 import { BLACK, WHITE, Rgb, contrastRatio, mix, paintOver, parseColor, toHex } from "./colorContrast";
 
@@ -69,6 +73,9 @@ type ThemeColors = {
   header: string[];
   /** The header icons and title without button_color. */
   headerInk: string;
+  /** The checkout card on the answer bubble (--cl-card-bg) and its venue line (--cl-card-meta). */
+  card: string;
+  cardMeta: string;
 };
 
 const LIGHT_BASE: ThemeColors = {
@@ -92,6 +99,9 @@ const LIGHT_BASE: ThemeColors = {
   // The base header of the stylesheet. Only the default theme makes it white.
   header: ["#1a1a1a"],
   headerInk: "#ffffff",
+  // A white card on the grey answer bubble.
+  card: "#ffffff",
+  cardMeta: "#4b5563",
 };
 
 export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
@@ -105,6 +115,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     send: "#0969da",
     header: ["#ffffff"],
     headerInk: "#0f172a",
+    card: "#f8fafc",
+    cardMeta: "#475569",
   },
   dark: {
     bubble: "#1e293b",
@@ -128,6 +140,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     muted: "#94a3b8",
     header: ["#0f172a"],
     headerInk: "#ffffff",
+    card: "#273449",
+    cardMeta: "#94a3b8",
   },
   ocean: {
     bubble: "#1e293b",
@@ -150,6 +164,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     muted: "#94a3b8",
     header: ["#0c4a6e", "#075985"],
     headerInk: "#ffffff",
+    card: "#1f3550",
+    cardMeta: "#9fb4cc",
   },
   aurora: {
     bubble: "rgba(76, 29, 149, 0.5)",
@@ -173,6 +189,8 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     muted: "#c4b5fd",
     header: ["#4c1d95", "#7c3aed", "#db2777"],
     headerInk: "#ffffff",
+    card: "rgba(255, 255, 255, 0.07)",
+    cardMeta: "#c4b5fd",
   },
   "punku-ai-bookingkit": { ...LIGHT_BASE, send: "#2563eb" },
   // Links in the blue of the swarovski-widget branch (.theme-swarovski in the stylesheet).
@@ -196,7 +214,10 @@ export type ControlColorProps = {
   error_message_style?: React.CSSProperties;
 };
 
-/** The colours to apply. A key is present only where a colour changes. */
+/**
+ * The colours to apply. A key is present only where a colour changes, and
+ * the card keys where a site's answer colour makes the card.
+ */
 export type GuardedColors = {
   linkButtonFill?: string;
   linkButtonLabel?: string;
@@ -217,6 +238,18 @@ export type GuardedColors = {
    * only where the stylesheet's 85% would fall below 4.5:1 on the header.
    */
   subtitleOpaque?: boolean;
+  /** The checkout card where it is not the theme's card, and its venue line where it is not the theme's colour. */
+  cardBg?: string;
+  cardMeta?: string;
+  /**
+   * "custom": the card is not the theme's card (a site's answer colour, or
+   * a site's text colour that reads worse on the theme's card). "image": the
+   * answer is a gradient or an image.
+   */
+  cardSurface?: "custom" | "image";
+  /** The checkout card button, only where the link button fill would vanish on the card. */
+  cardButtonFill?: string;
+  cardButtonLabel?: string;
 };
 
 /** One measured pair: a control's colour and the colour behind it. */
@@ -330,6 +363,33 @@ export function guardOutline(line: Rgb, surface: Rgb, linkColor: Rgb | null, lab
 
 const same = (a: Rgb, b: Rgb) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 
+/**
+ * The checkout card surface: the theme's card (themeCard, null on a site's
+ * own answer colour), else the bubble colour lifted toward white, 70% on a
+ * light bubble and 8% on a dark one, else the bubble colour. It is the first
+ * on which the answer text reads at 4.5:1, or at its own ratio on the bubble
+ * if that is lower.
+ */
+export function cardSurface(bubble: Rgb, text: Rgb | null, themeCard: Rgb | null = null): Rgb {
+  const light = contrast(BLACK, bubble) >= contrast(WHITE, bubble);
+  const lifted = mix(bubble, WHITE, light ? 0.7 : 0.08);
+  if (!text) return themeCard || lifted;
+  const floor = Math.min(TEXT_MIN, contrast(text, bubble));
+  for (const candidate of [themeCard, lifted]) {
+    if (candidate && contrast(text, candidate) >= floor) return candidate;
+  }
+  return bubble;
+}
+
+/** The venue line: the title colour toned toward the card while it keeps 4.5:1, else the title colour. */
+export function cardMetaColor(text: Rgb, card: Rgb): Rgb {
+  for (const amount of [0.22, 0.12]) {
+    const toned = mix(text, card, amount);
+    if (contrast(toned, card) >= TEXT_MIN) return toned;
+  }
+  return text;
+}
+
 const IMAGE = "image";
 
 /**
@@ -367,7 +427,22 @@ function surfaces(props: ControlColorProps) {
   const customError = !!props.error_message_style && Object.keys(props.error_message_style).length > 0;
   const errorBg = surface(styleBackground(props.error_message_style) || (customError ? "#f87171" : theme.errorBg), list);
   const errorInk = resolve(props.error_message_style?.color || (customError ? "#ffffff" : theme.errorInk), errorBg);
-  return { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk };
+  // The checkout card: the theme's card, or a lift of the site's own bubble
+  // (cardSurface). Its venue line takes the theme's colour on the theme's
+  // card, unless the site sets the text colour or the theme's colour reads
+  // worse than the answer text floor: then it follows the answer text.
+  const ownBubble = !!(props.bot_message_color || bubbleStyle);
+  const ownText = !!(props.bot_message_text_color || props.bot_message_style?.color);
+  const themeCard = bubble && !ownBubble ? resolve(theme.card, bubble) : null;
+  const card = bubble ? cardSurface(bubble, bubbleText, themeCard) : null;
+  const themedCard = !!card && !!themeCard && same(card, themeCard);
+  const floor = bubble && bubbleText ? Math.min(TEXT_MIN, contrast(bubbleText, bubble)) : 0;
+  const themeMeta = card && themedCard && !ownText ? resolve(theme.cardMeta, card) : null;
+  const metaFromTheme = !!card && !!themeMeta && contrast(themeMeta, card) >= floor;
+  const cardMeta = !card ? null : metaFromTheme ? themeMeta : bubbleText && cardMetaColor(bubbleText, card);
+  return {
+    theme, list, bubble, bubbleText, bar, field, errorBg, errorInk, card, cardMeta, themedCard, metaFromTheme,
+  };
 }
 
 /** The opacity of a subtitle in a site's button_text_color (.cl-header-subtitle). */
@@ -438,7 +513,9 @@ export function guardHintColors(background?: string, text?: string): { backgroun
  * the change (for tests and diagnostics).
  */
 export function guardControlColors(props: ControlColorProps): { colors: GuardedColors; pairs: ControlContrast[] } {
-  const { theme, list, bubble, bubbleText, bar, field, errorBg, errorInk } = surfaces(props);
+  const {
+    theme, list, bubble, bubbleText, bar, field, errorBg, errorInk, card, cardMeta, themedCard, metaFromTheme,
+  } = surfaces(props);
   const colors: GuardedColors = {};
   const pairs: ControlContrast[] = [];
   const measure = (control: string, foreground: Rgb, background: Rgb, minimum: number) => {
@@ -510,6 +587,39 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
     // The stylesheet draws the focus ring in the fill colour, on the bubble.
     measure("filled link button focus mark", guarded.fill, bubble, BOUNDARY_MIN);
     measure("filled link button label", guarded.label, guarded.fill, TEXT_MIN);
+
+    // The checkout card button takes the same fill. The card is lighter than
+    // the bubble, so the fill is checked again on the card; only where it
+    // fails there does the card button get a colour of its own.
+    if (card) {
+      const onCard = guardFilled({
+        fill: guarded.fill, label: guarded.label, surface: card, labelMin: TEXT_MIN,
+        own: !!props.button_color, linkColor: link && ownLink ? link : null, themeFallback: themeFallback(card),
+      });
+      if (!same(onCard.fill, guarded.fill)) colors.cardButtonFill = toHex(onCard.fill);
+      if (!same(onCard.label, guarded.label)) colors.cardButtonLabel = toHex(onCard.label);
+      measure("checkout card button", onCard.fill, card, BOUNDARY_MIN);
+      // The focus ring takes the fill too, on the card.
+      measure("checkout card button focus mark", onCard.fill, card, BOUNDARY_MIN);
+      measure("checkout card button label", onCard.label, onCard.fill, TEXT_MIN);
+    }
+  }
+
+  // The checkout card: its title in the answer text colour, its venue line.
+  if (card) {
+    if (!themedCard) {
+      colors.cardSurface = "custom";
+      colors.cardBg = toHex(card);
+    }
+    if (cardMeta && !metaFromTheme) colors.cardMeta = toHex(cardMeta);
+    if (bubbleText) {
+      // A site that chose a low contrast for its answers keeps it on the card.
+      const floor = Math.floor(Math.min(TEXT_MIN, contrast(bubbleText, bubble!)) * 100) / 100;
+      measure("checkout card title", bubbleText, card, floor);
+      if (cardMeta) measure("checkout card venue", cardMeta, card, floor);
+    }
+  } else if (!bubble) {
+    colors.cardSurface = "image";
   }
 
   // Suggestion chips on the message list. button_color draws their outline.

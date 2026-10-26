@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
-  BOUNDARY_MIN, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline, guardOwnText, ICON_MIN,
-  TEXT_MIN, THEME_COLORS, ThemeName,
+  BOUNDARY_MIN, cardMetaColor, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline,
+  cardSurface, guardOwnText, ICON_MIN, TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -178,7 +178,8 @@ describe('guardControlColors', () => {
     const { colors } = guardControlColors({
       theme: 'default', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827', link_color: '#2760CF',
     });
-    expect(colors).toEqual({});
+    // The site's answer colour gives the checkout card its own surface; no colour changes.
+    expect(colors).toEqual({ cardSurface: 'custom', cardBg: expect.any(String), cardMeta: expect.any(String) });
   });
 
   it('leaves colours alone that it cannot read', () => {
@@ -375,6 +376,158 @@ describe('link button focus marks', () => {
     // The fill in the bubble colour falls back to the gold link colour.
     expect(marks['filled link button focus mark']).toMatchObject({ foreground: '#ffd700', background: '#9e183b' });
     expect(marks['outlined link button focus mark']).toMatchObject({ foreground: '#ffd700', background: '#9e183b' });
+  });
+});
+
+describe('checkout card', () => {
+  const card = (props: Parameters<typeof guardControlColors>[0]) => {
+    const { colors, pairs } = guardControlColors(props);
+    const pair = (control: string) => pairs.find((item) => item.control === control);
+    return {
+      colors,
+      button: pair('checkout card button')!, label: pair('checkout card button label')!,
+      ring: pair('checkout card button focus mark')!, title: pair('checkout card title')!, venue: pair('checkout card venue')!,
+      failing: pairs.filter((item) => item.ratio < item.minimum),
+    };
+  };
+
+  it.each(Object.keys(THEME_COLORS) as ThemeName[])('measures the card of the %s theme on its own surface', (theme) => {
+    const result = card({ theme });
+    // A translucent colour shows the one behind it: the card on the bubble on the list.
+    const on = (color: string, backdrop: Rgb) => paintOver(parseColor(color)!.rgb, parseColor(color)!.alpha, backdrop);
+    const { list, bubble, card: surface } = THEME_COLORS[theme];
+    expect(result.button.background).toBe(toHex(on(surface, on(bubble, rgb(list)))));
+    expect(result.title.minimum).toBe(TEXT_MIN);
+    expect(result.venue.foreground).toBe(THEME_COLORS[theme].cardMeta);
+    expect(result.failing).toEqual([]);
+    // The theme needs no card colours of its own.
+    expect(Object.keys(result.colors).filter((key) => key.startsWith('card'))).toEqual([]);
+  });
+
+  it('lifts a dark site bubble and keeps the gold button on it', () => {
+    const result = card({
+      theme: 'default', button_color: '#9e183b', button_text_color: '#ffffff', bot_message_color: '#9e183b',
+      bot_message_text_color: '#ffffff', link_color: '#FFD700',
+    });
+    // 8% toward white: a slightly lighter red.
+    expect(result.colors).toMatchObject({ cardSurface: 'custom', cardBg: toHex(mix(rgb('#9e183b'), WHITE, 0.08)) });
+    expect(result.colors.cardButtonFill).toBeUndefined();
+    expect(result.button).toMatchObject({ foreground: '#ffd700', background: result.colors.cardBg });
+    expect(result.label.foreground).toBe('#9e183b');
+    expect(result.title.minimum).toBe(TEXT_MIN);
+    expect(result.venue.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.colors.cardMeta).not.toBe('#ffffff');
+    expect(result.failing).toEqual([]);
+  });
+
+  it('keeps the bubble colour where the answer text would read worse on a lighter card', () => {
+    // White text on a mid green reads at 3:1 only. A light card would hide it.
+    const result = card({
+      button_text_color: '#ffffff', background_color: '#f1efee', bot_message_color: '#3aaa35', bot_message_text_color: '#ffffff',
+    });
+    expect(result.colors).toMatchObject({ cardSurface: 'custom', cardBg: '#3aaa35', cardMeta: '#ffffff' });
+    // The site's own 3:1 is the floor for the title and the venue.
+    expect(result.title.minimum).toBe(3);
+    expect(result.title.ratio).toBeGreaterThanOrEqual(3);
+    expect(result.venue.minimum).toBe(3);
+    expect(result.button.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    expect(result.label.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('lifts a light site bubble toward white and checks the site button on it', () => {
+    const result = card({
+      theme: 'punku-ai-bookingkit', button_color: '#38AA3F', bot_message_style: { backgroundColor: '#F0F7FA', color: '#0f172a' },
+    });
+    expect(result.colors.cardBg).toBe(toHex(mix(rgb('#f0f7fa'), WHITE, 0.7)));
+    expect(result.button.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    expect(result.label.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('gives the card button its own fill where the link button fill vanishes on the lighter card', () => {
+    const props = {
+      button_color: '#15803d', button_text_color: '#ffffff', bot_message_color: '#111827', bot_message_text_color: '#ffffff',
+    };
+    // The green reads on the bubble (3.5:1), not on the card (2.9:1).
+    const lifted = mix(rgb('#111827'), WHITE, 0.08);
+    expect(contrastRatio(rgb('#15803d'), rgb('#111827'))).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    expect(contrastRatio(rgb('#15803d'), lifted)).toBeLessThan(BOUNDARY_MIN);
+    const result = card(props);
+    // Link buttons outside the card keep the site green.
+    expect(result.colors.linkButtonFill).toBeUndefined();
+    expect(result.colors.cardButtonFill).toBeDefined();
+    expect(result.button).toMatchObject({ foreground: result.colors.cardButtonFill, background: toHex(lifted) });
+    expect(result.ring.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('follows a site answer text colour on the theme card', () => {
+    const result = card({ theme: 'default', bot_message_text_color: '#3f3f46' });
+    expect(result.colors.cardBg).toBeUndefined();
+    expect(result.colors.cardMeta).toBe(toHex(cardMetaColor(rgb('#3f3f46'), rgb(THEME_COLORS.default.card))));
+    expect(result.failing).toEqual([]);
+  });
+
+  it.each([
+    // Grey text reads at 4.54:1 on the white bubble and 4.34:1 on the theme
+    // card: the card turns white, the bubble lifted toward white.
+    ['default', '#767676', '#ffffff'],
+    // 4.78:1 on the bubble, 4.1:1 on the theme card, 3.75:1 on the lift: the
+    // card keeps the bubble colour.
+    ['dark', '#8a94a6', '#1e293b'],
+  ])('leaves the %s theme card where a site text colour %s would read worse on it', (theme, text, surface) => {
+    const result = card({ theme, bot_message_text_color: text });
+    expect(contrastRatio(rgb(text), rgb(THEME_COLORS[theme as ThemeName].card))).toBeLessThan(TEXT_MIN);
+    expect(result.colors).toMatchObject({ cardSurface: 'custom', cardBg: surface, cardMeta: text });
+    expect(result.title.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.venue.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('brings the theme venue colour up to the answer text floor', () => {
+    // The translucent aurora bubble over a light window: the theme's light
+    // violet venue would read at about 1.4:1.
+    const result = card({ theme: 'aurora', background_color: '#f5f3ff' });
+    const themeVenue = paintOver(rgb(THEME_COLORS.aurora.cardMeta), 1, rgb(result.venue.background));
+    expect(contrastRatio(themeVenue, rgb(result.venue.background))).toBeLessThan(2);
+    expect(result.colors.cardMeta).toBeDefined();
+    expect(result.venue.ratio).toBeGreaterThanOrEqual(result.title.minimum);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('makes a clear card on a gradient or an image', () => {
+    const { colors, pairs } = guardControlColors({ bot_message_style: { background: 'linear-gradient(#4c1d95, #7c3aed)' } });
+    expect(colors.cardSurface).toBe('image');
+    expect(colors.cardBg).toBeUndefined();
+    expect(pairs.filter((pair) => pair.control.startsWith('checkout card'))).toEqual([]);
+  });
+
+  describe('cardSurface and cardMetaColor', () => {
+    it('lifts a light bubble 70% and a dark one 8% toward white', () => {
+      expect(cardSurface(rgb('#d0d0d0'), null)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
+      expect(cardSurface(rgb('#202020'), null)).toEqual(mix(rgb('#202020'), WHITE, 0.08));
+      expect(cardSurface(rgb('#202020'), rgb('#ffffff'))).toEqual(mix(rgb('#202020'), WHITE, 0.08));
+      // Dark text on a light bubble reads better still on the lighter card.
+      expect(cardSurface(rgb('#d0d0d0'), BLACK)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
+    });
+
+    it('takes the theme card first, then the lift, then the bubble', () => {
+      const themeCard = rgb('#f8fafc');
+      expect(cardSurface(rgb('#ffffff'), rgb('#1e293b'), themeCard)).toEqual(themeCard);
+      expect(cardSurface(rgb('#ffffff'), rgb('#767676'), themeCard)).toEqual(rgb('#ffffff'));
+      expect(cardSurface(rgb('#1e293b'), rgb('#8a94a6'), rgb('#273449'))).toEqual(rgb('#1e293b'));
+      expect(cardSurface(rgb('#1e293b'), null, rgb('#273449'))).toEqual(rgb('#273449'));
+    });
+
+    it('tones the venue toward the card while it keeps 4.5:1', () => {
+      const card = rgb('#ffffff');
+      const toned = cardMetaColor(rgb('#111827'), card);
+      expect(toned).toEqual(mix(rgb('#111827'), card, 0.22));
+      expect(contrastRatio(toned, card)).toBeGreaterThanOrEqual(TEXT_MIN);
+      // Text that only just reads keeps its colour.
+      expect(cardMetaColor(rgb('#767676'), card)).toEqual(rgb('#767676'));
+    });
   });
 });
 

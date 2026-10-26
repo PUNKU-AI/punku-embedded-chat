@@ -185,6 +185,7 @@ export default function ChatWidget({
   loading_messages,
   ai_notice_text,
   show_ai_notice,
+  checkout_card_venue,
   input_container_style,
   additional_headers,
   session_id,
@@ -254,6 +255,8 @@ export default function ChatWidget({
   ai_notice_text?: string;
   /** false hides the AI notice, for sites that show it elsewhere. */
   show_ai_notice?: boolean;
+  /** The second line of each checkout card, for example the name of the venue. */
+  checkout_card_venue?: string;
   placeholder?: string;
   input_style?: React.CSSProperties;
   input_container_style?: React.CSSProperties;
@@ -331,7 +334,11 @@ export default function ChatWidget({
     setCheckout({ url, opener });
     return true;
   }, []);
-  const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
+  // A page load ends every stream: an answer saved while it streamed is
+  // complete now, so its checkout card can show (AnswerParagraph).
+  const [messages, setMessages] = useState<ChatMessageType[]>(() =>
+    sessionData.messages.map((message) => (message.streaming ? { ...message, streaming: false } : message))
+  );
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(false);
@@ -3066,6 +3073,202 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline-offset: 2px;
 }
 
+/* ---------- Answers: the checkout card ----------
+   A checkout link that the server sent card facts for renders as a card in
+   the answer (CheckoutCard.tsx): the bold title, the venue line and the link
+   as a full-width button with the widget's label. The card is a lighter
+   panel on the bubble. The button takes the fill of the filled link button,
+   so it follows each theme and a site's button_color. The contrast guard
+   repeats these colours (THEME_COLORS card and cardMeta in controlColors.ts):
+   change both together. On a site's own answer colour, the guard sets
+   --cl-card-bg and --cl-card-meta inline, and --cl-card-button-fill and
+   --cl-card-button-label where the link button fill would vanish on the
+   card. Text sizes are in em, so they follow the answer size. */
+.cl-window {
+  --cl-card-bg: #ffffff;
+  --cl-card-line: rgba(15, 23, 42, 0.08);
+  --cl-card-meta: #4b5563;
+  --cl-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --cl-card-button-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.cl-window.theme-default {
+  --cl-card-bg: #f8fafc;
+  --cl-card-line: #e2e8f0;
+  --cl-card-meta: #475569;
+  --cl-card-shadow: none;
+}
+
+.cl-window.theme-dark {
+  --cl-card-bg: #273449;
+  --cl-card-line: #334155;
+  --cl-card-meta: #94a3b8;
+  --cl-card-shadow: none;
+  --cl-card-button-shadow: none;
+}
+
+.cl-window.theme-ocean {
+  --cl-card-bg: #1f3550;
+  --cl-card-line: #2c4a6e;
+  --cl-card-meta: #9fb4cc;
+  --cl-card-shadow: none;
+  --cl-card-button-shadow: none;
+}
+
+.cl-window.theme-aurora {
+  --cl-card-bg: rgba(255, 255, 255, 0.07);
+  --cl-card-line: rgba(216, 180, 254, 0.28);
+  --cl-card-meta: #c4b5fd;
+  --cl-card-shadow: none;
+  --cl-card-button-shadow: none;
+}
+
+/* The card fills the bubble; a short answer widens to at least 240 px. */
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: min(240px, 100%);
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid var(--cl-card-line);
+  border-radius: 12px;
+  background: var(--cl-card-bg);
+  box-shadow: var(--cl-card-shadow, none);
+}
+
+.cl-window .cl-bot_message .markdown-body > div.cl-checkout-card:first-child {
+  margin-top: 0;
+}
+
+.cl-window .cl-bot_message .markdown-body > div.cl-checkout-card:last-child {
+  margin-bottom: 0;
+}
+
+/* A site's own answer colour: the border takes the answer text colour. */
+.cl-window.cl-card-custom .cl-bot_message .markdown-body div.cl-checkout-card {
+  border-color: rgba(127, 127, 127, 0.3);
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+  box-shadow: none;
+}
+
+/* A gradient or an image behind the answer: a clear card, and the venue
+   line in the answer text colour. */
+.cl-window.cl-card-image .cl-bot_message .markdown-body div.cl-checkout-card {
+  background: transparent;
+  border-color: rgba(127, 127, 127, 0.3);
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
+  box-shadow: none;
+}
+
+.cl-window.cl-card-image .cl-bot_message .markdown-body .cl-checkout-card-meta {
+  color: inherit;
+}
+
+/* The title takes the answer text colour. A long name wraps; no single word
+   stays alone on the last line. */
+.cl-window .cl-bot_message .markdown-body .cl-checkout-card-title {
+  font-size: 0.9375em;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+/* The full venue, wrapped: a long word breaks rather than widen the card. */
+.cl-window .cl-bot_message .markdown-body .cl-checkout-card-meta {
+  margin-top: 2px;
+  font-size: 0.8125em;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--cl-card-meta);
+  overflow-wrap: anywhere;
+}
+
+/* !important on the colour and the underline: a site's link_color and the
+   underline rule of ChatWindow are !important too. */
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button,
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:hover,
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:visited,
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:focus-visible {
+  color: var(--cl-card-button-label, var(--cl-link-button-label, var(--cl-on-accent))) !important;
+  text-decoration: none !important;
+}
+
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent)));
+  box-shadow: var(--cl-card-button-shadow, none);
+  font-size: 0.9375em;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-wrap: balance;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+/* An arrow shows that the button opens a page. */
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:hover {
+  background: var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent-hover)));
+  opacity: 1 !important;
+}
+
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:active {
+  transform: translateY(1px);
+}
+
+/* The ring takes the fill, which the contrast guard checks at 3:1 on the card. */
+.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:focus-visible {
+  outline: 2px solid var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent)));
+  outline-offset: 2px;
+}
+
+/* Forced colours remove the fill: a border keeps the button's shape. The
+   arrows are masks painted in the background colour, which forced colours
+   also replace: paint them in the link colour of the system. */
+@media (forced-colors: active) {
+  .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button {
+    border: 1px solid LinkText;
+  }
+
+  .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button::after,
+  .cl-window .cl-bot_message .markdown-body > p.cl-link-only a::after,
+  .cl-window .cl-bot_message .markdown-body li.cl-link-only a::after {
+    forced-color-adjust: none;
+    background-color: LinkText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button {
+    transition: none;
+  }
+
+  .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:active {
+    transform: none;
+  }
+}
+
 /* ---------- Swarovski: the look of the swarovski-widget branch ----------
    Links are text links in the branch blue and in the weight of the answer
    (300; bold where the answer makes them bold). Links on their own line stay
@@ -4678,6 +4881,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           loading_messages={loading_messages}
           ai_notice_text={ai_notice_text}
           show_ai_notice={show_ai_notice}
+          checkout_card_venue={checkout_card_venue}
           send_button_style={send_button_style}
           online={online}
           online_message={online_message}

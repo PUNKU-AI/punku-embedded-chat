@@ -7,7 +7,9 @@ import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
+import { AnswerContext, AnswerParagraph } from "../../components/CheckoutCard";
 import { getBookingkitCheckoutUrl } from "../../bookingkitCheckout";
+import { EMOJI_OR_SPACE } from "../../checkoutCards";
 
 // Pins a readable base text size on every message. The widget renders inside a
 // closed shadow root, so without this the font-size inherits from the host page
@@ -92,6 +94,8 @@ type HastNode = {
   value?: string;
   properties?: { href?: unknown };
   children?: HastNode[];
+  data?: Record<string, unknown>;
+  position?: { start: { offset?: number }; end: { offset?: number } };
 };
 
 const meaningfulChildren = (node: unknown) =>
@@ -102,12 +106,6 @@ const meaningfulChildren = (node: unknown) =>
 const isElement = (node: HastNode | undefined, tagName: string) =>
   node?.type === "element" && node.tagName === tagName;
 
-// Whitespace and emoji: the symbol blocks (arrows, ☀ ✨ ➡ ⭐) and, as surrogate
-// pairs, U+1F000 to U+1FAFF (👉 🚀 🎟 and the skin tones), with joiners,
-// variation selectors and flag tags. No u flag: the bundle targets ES5.
-const EMOJI_OR_SPACE =
-  /^(?:[\s‍️←-⇿⌀-⏿■-➿⤀-⥿⬀-⯿]|[\ud83c\ud83d][\udc00-\udfff]|\ud83e[\udc00-\udeff]|\udb40[\udc20-\udc7f])*$/;
-
 /** The children that are not only emoji or whitespace, such as "👉 " or " 🚀✨". */
 const nonEmojiChildren = (node: unknown) =>
   ((node as HastNode | undefined)?.children || []).filter(
@@ -115,18 +113,24 @@ const nonEmojiChildren = (node: unknown) =>
   );
 
 /**
- * True when an element holds one Bookingkit checkout link and nothing else but
- * emoji or whitespace. The link may sit in one strong or em: the agent writes
- * **[Book now](url)**, which gives p > strong > a.
+ * The checkout link of an element that holds one Bookingkit checkout link and
+ * nothing else but emoji or whitespace, else null. The link may sit in one
+ * strong or em: the agent writes **[Book now](url)**, which gives p > strong > a.
  */
-export function isCheckoutLinkOnly(node: unknown): boolean {
+export function checkoutLinkOnly(node: unknown): string | null {
   let children = nonEmojiChildren(node);
   if (children.length === 1 && (isElement(children[0], "strong") || isElement(children[0], "em"))) {
     children = nonEmojiChildren(children[0]);
   }
   const href = children[0]?.properties?.href;
-  return children.length === 1 && isElement(children[0], "a") &&
-    getBookingkitCheckoutUrl(typeof href === "string" ? href : undefined) !== null;
+  return children.length === 1 && isElement(children[0], "a")
+    ? getBookingkitCheckoutUrl(typeof href === "string" ? href : undefined)
+    : null;
+}
+
+/** True when an element holds one checkout link and nothing else but emoji or whitespace. */
+export function isCheckoutLinkOnly(node: unknown): boolean {
+  return checkoutLinkOnly(node) !== null;
 }
 
 /**
@@ -154,6 +158,37 @@ export function isLinkList(node: unknown): boolean {
   return items.length > 0 && items.every((item) => isElement(item, "li") && isLinkOnlyListItem(item));
 }
 
+const TOP_LEVEL = "punkuTopLevel";
+const FOLLOWED = "punkuFollowed";
+
+/**
+ * Marks the paragraphs at the top level of an answer, and those that a later
+ * block follows (a rehype plugin). Only top-level paragraphs become checkout
+ * cards: a checkout link in a list item stays an outlined link button.
+ */
+function markTopLevelParagraphs() {
+  return (tree: HastNode) => {
+    const children = tree.children || [];
+    children.forEach((child, index) => {
+      if (!isElement(child, "p")) return;
+      const followed = children.slice(index + 1).some((next) => next.type === "element");
+      child.data = { ...child.data, [TOP_LEVEL]: true, [FOLLOWED]: followed };
+    });
+  };
+}
+
+const REHYPE_PLUGINS = [markTopLevelParagraphs];
+
+const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
+
+/** The start and end offsets of a node in the Markdown, when the parser gives them. */
+function sourceOf(node: unknown): { start: number; end: number } | undefined {
+  const position = (node as HastNode | undefined)?.position;
+  const start = position?.start.offset;
+  const end = position?.end.offset;
+  return start === undefined || end === undefined ? undefined : { start, end };
+}
+
 /** The class names of an element, with `added` when it is a string. */
 const withClass = (className: string | undefined, added: string | false) =>
   [className, added].filter(Boolean).join(" ") || undefined;
@@ -179,6 +214,7 @@ export default function ChatMessage({
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
   linkButtons = true,
+  streaming = false,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
@@ -203,19 +239,35 @@ export default function ChatMessage({
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
+  const answerContext = useMemo(() => ({ streaming, messageId: message_id }), [streaming, message_id]);
 
   // Keep the opener mounted so checkout can capture and restore its focus.
   // A link that stands alone in a paragraph or list item is an action: it
   // renders as a button (see .cl-link-only in the widget stylesheet), unless
   // linkButtons is false. A checkout link also does in the agent's bold
-  // format, next to emoji (isCheckoutLinkOnly).
+  // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
+  // complete top-level paragraph is a checkout card when the server sent one
+  // for it (AnswerParagraph). The cards, the language and the streaming state
+  // come from contexts, so these components never change. A new card, or the
+  // end of the stream, can swap a link button for a card (see AnswerParagraph).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
         {children}
       </BookingkitCheckoutLink>
     ),
-    p: ({ node, children, ...props }) => (
+    p: ({ node, children, ...props }) => linkButtons && markOf(node, TOP_LEVEL) ? (
+      <AnswerParagraph
+        {...props}
+        href={checkoutLinkOnly(node)}
+        linkOnly={isLinkOnly(node)}
+        followed={markOf(node, FOLLOWED)}
+        source={sourceOf(node)}
+        onCheckout={onCheckout}
+      >
+        {children}
+      </AnswerParagraph>
+    ) : (
       <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
     ),
     // react-markdown 8 passes ordered, checked, index and depth to lists and
@@ -346,13 +398,16 @@ export default function ChatMessage({
             }}
             className={"cl-bot_message"}
           >
-            <Markdown
-              className={"markdown-body prose flex flex-col word-break-break-word"}
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {parsedMessage}
-            </Markdown>
+            <AnswerContext.Provider value={answerContext}>
+              <Markdown
+                className={"markdown-body prose flex flex-col word-break-break-word"}
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={REHYPE_PLUGINS}
+                components={markdownComponents}
+              >
+                {parsedMessage}
+              </Markdown>
+            </AnswerContext.Provider>
           </div>
 
           {/* Simple thumbs up/down feedback - hide for welcome message */}

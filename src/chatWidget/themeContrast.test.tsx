@@ -179,6 +179,22 @@ function palette(theme: ThemeName) {
       background: errorBg, minimum: TEXT_MIN,
     },
   ];
+  // The checkout card on the answer bubble (CheckoutCard.tsx): the title in
+  // the answer text colour, the venue line, and the button with its ring.
+  const cardButton = '.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button';
+  const card = onTop(color('--cl-card-bg'), bubble);
+  const cardFill = paints(theme, declared([cardButton, 'background']));
+  const cardHover = paints(theme, declared([`${cardButton}:hover`, 'background']));
+  const cardLabel = paints(theme, declared([cardButton, 'color']));
+  pairs.push(
+    { what: 'checkout card title', foreground: of('.cl-bot_message', 'color'), background: card, minimum: TEXT_MIN },
+    { what: 'checkout card venue', foreground: color('--cl-card-meta'), background: card, minimum: TEXT_MIN },
+    { what: 'checkout card button', foreground: cardFill, background: card, minimum: BOUNDARY_MIN },
+    { what: 'checkout card button on hover', foreground: cardHover, background: card, minimum: BOUNDARY_MIN },
+    { what: 'checkout card button focus mark', foreground: ring(`${cardButton}:focus-visible`), background: card, minimum: BOUNDARY_MIN },
+    { what: 'checkout card button label', foreground: cardLabel, background: onTop(cardFill, card), minimum: TEXT_MIN },
+    { what: 'checkout card button label on hover', foreground: cardLabel, background: onTop(cardHover, card), minimum: TEXT_MIN },
+  );
   // The session refresh card: the arc on the grey track and the light card (chatWindow).
   pairs.push({
     what: 'session refresh spinner arc', foreground: color('--cl-accent-on-light'),
@@ -235,6 +251,8 @@ describe('built-in theme contrast (WCAG AA)', () => {
       expect(colors.field).toBe(token(theme, '--cl-field'));
       expect(colors.chipInk).toBe(token(theme, '--cl-chip-ink'));
       expect(colors.chipLine).toBe(token(theme, '--cl-chip-line'));
+      expect(colors.card).toBe(token(theme, '--cl-card-bg'));
+      expect(colors.cardMeta).toBe(token(theme, '--cl-card-meta'));
       expect(list.map(toHex)).toContain(colors.list);
       expect(toHex(bar[0])).toBe(colors.fieldBackdrop);
       expect(header.map(toHex)).toEqual(colors.header);
@@ -252,6 +270,17 @@ describe('built-in theme contrast (WCAG AA)', () => {
       .toBe('2px solid var(--cl-link-button-fill, var(--cl-accent))');
     expect(declared(['.cl-window .cl-bot_message .markdown-body li.cl-link-only a:focus-visible', 'outline']))
       .toBe('2px solid currentColor');
+  });
+
+  it('draws the checkout card button in the colours the contrast guard checks', () => {
+    // The guard sets --cl-card-button-fill and --cl-card-button-label only
+    // where the link button fill would vanish on the card.
+    const cardButton = '.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button';
+    expect(declared([cardButton, 'background'])).toBe('var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent)))');
+    expect(declared([cardButton, 'color'])).toBe('var(--cl-card-button-label, var(--cl-link-button-label, var(--cl-on-accent)))');
+    expect(declared([`${cardButton}:focus-visible`, 'outline']))
+      .toBe('2px solid var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent)))');
+    expect(declared(['.cl-window .cl-bot_message .markdown-body .cl-checkout-card-meta', 'color'])).toBe('var(--cl-card-meta)');
   });
 
   it('keeps the colours of the swarovski theme', () => {

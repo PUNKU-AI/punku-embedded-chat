@@ -1,0 +1,124 @@
+import { createContext, HTMLAttributes, ReactNode, useContext, useEffect, useId } from "react";
+import type { Language } from "../../translations";
+import { CardSpeech, cardSpeech, CheckoutCardData, findCheckoutCard, formatCheckoutCard } from "../checkoutCards";
+import BookingkitCheckoutLink from "./BookingkitCheckoutLink";
+
+/** What the answers need for checkout cards: the cards of the conversation, the chat language and the venue line. */
+export type CheckoutCards = {
+  cards: CheckoutCardData[];
+  language: Language;
+  /** The second line of each card, for example the name of the venue (checkout_card_venue). */
+  venue?: string;
+};
+
+export const CheckoutCardsContext = createContext<CheckoutCards>({ cards: [], language: "en" });
+
+/** The answer around a paragraph (ChatMessage): its message id, and whether it still streams in. */
+export const AnswerContext = createContext<{ streaming: boolean; messageId?: string }>({ streaming: false });
+
+/**
+ * The cards that the answers show, per message, with their place in the
+ * Markdown. The status region reads an answer from it once the answer is
+ * complete, so screen readers hear what the screen shows (ChatWindow).
+ */
+export class CardSpeechRegistry {
+  private messages = new Map<string, Map<number, CardSpeech>>();
+
+  set(messageId: string, speech: CardSpeech) {
+    const cards = this.messages.get(messageId) || new Map<number, CardSpeech>();
+    cards.set(speech.start, speech);
+    this.messages.set(messageId, cards);
+  }
+
+  delete(messageId: string, start: number) {
+    this.messages.get(messageId)?.delete(start);
+  }
+
+  get(messageId: string): CardSpeech[] {
+    return Array.from(this.messages.get(messageId)?.values() || []);
+  }
+}
+
+export const CardSpeechContext = createContext<CardSpeechRegistry | null>(null);
+
+type OnCheckout = (url: string, opener: HTMLAnchorElement) => boolean;
+
+/**
+ * A checkout link as a card: the bold title ("2 Tickets · Experience"), the
+ * venue on the second line, and the link as a full-width button with the
+ * widget's own label. The card is not a link and not a button. Its only
+ * interactive element is the checkout anchor (BookingkitCheckoutLink), so the
+ * on-page checkout, NitroPack recovery and focus return work as for every
+ * checkout link. The anchor's name is the label; the title and the venue
+ * describe it.
+ */
+export default function CheckoutCard({ title, venue, label, href, onCheckout }: {
+  title: string;
+  venue?: string;
+  label: string;
+  href: string;
+  onCheckout?: OnCheckout;
+}) {
+  const id = useId();
+  const titleId = `${id}title`;
+  const venueId = `${id}venue`;
+  return (
+    <div className="cl-checkout-card">
+      <div className="cl-checkout-card-title" id={titleId}>{title}</div>
+      {venue ? <div className="cl-checkout-card-meta" id={venueId}>{venue}</div> : null}
+      <BookingkitCheckoutLink
+        href={href}
+        onCheckout={onCheckout}
+        className="cl-checkout-card-button"
+        aria-describedby={venue ? `${titleId} ${venueId}` : titleId}
+      >
+        {label}
+      </BookingkitCheckoutLink>
+    </div>
+  );
+}
+
+/**
+ * A paragraph at the top level of an answer. It is a checkout card when it
+ * holds only a checkout link (`href`), the server sent a card for that link,
+ * and the paragraph is complete: a later block follows it, or the answer has
+ * stopped streaming. Else it is the paragraph as before: the filled link
+ * button (cl-link-only) when it holds only a link. Every top-level paragraph
+ * renders through this one component, so a paragraph that changes between
+ * these cases while it streams keeps its element and its link. The cards
+ * and the language come from a context: a new card or a new language never
+ * rebuilds the Markdown components. Only the one switch from the link button
+ * to the card replaces the link; a checkout open from the button then
+ * returns focus to the card button (BookingkitCheckoutModal). A card reports
+ * its place in the Markdown (`source`) and its words to the speech registry.
+ */
+export function AnswerParagraph({ href, linkOnly, followed, source, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
+  /** The checkout link when the paragraph holds only that link, else null. */
+  href: string | null;
+  /** True when the paragraph holds only a link (any link). */
+  linkOnly: boolean;
+  /** True when a later block follows the paragraph in the answer. */
+  followed: boolean;
+  /** The paragraph's start and end offsets in the answer's Markdown. */
+  source?: { start: number; end: number };
+  onCheckout?: OnCheckout;
+  children?: ReactNode;
+}) {
+  const { cards, language, venue } = useContext(CheckoutCardsContext);
+  const { streaming, messageId } = useContext(AnswerContext);
+  const registry = useContext(CardSpeechContext);
+  const card = href && (followed || !streaming) ? findCheckoutCard(cards, href) : null;
+  const view = card && formatCheckoutCard(card, language);
+  const words = view ? cardSpeech(view, venue) : null;
+  const start = source?.start;
+  const end = source?.end;
+  useEffect(() => {
+    if (!registry || !messageId || words === null || start === undefined || end === undefined) return;
+    registry.set(messageId, { start, end, text: words });
+    return () => registry.delete(messageId, start);
+  }, [registry, messageId, words, start, end]);
+  if (href && view) {
+    return <CheckoutCard title={view.title} venue={venue} label={view.label} href={href} onCheckout={onCheckout} />;
+  }
+  return <p {...props} className={linkOnly ? "cl-link-only" : undefined}>{children}</p>;
+}

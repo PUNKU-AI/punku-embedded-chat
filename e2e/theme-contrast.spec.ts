@@ -4,7 +4,7 @@ import { loadWidget } from './widget-helpers';
 // Every built-in theme reads at WCAG AA in the browser: each visible text at
 // 4.5:1 on the colour behind it (1.4.3), each icon and control at 3:1
 // (1.4.11). The pages show a conversation with a link and link buttons, a
-// typed question, an error with Try again, and the suggestions. The swarovski
+// checkout card, a typed question, an error with Try again, and the suggestions. The swarovski
 // theme keeps the look of the swarovski-widget branch (swarovski-look.spec.ts)
 // and is not measured here. The unit test themeContrast.test.tsx checks the
 // same colours in the stylesheet, also on hover.
@@ -19,6 +19,8 @@ test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
 
+// A made-up cart and experience for the checkout card (checkoutCards.ts).
+const cardUrl = 'https://eu5.bookingkit.de/cart/set/2468ace02468ace02468ace02468ace0?utm_source=web_chat&c=%5B%5D';
 const conversation = [
   { message: 'Do you have family tickets for Saturday?', isSend: true },
   {
@@ -27,6 +29,12 @@ const conversation = [
       + '- [Directions and parking](https://example.com/directions)\n- [Gift vouchers](https://example.com/gifts)',
     isSend: false,
     message_id: 'synthetic-answer',
+  },
+  {
+    message: `Two places are free at 18:00.\n\n**[Book now](${cardUrl})**`,
+    isSend: false,
+    message_id: 'synthetic-card',
+    checkoutCards: [{ url: cardUrl, locale: null, bookings: [{ count: 2, unit: 'person', product: 'Lantern Walk on the Old Wall' }] }],
   },
 ];
 
@@ -47,7 +55,7 @@ async function openTheme(page: Page, theme: string, props: Record<string, string
   }));
   await loadWidget(page, {
     theme, start_open: 'true', show_closed_widget_hint: 'false', width: '380', height: '640',
-    enable_client_error_reporting: 'false', ...props,
+    enable_client_error_reporting: 'false', checkout_card_venue: 'Harbour Museum of Example', ...props,
   });
   await page.bringToFront();
   await expect.poll(() => page.evaluate(() => {
@@ -179,6 +187,7 @@ function lowContrast(page: Page) {
       ['.cl-suggestion', 'suggestion'],
       ['.markdown-body > p.cl-link-only > a', 'filled link button'],
       ['.markdown-body li.cl-link-only > a', 'outlined link button'],
+      ['.cl-checkout-card-button', 'checkout card button'],
       ['.cl-retry-btn', 'Try again'],
       ['.cl-composer-field:focus-within', 'focused input field'],
     ];
@@ -208,10 +217,12 @@ function lowContrast(page: Page) {
 }
 
 for (const theme of ['default', 'dark', 'ocean', 'aurora', 'punku-ai-bookingkit']) {
-  test(`the ${theme} theme reads at WCAG AA: answers, link buttons, the input and an error`, async ({ page }) => {
+  test(`the ${theme} theme reads at WCAG AA: answers, link buttons, a checkout card, the input and an error`, async ({ page }) => {
     await openTheme(page, theme, {}, true);
-    await expect.poll(() => page.evaluate(() => !!window.__widgetRoots
-      .get(document.querySelector('punku-chat')!)!.querySelector('.markdown-body > p.cl-link-only > a'))).toBe(true);
+    await expect.poll(() => page.evaluate(() => {
+      const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+      return !!root.querySelector('.markdown-body > p.cl-link-only > a') && !!root.querySelector('.cl-checkout-card-meta');
+    })).toBe(true);
     // A typed question enables the send button, and the field shows its focus.
     await page.keyboard.type('Is the museum open on Monday?');
     await expect.poll(() => lowContrast(page)).toEqual([]);

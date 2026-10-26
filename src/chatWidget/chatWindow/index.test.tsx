@@ -34,19 +34,38 @@ jest.mock('./chatMessage', () => {
     retryLabel,
     isLatest,
     linkButtons,
+    streaming,
+    message_id,
   }: {
     message: string;
+    message_id?: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
     isLatest?: boolean;
     linkButtons?: boolean;
+    streaming?: boolean;
   }) {
+    // The checkout cards, the language and the venue that the answers read.
+    const { CardSpeechContext, CheckoutCardsContext } = require('../components/CheckoutCard');
+    const checkout = require('react').useContext(CheckoutCardsContext);
+    // A complete answer with a checkout link reports a card, as AnswerParagraph does.
+    const registry = require('react').useContext(CardSpeechContext);
+    require('react').useEffect(() => {
+      const start = message.indexOf('**[');
+      if (!registry || !message_id || streaming || isSend || !message.includes('bookingkit') || start < 0) return undefined;
+      registry.set(message_id, { start, end: message.length, text: 'CARD WORDS' });
+      return () => registry.delete(message_id, start);
+    });
     return (
       <div
         data-testid={isSend ? 'user-message' : 'bot-message'}
         data-latest={isLatest ? 'true' : undefined}
         data-link-buttons={String(linkButtons)}
+        data-streaming={streaming ? 'true' : undefined}
+        data-checkout-cards={checkout.cards.map((card: { url: string }) => card.url).join(' ')}
+        data-checkout-language={checkout.language}
+        data-checkout-venue={checkout.venue}
       >
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
@@ -1598,6 +1617,173 @@ describe('ChatWindow', () => {
           error: true
         });
       });
+    });
+  });
+
+  // The server sends checkout card facts in the content blocks of the agent
+  // message (checkoutCards.ts). Made-up carts and experiences.
+  describe('Checkout cards', () => {
+    const cardUrl = 'https://eu5.bookingkit.de/cart/set/abcdefabcdefabcdefabcdefabcdef12?utm_source=web_chat&c=%5B%5D';
+    const otherUrl = 'https://eu5.bookingkit.de/cart/set/3456789012345678901234567890abcd?utm_source=web_chat';
+    const card = (url = cardUrl) => ({
+      url, locale: 'de', bookings: [{ count: 2, unit: 'person' as const, product: 'Nachtführung in der Alten Mühle' }],
+    });
+    const blocks = [{
+      title: 'Checkout',
+      contents: [{ type: 'json', data: { kind: 'punku.checkout_card', v: 1, ...card() } }],
+    }];
+    const answer = `Ich habe 2 Tickets vorbereitet.\n\n**[Tickets buchen](${cardUrl})**`;
+
+    const streamWith = (events: Array<Record<string, unknown>>, finish: 'end' | 'error' = 'end') =>
+      mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+        const onStreamData = args[10] as (data: any) => void;
+        const onStreamEnd = args[11] as (terminal: 'end') => void;
+        for (const data of events) onStreamData({ event: 'add_message', data: { sender: 'Machine', id: 'assistant-message', ...data } });
+        if (finish === 'error') {
+          onStreamData({ event: 'error', data: { text: 'synthetic failure' } });
+        } else {
+          onStreamData({ event: 'end', data: { result: {} } });
+        }
+        onStreamEnd('end');
+        return Promise.resolve();
+      });
+
+    const ask = (props: Partial<React.ComponentProps<typeof ChatWindow>> = {}) => {
+      const addMessage = jest.fn();
+      const updateLastMessage = jest.fn();
+      render(
+        <ChatWindow {...defaultProps} enable_streaming={true} enable_client_error_reporting={false}
+          addMessage={addMessage} updateLastMessage={updateLastMessage} {...props} />
+      );
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Habt ihr am Samstag noch Plätze?' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+      return { addMessage, updateLastMessage };
+    };
+
+    it('keeps a card that comes before the answer text on every update of the answer', async () => {
+      // The block comes at the tool end, before the text, and again later.
+      streamWith([
+        { text: '', content_blocks: blocks },
+        { text: 'Ich habe 2 Tickets', content_blocks: blocks },
+        { text: answer },
+      ]);
+      const { addMessage, updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalledWith(expect.objectContaining({ streaming: false })));
+      expect(addMessage).toHaveBeenCalledWith({
+        message: 'Ich habe 2 Tickets', message_id: 'assistant-message', isSend: false, streaming: true, checkoutCards: [card()],
+      });
+      expect(updateLastMessage.mock.calls.map(([message]) => message)).toEqual([
+        { message: answer, message_id: 'assistant-message', isSend: false, streaming: true, checkoutCards: [card()] },
+        { message: answer, message_id: 'assistant-message', isSend: false, streaming: false, checkoutCards: [card()] },
+      ]);
+    });
+
+    it('leaves out a leading byte order mark, so the screen and the status region read the same text', async () => {
+      streamWith([{ text: `\uFEFF${answer}`, content_blocks: blocks }]);
+      const { addMessage, updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalledWith(expect.objectContaining({ streaming: false })));
+      expect(addMessage).toHaveBeenCalledWith(expect.objectContaining({ message: answer }));
+      expect(updateLastMessage).toHaveBeenLastCalledWith(expect.objectContaining({ message: answer }));
+      expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. Tickets buchen');
+      expect(screen.getByRole('status').textContent).not.toContain('\uFEFF');
+    });
+
+    it('adds a card that comes with a later part of the answer', async () => {
+      streamWith([{ text: 'Ich habe' }, { text: answer, content_blocks: blocks }]);
+      const { addMessage, updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalledWith(expect.objectContaining({ streaming: false })));
+      expect(addMessage).toHaveBeenCalledWith({ message: 'Ich habe', message_id: 'assistant-message', isSend: false, streaming: true });
+      expect(updateLastMessage).toHaveBeenLastCalledWith({
+        message: answer, message_id: 'assistant-message', isSend: false, streaming: false, checkoutCards: [card()],
+      });
+    });
+
+    it('reads no card from tool output and adds no key without a card', async () => {
+      const toolUse = [{
+        title: 'Agent Steps',
+        contents: [{ type: 'tool_use', output: { checkoutCard: { version: 1, bookings: card().bookings }, checkoutUrl: cardUrl } }],
+      }];
+      streamWith([{ text: answer, content_blocks: toolUse }]);
+      const { addMessage, updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalled());
+      expect(addMessage).toHaveBeenCalledWith({ message: answer, message_id: 'assistant-message', isSend: false, streaming: true });
+      expect(updateLastMessage).toHaveBeenLastCalledWith({ message: answer, message_id: 'assistant-message', isSend: false, streaming: false });
+    });
+
+    it('drops the card when the answer ends in an error', async () => {
+      streamWith([{ text: answer, content_blocks: blocks }], 'error');
+      const { updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalled());
+      expect(updateLastMessage).toHaveBeenLastCalledWith({
+        message: "Sorry, we're experiencing technical issues. Please try again.",
+        message_id: 'assistant-message', isSend: false, error: true,
+      });
+    });
+
+    it('tells screen readers the answer once its final render shows the card', async () => {
+      // Keeps the messages in state, like the widget, so the answer renders.
+      function Chat() {
+        const [messages, setMessages] = React.useState<ChatMessageType[]>([]);
+        return (
+          <ChatWindow {...defaultProps} enable_streaming={true} enable_client_error_reporting={false} messages={messages}
+            addMessage={(message: ChatMessageType) => setMessages((previous) => [...previous, message])}
+            updateLastMessage={(message: ChatMessageType) => setMessages((previous) => [...previous.slice(0, -1), message])} />
+        );
+      }
+      streamWith([{ text: '', content_blocks: blocks }, { text: answer, content_blocks: blocks }]);
+      render(<Chat />);
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Habt ihr am Samstag noch Plätze?' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. CARD WORDS'));
+    });
+
+    it('tells screen readers the link text where no card shows', async () => {
+      streamWith([{ text: answer, content_blocks: blocks }]);
+      ask({ theme: 'swarovski' });
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. Tickets buchen'));
+      expect(screen.getByRole('status')).not.toHaveTextContent('Nachtführung');
+    });
+
+    it('tells each answer whether it still streams', () => {
+      render(<ChatWindow {...defaultProps} messages={[
+        { message: 'Done', isSend: false, message_id: 'first', streaming: false },
+        { message: 'Still writing', isSend: false, message_id: 'second', streaming: true },
+      ]} />);
+
+      expect(screen.getAllByTestId('bot-message').map((element) => element.getAttribute('data-streaming'))).toEqual([null, 'true']);
+    });
+
+    it('gives every answer the cards of the conversation, the chat language and the venue', () => {
+      const messages: ChatMessageType[] = [
+        { message: answer, isSend: false, message_id: 'first', checkoutCards: [card()] },
+        { message: 'Und am Sonntag?', isSend: true },
+        { message: 'Auch am Sonntag.', isSend: false, message_id: 'second', checkoutCards: [card(otherUrl)] },
+        // Stored data is checked again: a card for another host never counts.
+        { message: 'Noch etwas?', isSend: false, message_id: 'third', checkoutCards: [{ ...card(), url: 'https://example.com/cart' }] },
+      ];
+      const { rerender } = render(
+        <ChatWindow {...defaultProps} messages={messages} language="it" checkout_card_venue="  Rocca di Esempio  " />
+      );
+
+      const answers = screen.getAllByTestId('bot-message');
+      expect(answers).toHaveLength(3);
+      for (const element of answers) {
+        expect(element).toHaveAttribute('data-checkout-cards', `${cardUrl} ${otherUrl}`);
+        expect(element).toHaveAttribute('data-checkout-language', 'it');
+        expect(element).toHaveAttribute('data-checkout-venue', 'Rocca di Esempio');
+      }
+
+      rerender(<ChatWindow {...defaultProps} messages={messages} language="it" checkout_card_venue="   " />);
+      expect(screen.getAllByTestId('bot-message')[0]).not.toHaveAttribute('data-checkout-venue');
     });
   });
 
