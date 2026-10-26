@@ -228,7 +228,7 @@ describe('formatCheckoutCard', () => {
   });
 
   it.each([
-    'DIE GROSSE HAFENRUNDFAHRT', 'VISITA GUIDATA AL FARO', '31 OTTOBRE | NOTTE DELLE LANTERNE | VIP', 'Kayak SUP Tour', 'taller de cerámica',
+    'DIE GROSSE HAFENRUNDFAHRT', 'VISITA GUIDATA AL FARO', 'NACHTFAHRT AUF DEM BEISPIELSEE (VIP)', 'Kayak SUP Tour', 'taller de cerámica',
   ])('shows the name %p exactly as the vendor writes it', (product) => {
     expect(formatCheckoutCard(card({ product, count: 5 }, 'it'), 'en')?.title).toBe(`5 biglietti · ${product}`);
   });
@@ -250,14 +250,27 @@ describe('speakCheckoutCards', () => {
   const NAME = 'Lantern Walk on the Old Wall';
   const cards = [card({ count: 2 }, 'de')];
   const lead = 'Am Samstag sind noch Plätze frei.';
+  // As the server writes the link: the brackets percent-encoded.
+  const encoded = URL_A.replace(/\[/g, '%5B').replace(/]/g, '%5D');
 
   it.each([
     ['the agent format', `**[Jetzt sichern](${URL_A})**`],
     ['emoji around the link', `👉 **[Jetzt sichern](${URL_A})** 🎟️`],
-    ['a plain link that Markdown would encode', `[Jetzt sichern](${URL_A.replace(/\[/g, '%5B').replace(/]/g, '%5D')})`],
+    ['a plain link that Markdown would encode', `[Jetzt sichern](${encoded})`],
+    ['a link with a title', `[Jetzt sichern](${encoded} "Warenkorb")`],
+    ['a bare URL', encoded],
+    ['a bold bare URL', `**${encoded}**`],
+    ['an autolink', `<${encoded}>`],
+    ['a paragraph of two lines', `👉\n**[Jetzt sichern](${URL_A})**`],
   ])('says the card, not the link text, for %s', (_, link) => {
     expect(speakCheckoutCards(`${lead}\n\n${link}\n\nBis bald!`, { cards, language: 'en', venue: 'Burg Beispielstein' }))
       .toBe(`${lead}\n\n2 Tickets · ${NAME}, Burg Beispielstein: Tickets buchen\n\nBis bald!`);
+  });
+
+  it('says a card after a code block that holds blank lines', () => {
+    const markdown = `\`\`\`\ncode\n\nmore code\n\`\`\`\n\n**[Jetzt sichern](${URL_A})**`;
+    expect(speakCheckoutCards(markdown, { cards, language: 'de' }))
+      .toBe(`\`\`\`\ncode\n\nmore code\n\`\`\`\n\n2 Tickets · ${NAME}: Tickets buchen`);
   });
 
   it('leaves out the venue when there is none', () => {
@@ -270,6 +283,16 @@ describe('speakCheckoutCards', () => {
     ['a card for another link', `**[Jetzt sichern](${URL_B})**`, cards],
     ['text next to the link', `Hier buchen: **[Jetzt sichern](${URL_A})**`, cards],
     ['a list item', `- **[Jetzt sichern](${URL_A})**`, cards],
+    ['a list item with a star', `* **[Jetzt sichern](${URL_A})**`, cards],
+    ['a list item with a plus', `+ [Jetzt sichern](${URL_A})`, cards],
+    ['a numbered list item', `1. **[Jetzt sichern](${URL_A})**`, cards],
+    ['a numbered list item with a parenthesis', `2) ${URL_A}`, cards],
+    ['a paragraph inside a list item', `- Samstag\n\n  **[Jetzt sichern](${URL_A})**`, cards],
+    ['indented code', `    ${URL_A}`, cards],
+    ['fenced code', `\`\`\`\n\n**[Jetzt sichern](${URL_A})**\n\n\`\`\``, cards],
+    ['a quote', `> **[Jetzt sichern](${URL_A})**`, cards],
+    ['a heading', `## [Jetzt sichern](${URL_A})`, cards],
+    ['a link and a bare URL', `[Jetzt sichern](${URL_A}) ${URL_B}`, cards],
     ['two links', `[Jetzt sichern](${URL_A}) [Gutschein](${URL_B})`, cards],
     ['a card without a name', `**[Jetzt sichern](${URL_A})**`, [card({ product: null })]],
   ] as const)('keeps the Markdown with %s', (_, markdown, list) => {

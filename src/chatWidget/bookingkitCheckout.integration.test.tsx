@@ -1,5 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import ChatWidget from "./index";
+import { streamMessage } from "../controllers";
+
+// The answer streams from a mock: the test sends its events.
+jest.mock("../controllers", () => ({ ...jest.requireActual("../controllers"), streamMessage: jest.fn() }));
 
 const url = "https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D";
 const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
@@ -92,7 +96,7 @@ describe.each([
 // page load. Made-up cart, experience and venue: the repository is public.
 describe("checkout card", () => {
   const cardUrl = "https://eu5.bookingkit.de/cart/set/fedcba9876543210fedcba9876543210?utm_source=web_chat&c=[{\"q\":2}]";
-  const storeConversation = (locale: string | null) => {
+  const storeConversation = (locale: string | null, streaming = false) => {
     const now = Date.now();
     localStorage.setItem("punku-chat-session-localhost-test-flow", JSON.stringify({
       sessionId: "stored-session", createdAt: now, lastActiveAt: now, expiresAt: now + 60 * 60 * 1000,
@@ -101,6 +105,7 @@ describe("checkout card", () => {
         { message: "Do you have places for two at sunset?", isSend: true },
         {
           message: `Yes, two places are free.\n\n👉 **[Grab your spot](${cardUrl})**`, isSend: false, message_id: "stored-answer",
+          streaming,
           checkoutCards: [{ url: cardUrl, locale, bookings: [{ count: 2, unit: "person", product: "Kayak at sunset" }] }],
         },
       ],
@@ -137,6 +142,60 @@ describe("checkout card", () => {
       expect(screen.getByRole("link", { name: "Book tickets" })).toBe(button);
       expect(button).toHaveFocus();
     }
+  });
+
+  it("shows the card of an answer that was saved while it streamed", () => {
+    // The page reloaded mid-stream: the saved answer still says streaming.
+    storeConversation(null, true);
+    renderWidget();
+
+    expect(screen.getByRole("link", { name: "Book tickets" })).toHaveClass("cl-checkout-card-button");
+  });
+
+  it("returns focus to the card button when the card replaces the opener during the checkout", () => {
+    const events: { push: (data: unknown) => void; end: () => void } = { push: () => {}, end: () => {} };
+    (streamMessage as jest.Mock).mockImplementationOnce((...args: unknown[]) => {
+      events.push = args[10] as (data: unknown) => void;
+      events.end = () => (args[11] as (terminal: string) => void)("end");
+      return Promise.resolve();
+    });
+    const blocks = [{
+      title: "Checkout",
+      contents: [{
+        type: "json",
+        data: {
+          kind: "punku.checkout_card", v: 1, url: cardUrl, locale: null,
+          bookings: [{ count: 2, unit: "person", product: "Kayak at sunset" }],
+        },
+      }],
+    }];
+    const answer = (text: string) => events.push({
+      event: "add_message", data: { sender: "Machine", id: "live-answer", text, content_blocks: blocks },
+    });
+    renderWidget();
+    const input = screen.getByPlaceholderText("Type your message...");
+    fireEvent.change(input, { target: { value: "Two places at sunset?" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+
+    // The link is the last block while the answer streams: the link button.
+    act(() => answer(""));
+    act(() => answer(`Yes, two places are free.\n\n**[Grab your spot](${cardUrl})**`));
+    const opener = screen.getByRole("link", { name: "Grab your spot" });
+    expect(opener.closest("p")).toHaveClass("cl-link-only");
+    fireEvent.click(opener);
+    expect(screen.getByRole("dialog", { name: "Checkout" })).toBeInTheDocument();
+
+    // The stream ends while the checkout is open: the card replaces the button.
+    act(() => {
+      events.push({ event: "end", data: { result: {} } });
+      events.end();
+    });
+    const cardButton = screen.getByRole("link", { name: "Book tickets" });
+    expect(opener.isConnected).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close checkout" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(cardButton).toHaveFocus();
   });
 
   it("writes the card in the language of the answer", () => {

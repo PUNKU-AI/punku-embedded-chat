@@ -368,7 +368,7 @@ const same = (a: Rgb, b: Rgb) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
  * own answer colour), else the bubble colour lifted toward white, 70% on a
  * light bubble and 8% on a dark one, else the bubble colour. It is the first
  * on which the answer text reads at 4.5:1, or at its own ratio on the bubble
- * if that is lower: a site's text colour never reads worse on the card.
+ * if that is lower.
  */
 export function cardSurface(bubble: Rgb, text: Rgb | null, themeCard: Rgb | null = null): Rgb {
   const light = contrast(BLACK, bubble) >= contrast(WHITE, bubble);

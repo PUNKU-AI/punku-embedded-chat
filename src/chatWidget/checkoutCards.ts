@@ -215,26 +215,82 @@ export function formatCheckoutCard(card: CheckoutCardData, chatLanguage: Languag
   };
 }
 
+/*
+ * A paragraph that cannot be a top-level paragraph on screen: a list item
+ * (-, *, + or 1. and 1)), a quote, a heading, a table row, or indented text
+ * (code, or a paragraph inside a list item).
+ */
+const NOT_TOP_LEVEL = /^(?:[ \t]|[-*+](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)|>|#{1,6}(?:[ \t]|$)|\|)/;
+/** [text](url) and [text](<url> "title"): the URL. */
+const MARKDOWN_LINK = /\[[^\]]*\]\(\s*<?([^\s<>)]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
+/** <https://…>: the URL. */
+const AUTOLINK = /<(https?:\/\/[^\s<>]+)>/g;
+/** A bare URL, which Markdown (GFM) also renders as a link. */
+const BARE_URL = /https?:\/\/[^\s<>]+/g;
+/** The marks that GFM leaves out at the end of a bare URL. */
+const BARE_URL_END = /[*_~.,:;!?"')]+$/;
+/** The fence of a code block: three or more ` or ~. */
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+/** The URL of a paragraph that holds one link and nothing else but emoji, bold or italics. */
+function onlyLink(paragraph: string): string | null {
+  if (NOT_TOP_LEVEL.test(paragraph)) return null;
+  const urls: string[] = [];
+  const rest = paragraph
+    .replace(MARKDOWN_LINK, (_match, url: string) => { urls.push(url); return ""; })
+    .replace(AUTOLINK, (_match, url: string) => { urls.push(url); return ""; })
+    .replace(BARE_URL, (match) => {
+      const url = match.replace(BARE_URL_END, "");
+      urls.push(url);
+      return match.slice(url.length);
+    });
+  return urls.length === 1 && EMOJI_OR_SPACE.test(rest.replace(/[*_]/g, "")) ? urls[0] : null;
+}
+
 /**
  * The answer for the status region, with each checkout card as screen
- * readers hear it: "<title>, <venue>: <label>" in place of the agent's link
- * text. It follows the cards on screen: a link alone in its own paragraph
- * (bold, italics and emoji around it allowed) with a matching card. The
- * rest stays Markdown.
+ * readers hear it: "<title>, <venue>: <label>" in place of the agent's link.
+ * It follows the cards on screen: one link, also a bare URL or <URL>, alone
+ * in a top-level paragraph (bold, italics and emoji around it allowed), with
+ * a matching card. List items, quotes, indented text and code stay as they
+ * are. The rest stays Markdown.
  */
 export function speakCheckoutCards(
   markdown: string,
   { cards, language, venue }: { cards: CheckoutCardData[]; language: Language; venue?: string },
 ): string {
   if (cards.length === 0) return markdown;
-  return markdown.split(/\n[ \t]*\n/).map((paragraph) => {
-    const links = paragraph.match(/\[[^\]]+\]\([^)\s]+\)/g);
-    if (!links || links.length !== 1) return paragraph;
-    if (!EMOJI_OR_SPACE.test(paragraph.replace(links[0], "").replace(/[*_]/g, ""))) return paragraph;
-    const href = /\(([^)\s]+)\)$/.exec(links[0])![1];
-    const card = getBookingkitCheckoutUrl(href) && findCheckoutCard(cards, href);
+  const spoken = (paragraph: string) => {
+    const href = onlyLink(paragraph);
+    const card = href && getBookingkitCheckoutUrl(href) ? findCheckoutCard(cards, href) : null;
     const view = card && formatCheckoutCard(card, language);
     if (!view) return paragraph;
     return venue ? `${view.title}, ${venue}: ${view.label}` : `${view.title}: ${view.label}`;
-  }).join("\n\n");
+  };
+  // Group the lines into paragraphs: blank lines and code fences end one.
+  const lines: string[] = [];
+  let paragraph: string[] = [];
+  let fence: string | null = null;
+  const flush = () => {
+    if (paragraph.length > 0) lines.push(spoken(paragraph.join("\n")));
+    paragraph = [];
+  };
+  for (const line of markdown.split("\n")) {
+    const opening = FENCE.exec(line);
+    if (fence !== null) {
+      lines.push(line);
+      if (opening && opening[1][0] === fence[0] && opening[1].length >= fence.length) fence = null;
+    } else if (opening) {
+      flush();
+      fence = opening[1];
+      lines.push(line);
+    } else if (!line.trim()) {
+      flush();
+      lines.push(line);
+    } else {
+      paragraph.push(line);
+    }
+  }
+  flush();
+  return lines.join("\n");
 }

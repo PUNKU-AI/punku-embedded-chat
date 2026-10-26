@@ -62,7 +62,9 @@ export default function CheckoutCard({ title, venue, label, href, onCheckout }: 
  * renders through this one component, so a paragraph that changes between
  * these cases while it streams keeps its element and its link. The cards
  * and the language come from a context: a new card or a new language never
- * rebuilds the Markdown components, so an open checkout keeps its opener.
+ * rebuilds the Markdown components. Only the one switch from the link button
+ * to the card replaces the link; a checkout open from the button then
+ * returns focus to the card button (BookingkitCheckoutModal).
  */
 export function AnswerParagraph({ href, linkOnly, followed, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
   /** The checkout link when the paragraph holds only that link, else null. */

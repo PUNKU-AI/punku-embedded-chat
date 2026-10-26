@@ -334,7 +334,11 @@ export default function ChatWidget({
     setCheckout({ url, opener });
     return true;
   }, []);
-  const [messages, setMessages] = useState<ChatMessageType[]>(sessionData.messages);
+  // A page load ends every stream: an answer saved while it streamed is
+  // complete now, so its checkout card can show (AnswerParagraph).
+  const [messages, setMessages] = useState<ChatMessageType[]>(() =>
+    sessionData.messages.map((message) => (message.streaming ? { ...message, streaming: false } : message))
+  );
   const [isClearing, setIsClearing] = useState(false);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(false);
