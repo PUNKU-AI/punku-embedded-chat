@@ -35,8 +35,10 @@ jest.mock('./chatMessage', () => {
     isLatest,
     linkButtons,
     streaming,
+    message_id,
   }: {
     message: string;
+    message_id?: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
@@ -45,8 +47,16 @@ jest.mock('./chatMessage', () => {
     streaming?: boolean;
   }) {
     // The checkout cards, the language and the venue that the answers read.
-    const { CheckoutCardsContext } = require('../components/CheckoutCard');
+    const { CardSpeechContext, CheckoutCardsContext } = require('../components/CheckoutCard');
     const checkout = require('react').useContext(CheckoutCardsContext);
+    // A complete answer with a checkout link reports a card, as AnswerParagraph does.
+    const registry = require('react').useContext(CardSpeechContext);
+    require('react').useEffect(() => {
+      const start = message.indexOf('**[');
+      if (!registry || !message_id || streaming || isSend || !message.includes('bookingkit') || start < 0) return undefined;
+      registry.set(message_id, { start, end: message.length, text: 'CARD WORDS' });
+      return () => registry.delete(message_id, start);
+    });
     return (
       <div
         data-testid={isSend ? 'user-message' : 'bot-message'}
@@ -1705,14 +1715,23 @@ describe('ChatWindow', () => {
       });
     });
 
-    it('tells screen readers the card as it shows, not the agent link text', async () => {
+    it('tells screen readers the answer once its final render shows the card', async () => {
+      // Keeps the messages in state, like the widget, so the answer renders.
+      function Chat() {
+        const [messages, setMessages] = React.useState<ChatMessageType[]>([]);
+        return (
+          <ChatWindow {...defaultProps} enable_streaming={true} enable_client_error_reporting={false} messages={messages}
+            addMessage={(message: ChatMessageType) => setMessages((previous) => [...previous, message])}
+            updateLastMessage={(message: ChatMessageType) => setMessages((previous) => [...previous.slice(0, -1), message])} />
+        );
+      }
       streamWith([{ text: '', content_blocks: blocks }, { text: answer, content_blocks: blocks }]);
-      ask({ checkout_card_venue: 'Burg Beispielstein' });
+      render(<Chat />);
+      const input = screen.getByRole('textbox');
+      fireEvent.change(input, { target: { value: 'Habt ihr am Samstag noch Plätze?' } });
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
-      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
-        'Ich habe 2 Tickets vorbereitet. 2 Tickets · Nachtführung in der Alten Mühle, Burg Beispielstein: Tickets buchen'
-      ));
-      expect(screen.getByRole('status')).not.toHaveTextContent('[Tickets buchen]');
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. CARD WORDS'));
     });
 
     it('tells screen readers the link text where no card shows', async () => {

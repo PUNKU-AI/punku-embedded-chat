@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import CheckoutCard, { AnswerParagraph, AnswerStreamingContext, CheckoutCards, CheckoutCardsContext } from './CheckoutCard';
+import CheckoutCard, {
+  AnswerContext, AnswerParagraph, CardSpeechContext, CardSpeechRegistry, CheckoutCards, CheckoutCardsContext,
+} from './CheckoutCard';
 import type { CheckoutCardData } from '../checkoutCards';
 
 // Made-up carts, experiences and venues. The repository is public.
@@ -64,9 +66,9 @@ describe('AnswerParagraph', () => {
   );
   const renderParagraph = (value: CheckoutCards | null, options: { href?: string | null; followed?: boolean; streaming?: boolean } = {}) =>
     render(
-      <AnswerStreamingContext.Provider value={!!options.streaming}>
+      <AnswerContext.Provider value={{ streaming: !!options.streaming }}>
         {value ? <CheckoutCardsContext.Provider value={value}>{paragraph(options)}</CheckoutCardsContext.Provider> : paragraph(options)}
-      </AnswerStreamingContext.Provider>,
+      </AnswerContext.Provider>,
     );
   const cards: CheckoutCards = { cards: [card()], language: 'pt', venue: 'Cais do Exemplo' };
 
@@ -78,6 +80,33 @@ describe('AnswerParagraph', () => {
     // The widget's label replaces the agent's link text.
     expect(screen.getByRole('link')).toHaveAccessibleName('Reservar bilhetes');
     expect(document.querySelector('p')).toBeNull();
+  });
+
+  it('reports the card it shows, with its place in the answer, until it goes', () => {
+    const registry = new CardSpeechRegistry();
+    const tree = (value: CheckoutCards) => (
+      <AnswerContext.Provider value={{ streaming: false, messageId: 'answer-1' }}>
+        <CardSpeechContext.Provider value={registry}>
+          <CheckoutCardsContext.Provider value={value}>
+            <AnswerParagraph href={url} linkOnly followed={false} source={{ start: 20, end: 60 }}>
+              <a href={url}>Agent link</a>
+            </AnswerParagraph>
+          </CheckoutCardsContext.Provider>
+        </CardSpeechContext.Provider>
+      </AnswerContext.Provider>
+    );
+    const { rerender, unmount } = render(tree(cards));
+    expect(registry.get('answer-1')).toEqual([
+      { start: 20, end: 60, text: '2 bilhetes · Passeio de barco no rio, Cais do Exemplo: Reservar bilhetes' },
+    ]);
+
+    // No card: nothing to say.
+    rerender(tree({ ...cards, cards: [] }));
+    expect(registry.get('answer-1')).toEqual([]);
+
+    rerender(tree(cards));
+    unmount();
+    expect(registry.get('answer-1')).toEqual([]);
   });
 
   it('waits for the end of a streaming answer, unless a later block follows the paragraph', () => {

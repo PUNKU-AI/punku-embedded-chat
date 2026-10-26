@@ -7,7 +7,7 @@ import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
-import { AnswerParagraph, AnswerStreamingContext } from "../../components/CheckoutCard";
+import { AnswerContext, AnswerParagraph } from "../../components/CheckoutCard";
 import { getBookingkitCheckoutUrl } from "../../bookingkitCheckout";
 import { EMOJI_OR_SPACE } from "../../checkoutCards";
 
@@ -95,6 +95,7 @@ type HastNode = {
   properties?: { href?: unknown };
   children?: HastNode[];
   data?: Record<string, unknown>;
+  position?: { start: { offset?: number }; end: { offset?: number } };
 };
 
 const meaningfulChildren = (node: unknown) =>
@@ -180,6 +181,14 @@ const REHYPE_PLUGINS = [markTopLevelParagraphs];
 
 const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
 
+/** The start and end offsets of a node in the Markdown, when the parser gives them. */
+function sourceOf(node: unknown): { start: number; end: number } | undefined {
+  const position = (node as HastNode | undefined)?.position;
+  const start = position?.start.offset;
+  const end = position?.end.offset;
+  return start === undefined || end === undefined ? undefined : { start, end };
+}
+
 /** The class names of an element, with `added` when it is a string. */
 const withClass = (className: string | undefined, added: string | false) =>
   [className, added].filter(Boolean).join(" ") || undefined;
@@ -230,6 +239,7 @@ export default function ChatMessage({
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
+  const answerContext = useMemo(() => ({ streaming, messageId: message_id }), [streaming, message_id]);
 
   // Keep the opener mounted so checkout can capture and restore its focus.
   // A link that stands alone in a paragraph or list item is an action: it
@@ -238,9 +248,8 @@ export default function ChatMessage({
   // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
   // complete top-level paragraph is a checkout card when the server sent one
   // for it (AnswerParagraph). The cards, the language and the streaming state
-  // come from contexts, so these components never change: a new card or a new
-  // language re-renders the paragraphs in place. The end of the stream can
-  // swap a link button for a card (see AnswerParagraph).
+  // come from contexts, so these components never change. A new card, or the
+  // end of the stream, can swap a link button for a card (see AnswerParagraph).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
@@ -253,6 +262,7 @@ export default function ChatMessage({
         href={checkoutLinkOnly(node)}
         linkOnly={isLinkOnly(node)}
         followed={markOf(node, FOLLOWED)}
+        source={sourceOf(node)}
         onCheckout={onCheckout}
       >
         {children}
@@ -388,7 +398,7 @@ export default function ChatMessage({
             }}
             className={"cl-bot_message"}
           >
-            <AnswerStreamingContext.Provider value={streaming}>
+            <AnswerContext.Provider value={answerContext}>
               <Markdown
                 className={"markdown-body prose flex flex-col word-break-break-word"}
                 remarkPlugins={[remarkGfm]}
@@ -397,7 +407,7 @@ export default function ChatMessage({
               >
                 {parsedMessage}
               </Markdown>
-            </AnswerStreamingContext.Provider>
+            </AnswerContext.Provider>
           </div>
 
           {/* Simple thumbs up/down feedback - hide for welcome message */}

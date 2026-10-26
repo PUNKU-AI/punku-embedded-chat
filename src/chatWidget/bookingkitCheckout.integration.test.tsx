@@ -198,6 +198,45 @@ describe("checkout card", () => {
     expect(cardButton).toHaveFocus();
   });
 
+  it("tells screen readers the card of a streamed answer as the screen shows it", () => {
+    let push: (data: unknown) => void = () => {};
+    let end = () => {};
+    (streamMessage as jest.Mock).mockImplementationOnce((...args: unknown[]) => {
+      push = args[10] as (data: unknown) => void;
+      end = () => (args[11] as (terminal: string) => void)("end");
+      return Promise.resolve();
+    });
+    const blocks = [{
+      title: "Checkout",
+      contents: [{
+        type: "json",
+        data: {
+          kind: "punku.checkout_card", v: 1, url: cardUrl, locale: null,
+          bookings: [{ count: 2, unit: "person", product: "Kayak at sunset" }],
+        },
+      }],
+    }];
+    renderWidget();
+    const input = screen.getByPlaceholderText("Type your message...");
+    fireEvent.change(input, { target: { value: "Two places at sunset?" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    act(() => {
+      push({ event: "add_message", data: { sender: "Machine", id: "spoken-answer", text: "", content_blocks: blocks } });
+      push({
+        event: "add_message",
+        data: { sender: "Machine", id: "spoken-answer", text: `Yes, two places are free.\n\n👉 **[Grab your spot](${cardUrl})**`, content_blocks: blocks },
+      });
+      push({ event: "end", data: { result: {} } });
+      end();
+    });
+
+    expect(screen.getByRole("link", { name: "Book tickets" })).toHaveClass("cl-checkout-card-button");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Yes, two places are free. 2 tickets · Kayak at sunset, Lakeside Boathouse: Book tickets"
+    );
+    expect(screen.getByRole("status")).not.toHaveTextContent("Grab your spot");
+  });
+
   it("writes the card in the language of the answer", () => {
     storeConversation("de");
     renderWidget();

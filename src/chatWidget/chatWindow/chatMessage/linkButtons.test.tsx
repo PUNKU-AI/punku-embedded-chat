@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import ChatMessage, { isCheckoutLinkOnly, isLinkList, isLinkOnly, isLinkOnlyListItem } from './index';
-import { CheckoutCards, CheckoutCardsContext } from '../../components/CheckoutCard';
+import { CardSpeechContext, CardSpeechRegistry, CheckoutCards, CheckoutCardsContext } from '../../components/CheckoutCard';
 import { speakCheckoutCards } from '../../checkoutCards';
 import type { CheckoutCardData } from '../../checkoutCards';
 
@@ -227,14 +227,15 @@ describe('checkout cards in answers', () => {
   ])('shows %s as a card and says the same card text', (_, link) => {
     const value = context({ cards: [card({ product: 'Kayak at sunset' }, 'de', encodedUrl)] });
     const message = `Zwei Plätze sind frei.\n\n${link}`;
-    render(element(message, value));
+    const registry = new CardSpeechRegistry();
+    render(<CardSpeechContext.Provider value={registry}>{element(message, value)}</CardSpeechContext.Provider>);
 
     const button = screen.getByRole('link', { name: 'Tickets buchen' });
     expect(button).toHaveAttribute('href', encodedUrl);
     const title = document.querySelector('.cl-checkout-card-title')!.textContent;
     const venue = document.querySelector('.cl-checkout-card-meta')!.textContent;
     expect(title).toBe('2 Tickets · Kayak at sunset');
-    expect(speakCheckoutCards(message, value)).toBe(`Zwei Plätze sind frei.\n\n${title}, ${venue}: Tickets buchen`);
+    expect(speakCheckoutCards(message, registry.get('answer'))).toBe(`Zwei Plätze sind frei.\n\n${title}, ${venue}: Tickets buchen`);
   });
 
   it('keeps the text link of the swarovski theme', () => {

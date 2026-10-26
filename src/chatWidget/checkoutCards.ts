@@ -215,147 +215,26 @@ export function formatCheckoutCard(card: CheckoutCardData, chatLanguage: Languag
   };
 }
 
-/*
- * The links of a paragraph, in Markdown (GFM) order: [text](url) or
- * [text](<url> "title"), then <url>, then a bare URL. Group 1, 2 or 3 holds
- * the URL. The earliest match wins, so the URL inside [text](url) is not
- * read again as a bare URL.
- */
-const LINK = /\[[^\]]*\]\(\s*<?([^\s<>)]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)|<(https?:\/\/[^\s<>]+)>|(https?:\/\/[^\s<>]+)/g;
-/** The marks that GFM leaves out at the end of a bare URL. */
-const BARE_URL_END = /[*_~.,:;!?"')]+$/;
-/** The wrappers that may stand around the link: one strong or one em. */
-const WRAPPERS = ["**", "__", "*", "_"];
-
-/** The Markdown blocks that start a line (CommonMark), for the paragraph scanner. */
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
-const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
-const HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/;
-const SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/;
-const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
-const QUOTE = /^ {0,3}>/;
-const BULLET = /^ {0,3}[-*+](?:[ \t]|$)/;
-const ORDERED = /^ {0,3}(\d{1,9})[.)](?:[ \t]|$)/;
-const EMPTY_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*$/;
-const INDENTED_CODE = /^(?: {4}|\t)/;
-const INDENTED = /^[ \t]/;
-
-/**
- * The URL of a paragraph that holds one link and nothing else but emoji or
- * spaces, with at most one strong or em around the link, as the screen
- * (checkoutLinkOnly in ChatMessage) asks. Else null.
- */
-function onlyLink(paragraph: string): string | null {
-  const links: RegExpExecArray[] = [];
-  LINK.lastIndex = 0;
-  for (let found = LINK.exec(paragraph); found; found = LINK.exec(paragraph)) links.push(found);
-  if (links.length !== 1) return null;
-  const [match] = links;
-  const bare = match[3] ? match[3].replace(BARE_URL_END, "") : null;
-  const url = match[1] || match[2] || bare!;
-  const start = match.index!;
-  const before = paragraph.slice(0, start);
-  const after = paragraph.slice(start + (bare ? bare.length : match[0].length));
-  const emoji = (text: string) => EMOJI_OR_SPACE.test(text);
-  if (emoji(before) && emoji(after)) return url;
-  // One wrapper: an opening mark before the link and the same mark after it.
-  for (const mark of WRAPPERS) {
-    const open = before.lastIndexOf(mark);
-    const close = after.indexOf(mark);
-    if (open < 0 || close < 0) continue;
-    const parts = [before.slice(0, open), before.slice(open + mark.length), after.slice(0, close), after.slice(close + mark.length)];
-    if (parts.every(emoji)) return url;
-  }
-  return null;
+/** The words of a card for screen readers: "<title>, <venue>: <label>". */
+export function cardSpeech(view: CheckoutCardView, venue?: string): string {
+  return venue ? `${view.title}, ${venue}: ${view.label}` : `${view.title}: ${view.label}`;
 }
 
+/** A card as the screen showed it: its paragraph in the answer's Markdown, and its words. */
+export type CardSpeech = { start: number; end: number; text: string };
+
 /**
- * The answer for the status region, with each checkout card as screen
- * readers hear it: "<title>, <venue>: <label>" in place of the agent's link.
- * It follows the cards on screen: one link, also a bare URL or <URL>, alone
- * in a top-level paragraph (one bold or italics and emoji around it
- * allowed), with a matching card. A small block reader finds the top-level
- * paragraphs as Markdown does: headings, rules, quotes, list items and code
- * end a paragraph and are never cards; a line under a list item or a quote
- * belongs to it. The rest stays Markdown.
+ * The answer for the status region: the Markdown with each paragraph that the
+ * screen showed as a card (AnswerParagraph reports them) replaced by the
+ * card's words. Ranges that do not fit the answer are left out.
  */
-export function speakCheckoutCards(
-  markdown: string,
-  { cards, language, venue }: { cards: CheckoutCardData[]; language: Language; venue?: string },
-): string {
-  if (cards.length === 0) return markdown;
-  const spoken = (paragraph: string) => {
-    const href = onlyLink(paragraph);
-    const card = href && getBookingkitCheckoutUrl(href) ? findCheckoutCard(cards, href) : null;
-    const view = card && formatCheckoutCard(card, language);
-    if (!view) return paragraph;
-    return venue ? `${view.title}, ${venue}: ${view.label}` : `${view.title}: ${view.label}`;
-  };
-
-  const lines: string[] = [];
-  let paragraph: string[] = [];
-  // "list" and "quote": the lines belong to that block. "listGap": a blank
-  // line inside a list, where an indented line still belongs to the list.
-  let block = "none" as "none" | "list" | "listGap" | "quote";
-  let fence: string | null = null;
-  const flush = (asParagraph = true) => {
-    if (paragraph.length > 0) lines.push(asParagraph ? spoken(paragraph.join("\n")) : paragraph.join("\n"));
-    paragraph = [];
-  };
-
-  for (const line of markdown.split("\n")) {
-    if (fence !== null) {
-      lines.push(line);
-      const closing = FENCE_CLOSE.exec(line);
-      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null;
-      continue;
-    }
-    if (!line.trim()) {
-      flush();
-      lines.push(line);
-      block = block === "list" || block === "listGap" ? "listGap" : "none";
-      continue;
-    }
-    const item = BULLET.test(line) || ORDERED.test(line);
-    const opensBlock = FENCE_OPEN.test(line) || HEADING.test(line) || RULE.test(line) || QUOTE.test(line);
-    // Inside a list or a quote: a list item, a lazy line, or (after a blank
-    // line) an indented line stays in it. Another block ends it.
-    if ((block === "list" && (item || !opensBlock || INDENTED.test(line))) || (block === "listGap" && (item || INDENTED.test(line)))
-      || (block === "quote" && !item && !opensBlock)) {
-      if (item && block !== "quote") block = "list";
-      lines.push(line);
-      continue;
-    }
-    if (block !== "none") block = "none";
-
-    const fenceOpening = FENCE_OPEN.exec(line);
-    if (paragraph.length > 0 && SETEXT_UNDERLINE.test(line)) {
-      // The paragraph above is a heading (setext): never a card.
-      flush(false);
-      lines.push(line);
-    } else if (fenceOpening) {
-      flush();
-      fence = fenceOpening[1];
-      lines.push(line);
-    } else if (HEADING.test(line) || RULE.test(line)) {
-      flush();
-      lines.push(line);
-    } else if (QUOTE.test(line)) {
-      flush();
-      block = "quote";
-      lines.push(line);
-    } else if (item && !(paragraph.length > 0 && (EMPTY_ITEM.test(line) || (ORDERED.exec(line)?.[1] ?? "1") !== "1"))) {
-      // A list item. Within a paragraph, an empty item or an ordered item
-      // that does not start at 1 is plain text of the paragraph.
-      flush();
-      block = "list";
-      lines.push(line);
-    } else if (paragraph.length === 0 && INDENTED_CODE.test(line)) {
-      lines.push(line);
-    } else {
-      paragraph.push(line);
-    }
+export function speakCheckoutCards(markdown: string, cards: CardSpeech[]): string {
+  let spoken = markdown;
+  let limit = markdown.length;
+  for (const card of [...cards].sort((a, b) => b.start - a.start)) {
+    if (card.start < 0 || card.end > limit || card.start >= card.end) continue;
+    spoken = spoken.slice(0, card.start) + card.text + spoken.slice(card.end);
+    limit = card.start;
   }
-  flush();
-  return lines.join("\n");
+  return spoken;
 }

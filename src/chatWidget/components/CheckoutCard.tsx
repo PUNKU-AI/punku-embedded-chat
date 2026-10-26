@@ -1,6 +1,6 @@
-import { createContext, HTMLAttributes, ReactNode, useContext, useId } from "react";
+import { createContext, HTMLAttributes, ReactNode, useContext, useEffect, useId } from "react";
 import type { Language } from "../../translations";
-import { CheckoutCardData, findCheckoutCard, formatCheckoutCard } from "../checkoutCards";
+import { CardSpeech, cardSpeech, CheckoutCardData, findCheckoutCard, formatCheckoutCard } from "../checkoutCards";
 import BookingkitCheckoutLink from "./BookingkitCheckoutLink";
 
 /** What the answers need for checkout cards: the cards of the conversation, the chat language and the venue line. */
@@ -13,8 +13,33 @@ export type CheckoutCards = {
 
 export const CheckoutCardsContext = createContext<CheckoutCards>({ cards: [], language: "en" });
 
-/** True while the answer around it still streams in (ChatMessage). */
-export const AnswerStreamingContext = createContext(false);
+/** The answer around a paragraph (ChatMessage): its message id, and whether it still streams in. */
+export const AnswerContext = createContext<{ streaming: boolean; messageId?: string }>({ streaming: false });
+
+/**
+ * The cards that the answers show, per message, with their place in the
+ * Markdown. The status region reads an answer from it once the answer is
+ * complete, so screen readers hear what the screen shows (ChatWindow).
+ */
+export class CardSpeechRegistry {
+  private messages = new Map<string, Map<number, CardSpeech>>();
+
+  set(messageId: string, speech: CardSpeech) {
+    const cards = this.messages.get(messageId) || new Map<number, CardSpeech>();
+    cards.set(speech.start, speech);
+    this.messages.set(messageId, cards);
+  }
+
+  delete(messageId: string, start: number) {
+    this.messages.get(messageId)?.delete(start);
+  }
+
+  get(messageId: string): CardSpeech[] {
+    return Array.from(this.messages.get(messageId)?.values() || []);
+  }
+}
+
+export const CardSpeechContext = createContext<CardSpeechRegistry | null>(null);
 
 type OnCheckout = (url: string, opener: HTMLAnchorElement) => boolean;
 
@@ -64,22 +89,34 @@ export default function CheckoutCard({ title, venue, label, href, onCheckout }: 
  * and the language come from a context: a new card or a new language never
  * rebuilds the Markdown components. Only the one switch from the link button
  * to the card replaces the link; a checkout open from the button then
- * returns focus to the card button (BookingkitCheckoutModal).
+ * returns focus to the card button (BookingkitCheckoutModal). A card reports
+ * its place in the Markdown (`source`) and its words to the speech registry.
  */
-export function AnswerParagraph({ href, linkOnly, followed, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
+export function AnswerParagraph({ href, linkOnly, followed, source, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
   /** The checkout link when the paragraph holds only that link, else null. */
   href: string | null;
   /** True when the paragraph holds only a link (any link). */
   linkOnly: boolean;
   /** True when a later block follows the paragraph in the answer. */
   followed: boolean;
+  /** The paragraph's start and end offsets in the answer's Markdown. */
+  source?: { start: number; end: number };
   onCheckout?: OnCheckout;
   children?: ReactNode;
 }) {
   const { cards, language, venue } = useContext(CheckoutCardsContext);
-  const streaming = useContext(AnswerStreamingContext);
+  const { streaming, messageId } = useContext(AnswerContext);
+  const registry = useContext(CardSpeechContext);
   const card = href && (followed || !streaming) ? findCheckoutCard(cards, href) : null;
   const view = card && formatCheckoutCard(card, language);
+  const words = view ? cardSpeech(view, venue) : null;
+  const start = source?.start;
+  const end = source?.end;
+  useEffect(() => {
+    if (!registry || !messageId || words === null || start === undefined || end === undefined) return;
+    registry.set(messageId, { start, end, text: words });
+    return () => registry.delete(messageId, start);
+  }, [registry, messageId, words, start, end]);
   if (href && view) {
     return <CheckoutCard title={view.title} venue={venue} label={view.label} href={href} onCheckout={onCheckout} />;
   }

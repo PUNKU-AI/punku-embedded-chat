@@ -25,7 +25,7 @@ import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
-import { CheckoutCards, CheckoutCardsContext } from "../components/CheckoutCard";
+import { CardSpeechContext, CardSpeechRegistry, CheckoutCards, CheckoutCardsContext } from "../components/CheckoutCard";
 import { CheckoutCardData, mergeCheckoutCards, readCheckoutCards, speakCheckoutCards, storedCheckoutCards } from "../checkoutCards";
 import { translations, Language, Translation } from "../../translations";
 import {
@@ -326,9 +326,11 @@ export default function ChatWindow({
   const sendingRef = useRef(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
-  // The checkout cards, language and venue of the newest render, for the
-  // status region at the end of an answer (set below, next to the context).
-  const checkoutCardsRef = useRef<CheckoutCards>({ cards: [], language });
+  // The cards that the answers show, with their place in the Markdown
+  // (AnswerParagraph). A complete answer waits here for the render that
+  // shows it; the status region then reads it as the screen shows it.
+  const [cardSpeech] = useState(() => new CardSpeechRegistry());
+  const [pendingAnswer, setPendingAnswer] = useState<{ id: string | null; markdown: string } | null>(null);
 
   const notifyClientError = useCallback(
     (
@@ -623,15 +625,9 @@ export default function ChatWindow({
           sendingRef.current = false;
           setSendingMessage(false);
           setIsStreaming(false);
-          // Screen readers hear the complete answer once, not each token. A
-          // checkout card is heard as it shows: its title, venue and label.
-          const spoken = linkButtons
-            ? speakCheckoutCards(message_to_add, {
-                ...checkoutCardsRef.current,
-                cards: mergeCheckoutCards(checkoutCardsRef.current.cards, checkoutCards),
-              })
-            : message_to_add;
-          setStatusAnnouncement(markdownToPlainText(spoken));
+          // Screen readers hear the complete answer once, not each token,
+          // after the render that shows it (the effect below).
+          setPendingAnswer({ id: currentMessageId, markdown: message_to_add });
 
           // Ensure final message is marked as complete
           if (currentMessageId) {
@@ -660,7 +656,6 @@ export default function ChatWindow({
     flowId,
     hostUrl,
     input_type,
-    linkButtons,
     notifyClientError,
     onSessionValidate,
     onStartNewSession,
@@ -703,7 +698,17 @@ export default function ChatWindow({
     () => ({ cards: conversationCards, language, venue }),
     [conversationCards, language, venue]
   );
-  checkoutCardsRef.current = checkoutCardsContext;
+
+  // A complete answer is read once its final render is on the screen: each
+  // checkout card as it shows (its title, venue and label), the rest as text.
+  useEffect(() => {
+    if (!pendingAnswer) return;
+    const answer = pendingAnswer.id ? messages.find((message) => message.message_id === pendingAnswer.id) : undefined;
+    if (answer && (answer.streaming || answer.message !== pendingAnswer.markdown)) return;
+    const cards = pendingAnswer.id ? cardSpeech.get(pendingAnswer.id) : [];
+    setStatusAnnouncement(markdownToPlainText(speakCheckoutCards(pendingAnswer.markdown, cards)));
+    setPendingAnswer(null);
+  }, [pendingAnswer, messages, cardSpeech]);
 
   // The newest answer keeps its feedback buttons visible; older ones show
   // them on hover, on focus or after a vote.
@@ -1531,8 +1536,10 @@ export default function ChatWindow({
             </div>
           )}
 
-          {/* The answers read their checkout cards from here (CheckoutCard.tsx). */}
+          {/* The answers read their checkout cards from here and report the
+              cards they show (CheckoutCard.tsx). */}
           <CheckoutCardsContext.Provider value={checkoutCardsContext}>
+          <CardSpeechContext.Provider value={cardSpeech}>
             {messages.map((message, index) => (
               <ChatMessage
                 bot_message_style={
@@ -1571,6 +1578,7 @@ export default function ChatWindow({
                 notHelpfulLabel={t.notHelpful}
               />
             ))}
+          </CardSpeechContext.Provider>
           </CheckoutCardsContext.Provider>
           {sendingMessage && !isStreaming && (
             <ChatMessagePlaceholder

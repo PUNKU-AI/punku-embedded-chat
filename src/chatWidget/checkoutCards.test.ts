@@ -1,5 +1,5 @@
 import {
-  CheckoutCardData, findCheckoutCard, formatCheckoutCard, mergeCheckoutCards, readCheckoutCards,
+  cardSpeech, CheckoutCardData, findCheckoutCard, formatCheckoutCard, mergeCheckoutCards, readCheckoutCards,
   speakCheckoutCards, storedCheckoutCards,
 } from './checkoutCards';
 import { LANGUAGES } from '../translations';
@@ -247,75 +247,24 @@ describe('formatCheckoutCard', () => {
 });
 
 describe('speakCheckoutCards', () => {
-  const NAME = 'Lantern Walk on the Old Wall';
-  const cards = [card({ count: 2 }, 'de')];
-  const lead = 'Am Samstag sind noch Plätze frei.';
-  // As the server writes the link: the brackets percent-encoded.
-  const encoded = URL_A.replace(/\[/g, '%5B').replace(/]/g, '%5D');
-
-  it.each([
-    ['the agent format', `**[Jetzt sichern](${URL_A})**`],
-    ['emoji around the link', `👉 **[Jetzt sichern](${URL_A})** 🎟️`],
-    ['a plain link that Markdown would encode', `[Jetzt sichern](${encoded})`],
-    ['a link with a title', `[Jetzt sichern](${encoded} "Warenkorb")`],
-    ['a bare URL', encoded],
-    ['a bold bare URL', `**${encoded}**`],
-    ['an autolink', `<${encoded}>`],
-    ['a paragraph of two lines', `👉\n**[Jetzt sichern](${URL_A})**`],
-  ])('says the card, not the link text, for %s', (_, link) => {
-    expect(speakCheckoutCards(`${lead}\n\n${link}\n\nBis bald!`, { cards, language: 'en', venue: 'Burg Beispielstein' }))
-      .toBe(`${lead}\n\n2 Tickets · ${NAME}, Burg Beispielstein: Tickets buchen\n\nBis bald!`);
+  it('puts the words of each card in place of its paragraph', () => {
+    const markdown = 'Lead.\n\n**[Book](https://example.com/a)**\n\nMore.\n\n<https://example.com/b>';
+    const first = markdown.indexOf('**[');
+    const second = markdown.indexOf('<https');
+    expect(speakCheckoutCards(markdown, [
+      { start: second, end: markdown.length, text: 'Card B' },
+      { start: first, end: first + '**[Book](https://example.com/a)**'.length, text: 'Card A' },
+    ])).toBe('Lead.\n\nCard A\n\nMore.\n\nCard B');
   });
 
-  // A line that starts its own block ends the paragraph, as on screen.
-  it.each([
-    ['a heading above', `## Termine\n**[Jetzt sichern](${URL_A})**`, '## Termine\nCARD'],
-    ['a rule above', `---\n**[Jetzt sichern](${URL_A})**`, '---\nCARD'],
-    ['a list below', `**[Jetzt sichern](${URL_A})**\n- Mehr Infos`, 'CARD\n- Mehr Infos'],
-    ['a quote below', `**[Jetzt sichern](${URL_A})**\n> Hinweis`, 'CARD\n> Hinweis'],
-    ['a paragraph after a list and a blank line', `- Samstag\n\n**[Jetzt sichern](${URL_A})**`, '- Samstag\n\nCARD'],
-    ['three spaces before the link', `   **[Jetzt sichern](${URL_A})**`, 'CARD'],
-    ['an emoji inside the bold', `**👉 [Jetzt sichern](${URL_A})**`, 'CARD'],
-  ])('says the card with %s', (_, markdown, expected) => {
-    expect(speakCheckoutCards(markdown, { cards, language: 'de' })).toBe(expected.replace('CARD', `2 Tickets · ${NAME}: Tickets buchen`));
+  it('leaves out ranges that do not fit the answer', () => {
+    expect(speakCheckoutCards('Short.', [{ start: 2, end: 99, text: 'Card' }, { start: 3, end: 3, text: 'Empty' }])).toBe('Short.');
+    expect(speakCheckoutCards('Short.', [])).toBe('Short.');
   });
 
-  it('says a card after a code block that holds blank lines', () => {
-    const markdown = `\`\`\`\ncode\n\nmore code\n\`\`\`\n\n**[Jetzt sichern](${URL_A})**`;
-    expect(speakCheckoutCards(markdown, { cards, language: 'de' }))
-      .toBe(`\`\`\`\ncode\n\nmore code\n\`\`\`\n\n2 Tickets · ${NAME}: Tickets buchen`);
-  });
-
-  it('leaves out the venue when there is none', () => {
-    expect(speakCheckoutCards(`**[Book](${URL_A})**`, { cards: [card({ count: 1 }, 'en')], language: 'en' }))
-      .toBe(`1 ticket · ${NAME}: Book tickets`);
-  });
-
-  it.each([
-    ['no card', `**[Jetzt sichern](${URL_A})**`, []],
-    ['a card for another link', `**[Jetzt sichern](${URL_B})**`, cards],
-    ['text next to the link', `Hier buchen: **[Jetzt sichern](${URL_A})**`, cards],
-    ['a list item', `- **[Jetzt sichern](${URL_A})**`, cards],
-    ['a list item with a star', `* **[Jetzt sichern](${URL_A})**`, cards],
-    ['a list item with a plus', `+ [Jetzt sichern](${URL_A})`, cards],
-    ['a numbered list item', `1. **[Jetzt sichern](${URL_A})**`, cards],
-    ['a numbered list item with a parenthesis', `2) ${URL_A}`, cards],
-    ['a paragraph inside a list item', `- Samstag\n\n  **[Jetzt sichern](${URL_A})**`, cards],
-    ['indented code', `    ${URL_A}`, cards],
-    ['fenced code', `\`\`\`\n\n**[Jetzt sichern](${URL_A})**\n\n\`\`\``, cards],
-    ['a quote', `> **[Jetzt sichern](${URL_A})**`, cards],
-    ['a heading', `## [Jetzt sichern](${URL_A})`, cards],
-    ['a link and a bare URL', `[Jetzt sichern](${URL_A}) ${URL_B}`, cards],
-    ['an emoji line above a star list item', `👉\n* **[Jetzt sichern](${URL_A})**`, cards],
-    ['a heading underline below (setext)', `**[Jetzt sichern](${URL_A})**\n---`, cards],
-    ['a lazy line of a quote', `> Hinweis\n**[Jetzt sichern](${URL_A})**`, cards],
-    ['a lazy line of a list item', `- Samstag\n**[Jetzt sichern](${URL_A})**`, cards],
-    ['bold and italics around the link', `***[Jetzt sichern](${URL_A})***`, cards],
-    ['an ordered item that continues a paragraph', `Termine\n2. **[Jetzt sichern](${URL_A})**`, cards],
-    ['a fence with an info string inside a fence', `\`\`\`\n\`\`\`js\n**[Jetzt sichern](${URL_A})**\n\`\`\``, cards],
-    ['two links', `[Jetzt sichern](${URL_A}) [Gutschein](${URL_B})`, cards],
-    ['a card without a name', `**[Jetzt sichern](${URL_A})**`, [card({ product: null })]],
-  ] as const)('keeps the Markdown with %s', (_, markdown, list) => {
-    expect(speakCheckoutCards(markdown, { cards: [...list] as CheckoutCardData[], language: 'de' })).toBe(markdown);
+  it('says a card as "<title>, <venue>: <label>"', () => {
+    const view = formatCheckoutCard(card({ count: 2 }, 'de'), 'en')!;
+    expect(cardSpeech(view, 'Burg Beispielstein')).toBe('2 Tickets · Lantern Walk on the Old Wall, Burg Beispielstein: Tickets buchen');
+    expect(cardSpeech(view)).toBe('2 Tickets · Lantern Walk on the Old Wall: Tickets buchen');
   });
 });
