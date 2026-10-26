@@ -138,7 +138,7 @@ describe("checkout card", () => {
         fireEvent.click(screen.getByRole("button", { name: "Close checkout" }));
       }
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      // The same button: it never remounts while the checkout is open.
+      // The same button: the open checkout does not replace it.
       expect(screen.getByRole("link", { name: "Book tickets" })).toBe(button);
       expect(button).toHaveFocus();
     }

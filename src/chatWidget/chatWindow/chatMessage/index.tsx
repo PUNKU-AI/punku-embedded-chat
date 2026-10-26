@@ -238,8 +238,9 @@ export default function ChatMessage({
   // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
   // complete top-level paragraph is a checkout card when the server sent one
   // for it (AnswerParagraph). The cards, the language and the streaming state
-  // come from contexts, so these components never change: a new card, a new
-  // language or the end of the stream re-renders the paragraphs in place.
+  // come from contexts, so these components never change: a new card or a new
+  // language re-renders the paragraphs in place. The end of the stream can
+  // swap a link button for a card (see AnswerParagraph).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>

@@ -216,7 +216,7 @@ The widget shows the filled link button instead in these cases:
 The `swarovski` theme keeps its text links and shows no card.
 
 The card follows the theme. On your own answer colour (`bot_message_color`), the card is a lighter shade of that colour.
-On the card, your answer text keeps at least 4.5:1, or its own contrast on the answer when that is lower. Where the theme card would not give that, the card takes a lighter shade of the answer colour, or the answer colour itself.
+On the card, your answer text keeps at least 4.5:1, or its own contrast on the answer when that is lower. Where the theme card or the lighter shade would not give that, the card takes a lighter shade of the answer colour, or the answer colour itself.
 The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
 
 ### on simple HTML

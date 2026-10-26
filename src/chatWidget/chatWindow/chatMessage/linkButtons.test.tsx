@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import ChatMessage, { isCheckoutLinkOnly, isLinkList, isLinkOnly, isLinkOnlyListItem } from './index';
 import { CheckoutCards, CheckoutCardsContext } from '../../components/CheckoutCard';
+import { speakCheckoutCards } from '../../checkoutCards';
 import type { CheckoutCardData } from '../../checkoutCards';
 
 // Real markdown rendering: a link that stands alone in a paragraph or a list
@@ -213,6 +214,27 @@ describe('checkout cards in answers', () => {
     expect(document.querySelector('.cl-checkout-card')).toBeNull();
     const link = screen.getByRole('link', { name: 'Jetzt Tickets sichern' });
     expect(link.closest('p')).toHaveClass('cl-link-only');
+  });
+
+  // GFM also renders a bare URL and <URL> as a link: they are cards too, and
+  // the status region says the same card text.
+  const encodedUrl = 'https://eu5.bookingkit.de/cart/set/9a8b7c6d5e4f30211203f4e5d6c7b8a9?c=%5B%5D'
+    + '&utm_source=web_chat&sale_params%5Bpunku_reference%5D=pk_example_bare';
+  it.each([
+    ['a bare URL', encodedUrl],
+    ['a bold bare URL', `**${encodedUrl}**`],
+    ['an autolink', `<${encodedUrl}>`],
+  ])('shows %s as a card and says the same card text', (_, link) => {
+    const value = context({ cards: [card({ product: 'Kayak at sunset' }, 'de', encodedUrl)] });
+    const message = `Zwei Plätze sind frei.\n\n${link}`;
+    render(element(message, value));
+
+    const button = screen.getByRole('link', { name: 'Tickets buchen' });
+    expect(button).toHaveAttribute('href', encodedUrl);
+    const title = document.querySelector('.cl-checkout-card-title')!.textContent;
+    const venue = document.querySelector('.cl-checkout-card-meta')!.textContent;
+    expect(title).toBe('2 Tickets · Kayak at sunset');
+    expect(speakCheckoutCards(message, value)).toBe(`Zwei Plätze sind frei.\n\n${title}, ${venue}: Tickets buchen`);
   });
 
   it('keeps the text link of the swarovski theme', () => {

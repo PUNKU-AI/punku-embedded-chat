@@ -267,6 +267,19 @@ describe('speakCheckoutCards', () => {
       .toBe(`${lead}\n\n2 Tickets · ${NAME}, Burg Beispielstein: Tickets buchen\n\nBis bald!`);
   });
 
+  // A line that starts its own block ends the paragraph, as on screen.
+  it.each([
+    ['a heading above', `## Termine\n**[Jetzt sichern](${URL_A})**`, '## Termine\nCARD'],
+    ['a rule above', `---\n**[Jetzt sichern](${URL_A})**`, '---\nCARD'],
+    ['a list below', `**[Jetzt sichern](${URL_A})**\n- Mehr Infos`, 'CARD\n- Mehr Infos'],
+    ['a quote below', `**[Jetzt sichern](${URL_A})**\n> Hinweis`, 'CARD\n> Hinweis'],
+    ['a paragraph after a list and a blank line', `- Samstag\n\n**[Jetzt sichern](${URL_A})**`, '- Samstag\n\nCARD'],
+    ['three spaces before the link', `   **[Jetzt sichern](${URL_A})**`, 'CARD'],
+    ['an emoji inside the bold', `**👉 [Jetzt sichern](${URL_A})**`, 'CARD'],
+  ])('says the card with %s', (_, markdown, expected) => {
+    expect(speakCheckoutCards(markdown, { cards, language: 'de' })).toBe(expected.replace('CARD', `2 Tickets · ${NAME}: Tickets buchen`));
+  });
+
   it('says a card after a code block that holds blank lines', () => {
     const markdown = `\`\`\`\ncode\n\nmore code\n\`\`\`\n\n**[Jetzt sichern](${URL_A})**`;
     expect(speakCheckoutCards(markdown, { cards, language: 'de' }))
@@ -293,6 +306,13 @@ describe('speakCheckoutCards', () => {
     ['a quote', `> **[Jetzt sichern](${URL_A})**`, cards],
     ['a heading', `## [Jetzt sichern](${URL_A})`, cards],
     ['a link and a bare URL', `[Jetzt sichern](${URL_A}) ${URL_B}`, cards],
+    ['an emoji line above a star list item', `👉\n* **[Jetzt sichern](${URL_A})**`, cards],
+    ['a heading underline below (setext)', `**[Jetzt sichern](${URL_A})**\n---`, cards],
+    ['a lazy line of a quote', `> Hinweis\n**[Jetzt sichern](${URL_A})**`, cards],
+    ['a lazy line of a list item', `- Samstag\n**[Jetzt sichern](${URL_A})**`, cards],
+    ['bold and italics around the link', `***[Jetzt sichern](${URL_A})***`, cards],
+    ['an ordered item that continues a paragraph', `Termine\n2. **[Jetzt sichern](${URL_A})**`, cards],
+    ['a fence with an info string inside a fence', `\`\`\`\n\`\`\`js\n**[Jetzt sichern](${URL_A})**\n\`\`\``, cards],
     ['two links', `[Jetzt sichern](${URL_A}) [Gutschein](${URL_B})`, cards],
     ['a card without a name', `**[Jetzt sichern](${URL_A})**`, [card({ product: null })]],
   ] as const)('keeps the Markdown with %s', (_, markdown, list) => {
