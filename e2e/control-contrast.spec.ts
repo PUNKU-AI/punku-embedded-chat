@@ -35,7 +35,7 @@ const conversation = [
     message: `I have prepared 2 tickets for you.\n\n👉 **[Book my tickets](${cardUrl})**`,
     isSend: false,
     message_id: 'synthetic-card',
-    checkoutCards: [{ url: cardUrl, locale: null, bookings: [{ count: 2, unit: 'person', product: 'Gothic evening with dinner' }] }],
+    checkoutCards: [{ url: cardUrl, locale: null, bookings: [{ count: 2, unit: 'person', product: 'Harbour lantern tour' }] }],
   },
 ];
 

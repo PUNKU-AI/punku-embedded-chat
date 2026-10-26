@@ -7,8 +7,9 @@ import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
-import { CheckoutLinkParagraph } from "../../components/CheckoutCard";
+import { AnswerParagraph, AnswerStreamingContext } from "../../components/CheckoutCard";
 import { getBookingkitCheckoutUrl } from "../../bookingkitCheckout";
+import { EMOJI_OR_SPACE } from "../../checkoutCards";
 
 // Pins a readable base text size on every message. The widget renders inside a
 // closed shadow root, so without this the font-size inherits from the host page
@@ -104,12 +105,6 @@ const meaningfulChildren = (node: unknown) =>
 const isElement = (node: HastNode | undefined, tagName: string) =>
   node?.type === "element" && node.tagName === tagName;
 
-// Whitespace and emoji: the symbol blocks (arrows, ☀ ✨ ➡ ⭐) and, as surrogate
-// pairs, U+1F000 to U+1FAFF (👉 🚀 🎟 and the skin tones), with joiners,
-// variation selectors and flag tags. No u flag: the bundle targets ES5.
-const EMOJI_OR_SPACE =
-  /^(?:[\s‍️←-⇿⌀-⏿■-➿⤀-⥿⬀-⯿]|[\ud83c\ud83d][\udc00-\udfff]|\ud83e[\udc00-\udeff]|\udb40[\udc20-\udc7f])*$/;
-
 /** The children that are not only emoji or whitespace, such as "👉 " or " 🚀✨". */
 const nonEmojiChildren = (node: unknown) =>
   ((node as HastNode | undefined)?.children || []).filter(
@@ -163,23 +158,27 @@ export function isLinkList(node: unknown): boolean {
 }
 
 const TOP_LEVEL = "punkuTopLevel";
+const FOLLOWED = "punkuFollowed";
 
 /**
- * Marks the paragraphs at the top level of an answer (a rehype plugin). Only
- * they become checkout cards: a checkout link in a list item stays an
- * outlined link button.
+ * Marks the paragraphs at the top level of an answer, and those that a later
+ * block follows (a rehype plugin). Only top-level paragraphs become checkout
+ * cards: a checkout link in a list item stays an outlined link button.
  */
 function markTopLevelParagraphs() {
   return (tree: HastNode) => {
-    for (const child of tree.children || []) {
-      if (isElement(child, "p")) child.data = { ...child.data, [TOP_LEVEL]: true };
-    }
+    const children = tree.children || [];
+    children.forEach((child, index) => {
+      if (!isElement(child, "p")) return;
+      const followed = children.slice(index + 1).some((next) => next.type === "element");
+      child.data = { ...child.data, [TOP_LEVEL]: true, [FOLLOWED]: followed };
+    });
   };
 }
 
 const REHYPE_PLUGINS = [markTopLevelParagraphs];
 
-const isTopLevel = (node: unknown) => (node as HastNode | undefined)?.data?.[TOP_LEVEL] === true;
+const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
 
 /** The class names of an element, with `added` when it is a string. */
 const withClass = (className: string | undefined, added: string | false) =>
@@ -206,6 +205,7 @@ export default function ChatMessage({
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
   linkButtons = true,
+  streaming = false,
 }: ChatMessageType & {
   api_key?: string;
   additional_headers?: {[key: string]: string};
@@ -236,22 +236,28 @@ export default function ChatMessage({
   // renders as a button (see .cl-link-only in the widget stylesheet), unless
   // linkButtons is false. A checkout link also does in the agent's bold
   // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
-  // top-level paragraph is a checkout card when the server sent one for it
-  // (CheckoutLinkParagraph). The cards and the language come from a context:
-  // these components never change while a checkout is open.
+  // complete top-level paragraph is a checkout card when the server sent one
+  // for it (AnswerParagraph). The cards, the language and the streaming state
+  // come from contexts: these components never change while a checkout is open.
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
         {children}
       </BookingkitCheckoutLink>
     ),
-    p: ({ node, children, ...props }) => {
-      const checkoutLink = linkButtons && isTopLevel(node) ? checkoutLinkOnly(node) : null;
-      if (checkoutLink) {
-        return <CheckoutLinkParagraph {...props} href={checkoutLink} onCheckout={onCheckout}>{children}</CheckoutLinkParagraph>;
-      }
-      return <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>;
-    },
+    p: ({ node, children, ...props }) => linkButtons && markOf(node, TOP_LEVEL) ? (
+      <AnswerParagraph
+        {...props}
+        href={checkoutLinkOnly(node)}
+        linkOnly={isLinkOnly(node)}
+        followed={markOf(node, FOLLOWED)}
+        onCheckout={onCheckout}
+      >
+        {children}
+      </AnswerParagraph>
+    ) : (
+      <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
+    ),
     // react-markdown 8 passes ordered, checked, index and depth to lists and
     // list items; they are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
@@ -380,14 +386,16 @@ export default function ChatMessage({
             }}
             className={"cl-bot_message"}
           >
-            <Markdown
-              className={"markdown-body prose flex flex-col word-break-break-word"}
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={REHYPE_PLUGINS}
-              components={markdownComponents}
-            >
-              {parsedMessage}
-            </Markdown>
+            <AnswerStreamingContext.Provider value={streaming}>
+              <Markdown
+                className={"markdown-body prose flex flex-col word-break-break-word"}
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={REHYPE_PLUGINS}
+                components={markdownComponents}
+              >
+                {parsedMessage}
+              </Markdown>
+            </AnswerStreamingContext.Provider>
           </div>
 
           {/* Simple thumbs up/down feedback - hide for welcome message */}

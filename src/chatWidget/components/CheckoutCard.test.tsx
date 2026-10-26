@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import CheckoutCard, { CheckoutCards, CheckoutCardsContext, CheckoutLinkParagraph } from './CheckoutCard';
+import CheckoutCard, { AnswerParagraph, AnswerStreamingContext, CheckoutCards, CheckoutCardsContext } from './CheckoutCard';
 import type { CheckoutCardData } from '../checkoutCards';
 
 // Made-up carts, experiences and venues. The repository is public.
@@ -55,20 +55,23 @@ describe('CheckoutCard', () => {
   });
 });
 
-describe('CheckoutLinkParagraph', () => {
+describe('AnswerParagraph', () => {
   const card = (booking: Partial<CheckoutCardData['bookings'][0]> = {}, cardUrl = url): CheckoutCardData => ({
     url: cardUrl, locale: null, bookings: [{ count: 2, unit: 'person', product: 'Passeio de barco no rio', ...booking }],
   });
-  const renderParagraph = (value: CheckoutCards | null) => render(
-    value ? (
-      <CheckoutCardsContext.Provider value={value}>
-        <CheckoutLinkParagraph href={url}><a href={url}>Agent link</a></CheckoutLinkParagraph>
-      </CheckoutCardsContext.Provider>
-    ) : <CheckoutLinkParagraph href={url}><a href={url}>Agent link</a></CheckoutLinkParagraph>,
+  const paragraph = ({ href = url, followed = false }: { href?: string | null; followed?: boolean } = {}) => (
+    <AnswerParagraph href={href} linkOnly followed={followed}><a href={url}>Agent link</a></AnswerParagraph>
   );
+  const renderParagraph = (value: CheckoutCards | null, options: { href?: string | null; followed?: boolean; streaming?: boolean } = {}) =>
+    render(
+      <AnswerStreamingContext.Provider value={!!options.streaming}>
+        {value ? <CheckoutCardsContext.Provider value={value}>{paragraph(options)}</CheckoutCardsContext.Provider> : paragraph(options)}
+      </AnswerStreamingContext.Provider>,
+    );
+  const cards: CheckoutCards = { cards: [card()], language: 'pt', venue: 'Cais do Exemplo' };
 
   it('shows the card of its link, in the card or chat language', () => {
-    renderParagraph({ cards: [card()], language: 'pt', venue: 'Cais do Exemplo' });
+    renderParagraph(cards);
 
     expect(document.querySelector('.cl-checkout-card-title')).toHaveTextContent('2 bilhetes · Passeio de barco no rio');
     expect(document.querySelector('.cl-checkout-card-meta')).toHaveTextContent('Cais do Exemplo');
@@ -77,16 +80,27 @@ describe('CheckoutLinkParagraph', () => {
     expect(document.querySelector('p')).toBeNull();
   });
 
+  it('waits for the end of a streaming answer, unless a later block follows the paragraph', () => {
+    const { unmount } = renderParagraph(cards, { streaming: true });
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
+    expect(document.querySelector('p')).toHaveClass('cl-link-only');
+    unmount();
+
+    renderParagraph(cards, { streaming: true, followed: true });
+    expect(document.querySelector('.cl-checkout-card')).not.toBeNull();
+  });
+
   it.each([
-    ['no cards', null],
-    ['a card for another link', { cards: [card({}, otherUrl)], language: 'en' }],
-    ['a card without a name', { cards: [card({ product: null })], language: 'en' }],
+    ['no cards', null, url],
+    ['a card for another link', { cards: [card({}, otherUrl)], language: 'en' }, url],
+    ['a card without a name', { cards: [card({ product: null })], language: 'en' }, url],
     ['a card with two bookings', {
       cards: [{ ...card(), bookings: [card().bookings[0], { count: 1, unit: 'group', product: 'Kayak at sunset' }] }],
       language: 'en',
-    }],
-  ] as const)('keeps the filled link button with %s', (_, value) => {
-    renderParagraph(value as CheckoutCards | null);
+    }, url],
+    ['a paragraph that holds more than the link', { cards: [card()], language: 'en' }, null],
+  ] as const)('keeps the filled link button with %s', (_, value, href) => {
+    renderParagraph(value as CheckoutCards | null, { href });
 
     expect(document.querySelector('.cl-checkout-card')).toBeNull();
     expect(document.querySelector('p')).toHaveClass('cl-link-only');

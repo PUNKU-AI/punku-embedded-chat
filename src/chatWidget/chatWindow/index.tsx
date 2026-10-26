@@ -26,7 +26,7 @@ import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { CheckoutCards, CheckoutCardsContext } from "../components/CheckoutCard";
-import { CheckoutCardData, mergeCheckoutCards, readCheckoutCards, storedCheckoutCards } from "../checkoutCards";
+import { CheckoutCardData, mergeCheckoutCards, readCheckoutCards, speakCheckoutCards, storedCheckoutCards } from "../checkoutCards";
 import { translations, Language, Translation } from "../../translations";
 import {
   createPunkuChatErrorDetail,
@@ -326,6 +326,9 @@ export default function ChatWindow({
   const sendingRef = useRef(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
+  // The checkout cards, language and venue of the newest render, for the
+  // status region at the end of an answer (set below, next to the context).
+  const checkoutCardsRef = useRef<CheckoutCards>({ cards: [], language });
 
   const notifyClientError = useCallback(
     (
@@ -620,8 +623,15 @@ export default function ChatWindow({
           sendingRef.current = false;
           setSendingMessage(false);
           setIsStreaming(false);
-          // Screen readers hear the complete answer once, not each token.
-          setStatusAnnouncement(markdownToPlainText(message_to_add));
+          // Screen readers hear the complete answer once, not each token. A
+          // checkout card is heard as it shows: its title, venue and label.
+          const spoken = linkButtons
+            ? speakCheckoutCards(message_to_add, {
+                ...checkoutCardsRef.current,
+                cards: mergeCheckoutCards(checkoutCardsRef.current.cards, checkoutCards),
+              })
+            : message_to_add;
+          setStatusAnnouncement(markdownToPlainText(spoken));
 
           // Ensure final message is marked as complete
           if (currentMessageId) {
@@ -650,6 +660,7 @@ export default function ChatWindow({
     flowId,
     hostUrl,
     input_type,
+    linkButtons,
     notifyClientError,
     onSessionValidate,
     onStartNewSession,
@@ -692,6 +703,7 @@ export default function ChatWindow({
     () => ({ cards: conversationCards, language, venue }),
     [conversationCards, language, venue]
   );
+  checkoutCardsRef.current = checkoutCardsContext;
 
   // The newest answer keeps its feedback buttons visible; older ones show
   // them on hover, on focus or after a vote.
@@ -1551,6 +1563,7 @@ export default function ChatWindow({
                 onClientError={notifyClientError}
                 onCheckout={onCheckout}
                 linkButtons={linkButtons}
+                streaming={message.streaming}
                 isLatest={index === latestAnswerIndex}
                 onRetry={index === messages.length - 1 ? handleRetry : undefined}
                 retryLabel={t.retry}

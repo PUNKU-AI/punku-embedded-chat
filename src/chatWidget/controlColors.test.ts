@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
   BOUNDARY_MIN, cardMetaColor, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline,
-  guardOwnText, ICON_MIN, liftCard, TEXT_MIN, THEME_COLORS, ThemeName,
+  cardSurface, guardOwnText, ICON_MIN, TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -469,6 +469,33 @@ describe('checkout card', () => {
     expect(result.failing).toEqual([]);
   });
 
+  it.each([
+    // Grey text reads at 4.54:1 on the white bubble and 4.34:1 on the theme
+    // card: the card turns white, the bubble lifted toward white.
+    ['default', '#767676', '#ffffff'],
+    // 4.78:1 on the bubble, 4.1:1 on the theme card, 3.75:1 on the lift: the
+    // card keeps the bubble colour.
+    ['dark', '#8a94a6', '#1e293b'],
+  ])('leaves the %s theme card where a site text colour %s would read worse on it', (theme, text, surface) => {
+    const result = card({ theme, bot_message_text_color: text });
+    expect(contrastRatio(rgb(text), rgb(THEME_COLORS[theme as ThemeName].card))).toBeLessThan(TEXT_MIN);
+    expect(result.colors).toMatchObject({ cardSurface: 'custom', cardBg: surface, cardMeta: text });
+    expect(result.title.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.venue.ratio).toBeGreaterThanOrEqual(TEXT_MIN);
+    expect(result.failing).toEqual([]);
+  });
+
+  it('brings the theme venue colour up to the answer text floor', () => {
+    // The translucent aurora bubble over a light window: the theme's light
+    // violet venue would read at about 1.4:1.
+    const result = card({ theme: 'aurora', background_color: '#f5f3ff' });
+    const themeVenue = paintOver(rgb(THEME_COLORS.aurora.cardMeta), 1, rgb(result.venue.background));
+    expect(contrastRatio(themeVenue, rgb(result.venue.background))).toBeLessThan(2);
+    expect(result.colors.cardMeta).toBeDefined();
+    expect(result.venue.ratio).toBeGreaterThanOrEqual(result.title.minimum);
+    expect(result.failing).toEqual([]);
+  });
+
   it('makes a clear card on a gradient or an image', () => {
     const { colors, pairs } = guardControlColors({ bot_message_style: { background: 'linear-gradient(#4c1d95, #7c3aed)' } });
     expect(colors.cardSurface).toBe('image');
@@ -476,13 +503,21 @@ describe('checkout card', () => {
     expect(pairs.filter((pair) => pair.control.startsWith('checkout card'))).toEqual([]);
   });
 
-  describe('liftCard and cardMetaColor', () => {
+  describe('cardSurface and cardMetaColor', () => {
     it('lifts a light bubble 70% and a dark one 8% toward white', () => {
-      expect(liftCard(rgb('#d0d0d0'), null)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
-      expect(liftCard(rgb('#202020'), null)).toEqual(mix(rgb('#202020'), WHITE, 0.08));
-      expect(liftCard(rgb('#202020'), rgb('#ffffff'))).toEqual(mix(rgb('#202020'), WHITE, 0.08));
+      expect(cardSurface(rgb('#d0d0d0'), null)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
+      expect(cardSurface(rgb('#202020'), null)).toEqual(mix(rgb('#202020'), WHITE, 0.08));
+      expect(cardSurface(rgb('#202020'), rgb('#ffffff'))).toEqual(mix(rgb('#202020'), WHITE, 0.08));
       // Dark text on a light bubble reads better still on the lighter card.
-      expect(liftCard(rgb('#d0d0d0'), BLACK)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
+      expect(cardSurface(rgb('#d0d0d0'), BLACK)).toEqual(mix(rgb('#d0d0d0'), WHITE, 0.7));
+    });
+
+    it('takes the theme card first, then the lift, then the bubble', () => {
+      const themeCard = rgb('#f8fafc');
+      expect(cardSurface(rgb('#ffffff'), rgb('#1e293b'), themeCard)).toEqual(themeCard);
+      expect(cardSurface(rgb('#ffffff'), rgb('#767676'), themeCard)).toEqual(rgb('#ffffff'));
+      expect(cardSurface(rgb('#1e293b'), rgb('#8a94a6'), rgb('#273449'))).toEqual(rgb('#1e293b'));
+      expect(cardSurface(rgb('#1e293b'), null, rgb('#273449'))).toEqual(rgb('#273449'));
     });
 
     it('tones the venue toward the card while it keeps 4.5:1', () => {

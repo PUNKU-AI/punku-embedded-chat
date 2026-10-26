@@ -219,20 +219,23 @@ test('modified Nitro checkout clicks keep the separate-tab behavior', async ({ p
 // block of the agent message (checkoutCards.ts): when the checkout tool ends,
 // before any text, and again with the text. The answer then shows a checkout
 // card. Made-up experience and venue.
-const cardBlocks = [{
+const blocksFor = (product: string) => [{
   title: 'Checkout',
   contents: [{
     type: 'json',
     data: {
       kind: 'punku.checkout_card', v: 1, url: checkoutUrl, locale: 'de',
-      bookings: [{ count: 2, unit: 'person', product: 'Nachtführung in der Alten Mühle' }],
+      bookings: [{ count: 2, unit: 'person', product }],
     },
   }],
 }];
 const cardAnswer = `Am Samstag um 18:00 Uhr sind noch Plätze frei.\n\n👉 **[Jetzt Tickets sichern](${checkoutUrl})**`;
 const cardButton = '.cl-checkout-card-button';
 
-async function loadCardAnswer(page: Page, nitro: boolean) {
+async function loadCardAnswer(page: Page, nitro: boolean, {
+  product = 'Nachtführung in der Alten Mühle', venue = 'Burg Beispielstein', check = true,
+}: { product?: string; venue?: string; check?: boolean } = {}) {
+  const cardBlocks = blocksFor(product);
   await page.route('**/api/v1/run/**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/x-ndjson',
@@ -244,14 +247,14 @@ async function loadCardAnswer(page: Page, nitro: boolean) {
     ].map((event) => JSON.stringify(event)).join('\n') + '\n',
   }));
   await loadCheckout(page, nitro, 'Hallo!', {
-    width: '380', height: '640', default_language: 'de', checkout_card_venue: 'Burg Beispielstein',
+    width: '380', height: '640', default_language: 'de', checkout_card_venue: venue,
   });
   // Send through the public API: no click or tap that could move the page.
   await page.evaluate(() => {
     (window as unknown as Record<string, { open: (message: string) => void }>)['browser-fixture_api']
       .open('Habt ihr am Samstag noch Plätze?');
   });
-  await expectCard(page);
+  if (check) await expectCard(page);
   await waitForAnswerDone(page);
 }
 
@@ -312,6 +315,51 @@ test.describe('checkout card', () => {
       await assertNoPopup(page, nitro ? 2 : 0);
     });
   }
+
+  // A made-up name of 117 characters with a 52-letter compound word, and a
+  // venue of 104 characters that wraps to three lines on a 320 px phone.
+  test('a long name and a long venue wrap inside the card on a phone', async ({ page }, testInfo) => {
+    test.skip(!['narrow-phone', 'iphone'].includes(testInfo.project.name), 'Runs on the narrow and the iPhone profile.');
+    const product = 'Donaudampfschifffahrtsgesellschaftskapitänsrundfahrt mit Abendessen, Weinprobe und Laternenführung durch die Altstadt';
+    const venue = 'Historischer Hafenspeicher am Nordufer des Beispielsees, Eingang über den Innenhof neben der alten Werft';
+    await loadCardAnswer(page, false, { product, venue, check: false });
+
+    const layout = await page.evaluate(() => {
+      const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+      const list = root.querySelector<HTMLElement>('.cl-messages_container')!;
+      // The visitor scrolls to the end of the answer.
+      list.scrollTop = list.scrollHeight;
+      const card = root.querySelector<HTMLElement>('.cl-checkout-card')!;
+      const bubble = card.closest<HTMLElement>('.cl-bot_message')!;
+      const title = card.querySelector<HTMLElement>('.cl-checkout-card-title')!;
+      const venueLine = card.querySelector<HTMLElement>('.cl-checkout-card-meta')!;
+      const button = card.querySelector<HTMLElement>('.cl-checkout-card-button')!;
+      const fits = (element: HTMLElement) => element.scrollWidth <= element.clientWidth;
+      const box = (element: Element) => element.getBoundingClientRect();
+      const [listBox, cardBox, buttonBox] = [box(list), box(card), box(button)];
+      return {
+        title: title.textContent,
+        venue: venueLine.textContent,
+        venueLines: Math.round(venueLine.getBoundingClientRect().height / parseFloat(getComputedStyle(venueLine).lineHeight)),
+        venueClipped: venueLine.scrollHeight > venueLine.clientHeight + 1,
+        fits: { list: fits(list), bubble: fits(bubble), card: fits(card), title: fits(title), venue: fits(venueLine) },
+        page: document.documentElement.scrollWidth <= window.innerWidth,
+        buttonInCard: buttonBox.left >= cardBox.left && buttonBox.right <= cardBox.right,
+        buttonShown: buttonBox.width > 100 && buttonBox.height >= 44 && buttonBox.top >= listBox.top && buttonBox.bottom <= listBox.bottom
+          && buttonBox.right <= window.innerWidth,
+      };
+    });
+    expect(layout).toMatchObject({
+      title: `2 Tickets · ${product}`,
+      venue,
+      venueClipped: false,
+      fits: { list: true, bubble: true, card: true, title: true, venue: true },
+      page: true,
+      buttonInCard: true,
+      buttonShown: true,
+    });
+    expect(layout.venueLines).toBeGreaterThanOrEqual(testInfo.project.name === 'narrow-phone' ? 3 : 2);
+  });
 
   test('a card opens with the keyboard and comes back after a page load', async ({ page, hasTouch }) => {
     test.skip(hasTouch, 'Keyboard input runs on the three desktop engines.');

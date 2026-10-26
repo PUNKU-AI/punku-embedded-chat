@@ -13,6 +13,9 @@ export type CheckoutCards = {
 
 export const CheckoutCardsContext = createContext<CheckoutCards>({ cards: [], language: "en" });
 
+/** True while the answer around it still streams in (ChatMessage). */
+export const AnswerStreamingContext = createContext(false);
+
 type OnCheckout = (url: string, opener: HTMLAnchorElement) => boolean;
 
 /**
@@ -51,22 +54,32 @@ export default function CheckoutCard({ title, venue, label, href, onCheckout }: 
 }
 
 /**
- * A top-level paragraph that holds only a checkout link: a checkout card when
- * the server sent a card for that link, else the filled link button
- * (p.cl-link-only). The cards come from the context, so a new card or a new
- * language never rebuilds the Markdown components: an open checkout keeps
- * its opener.
+ * A paragraph at the top level of an answer. It is a checkout card when it
+ * holds only a checkout link (`href`), the server sent a card for that link,
+ * and the paragraph is complete: a later block follows it, or the answer has
+ * stopped streaming. Else it is the paragraph as before: the filled link
+ * button (cl-link-only) when it holds only a link. Every top-level paragraph
+ * renders through this one component, so a paragraph that changes between
+ * these cases while it streams keeps its element and its link. The cards
+ * and the language come from a context: a new card or a new language never
+ * rebuilds the Markdown components, so an open checkout keeps its opener.
  */
-export function CheckoutLinkParagraph({ href, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
-  href: string;
+export function AnswerParagraph({ href, linkOnly, followed, onCheckout, children, ...props }: HTMLAttributes<HTMLParagraphElement> & {
+  /** The checkout link when the paragraph holds only that link, else null. */
+  href: string | null;
+  /** True when the paragraph holds only a link (any link). */
+  linkOnly: boolean;
+  /** True when a later block follows the paragraph in the answer. */
+  followed: boolean;
   onCheckout?: OnCheckout;
   children?: ReactNode;
 }) {
   const { cards, language, venue } = useContext(CheckoutCardsContext);
-  const card = findCheckoutCard(cards, href);
+  const streaming = useContext(AnswerStreamingContext);
+  const card = href && (followed || !streaming) ? findCheckoutCard(cards, href) : null;
   const view = card && formatCheckoutCard(card, language);
-  if (view) {
+  if (href && view) {
     return <CheckoutCard title={view.title} venue={venue} label={view.label} href={href} onCheckout={onCheckout} />;
   }
-  return <p {...props} className="cl-link-only">{children}</p>;
+  return <p {...props} className={linkOnly ? "cl-link-only" : undefined}>{children}</p>;
 }

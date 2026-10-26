@@ -34,6 +34,7 @@ jest.mock('./chatMessage', () => {
     retryLabel,
     isLatest,
     linkButtons,
+    streaming,
   }: {
     message: string;
     isSend: boolean;
@@ -41,6 +42,7 @@ jest.mock('./chatMessage', () => {
     retryLabel?: string;
     isLatest?: boolean;
     linkButtons?: boolean;
+    streaming?: boolean;
   }) {
     // The checkout cards, the language and the venue that the answers read.
     const { CheckoutCardsContext } = require('../components/CheckoutCard');
@@ -50,6 +52,7 @@ jest.mock('./chatMessage', () => {
         data-testid={isSend ? 'user-message' : 'bot-message'}
         data-latest={isLatest ? 'true' : undefined}
         data-link-buttons={String(linkButtons)}
+        data-streaming={streaming ? 'true' : undefined}
         data-checkout-cards={checkout.cards.map((card: { url: string }) => card.url).join(' ')}
         data-checkout-language={checkout.language}
         data-checkout-venue={checkout.venue}
@@ -1635,12 +1638,12 @@ describe('ChatWindow', () => {
         return Promise.resolve();
       });
 
-    const ask = () => {
+    const ask = (props: Partial<React.ComponentProps<typeof ChatWindow>> = {}) => {
       const addMessage = jest.fn();
       const updateLastMessage = jest.fn();
       render(
         <ChatWindow {...defaultProps} enable_streaming={true} enable_client_error_reporting={false}
-          addMessage={addMessage} updateLastMessage={updateLastMessage} />
+          addMessage={addMessage} updateLastMessage={updateLastMessage} {...props} />
       );
       const input = screen.getByRole('textbox');
       fireEvent.change(input, { target: { value: 'Habt ihr am Samstag noch Plätze?' } });
@@ -1700,6 +1703,33 @@ describe('ChatWindow', () => {
         message: "Sorry, we're experiencing technical issues. Please try again.",
         message_id: 'assistant-message', isSend: false, error: true,
       });
+    });
+
+    it('tells screen readers the card as it shows, not the agent link text', async () => {
+      streamWith([{ text: '', content_blocks: blocks }, { text: answer, content_blocks: blocks }]);
+      ask({ checkout_card_venue: 'Burg Beispielstein' });
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(
+        'Ich habe 2 Tickets vorbereitet. 2 Tickets · Nachtführung in der Alten Mühle, Burg Beispielstein: Tickets buchen'
+      ));
+      expect(screen.getByRole('status')).not.toHaveTextContent('[Tickets buchen]');
+    });
+
+    it('tells screen readers the link text where no card shows', async () => {
+      streamWith([{ text: answer, content_blocks: blocks }]);
+      ask({ theme: 'swarovski' });
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. Tickets buchen'));
+      expect(screen.getByRole('status')).not.toHaveTextContent('Nachtführung');
+    });
+
+    it('tells each answer whether it still streams', () => {
+      render(<ChatWindow {...defaultProps} messages={[
+        { message: 'Done', isSend: false, message_id: 'first', streaming: false },
+        { message: 'Still writing', isSend: false, message_id: 'second', streaming: true },
+      ]} />);
+
+      expect(screen.getAllByTestId('bot-message').map((element) => element.getAttribute('data-streaming'))).toEqual([null, 'true']);
     });
 
     it('gives every answer the cards of the conversation, the chat language and the venue', () => {

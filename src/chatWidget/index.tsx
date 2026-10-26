@@ -3172,12 +3172,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   text-wrap: pretty;
 }
 
-/* At most two lines. The full text stays for aria-describedby. */
+/* The full venue, wrapped: a long word breaks rather than widen the card. */
 .cl-window .cl-bot_message .markdown-body .cl-checkout-card-meta {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
   margin-top: 2px;
   font-size: 0.8125em;
   font-weight: 400;
@@ -3243,10 +3239,19 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   outline-offset: 2px;
 }
 
-/* Forced colours remove the fill: a border keeps the button's shape. */
+/* Forced colours remove the fill: a border keeps the button's shape. The
+   arrows are masks painted in the background colour, which forced colours
+   also replace: paint them in the link colour of the system. */
 @media (forced-colors: active) {
   .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button {
     border: 1px solid LinkText;
+  }
+
+  .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button::after,
+  .cl-window .cl-bot_message .markdown-body > p.cl-link-only a::after,
+  .cl-window .cl-bot_message .markdown-body li.cl-link-only a::after {
+    forced-color-adjust: none;
+    background-color: LinkText;
   }
 }
 

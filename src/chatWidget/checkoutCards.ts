@@ -32,7 +32,7 @@ export type CheckoutCardData = {
 
 const KIND = "punku.checkout_card";
 const VERSION = 1;
-/** The server cuts each text at 120 characters. A longer text is not from it. */
+/** The server cuts each text at 120 characters (code points). A longer text is not from it. */
 const MAX_TEXT = 120;
 /** The server sends 1 to 4 bookings per checkout link. */
 const MAX_BOOKINGS = 4;
@@ -42,10 +42,14 @@ const UNITS = ["person", "group"];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
-/** A text of at most 120 characters with its spaces collapsed, null for none, undefined when it is not valid. */
+/**
+ * A text of at most 120 code points with its spaces collapsed, null for none,
+ * undefined when it is not valid. Array.from counts an emoji as one, as the
+ * server does; String length counts it as two.
+ */
 function readText(value: unknown): string | null | undefined {
   if (value === null || value === undefined) return null;
-  if (typeof value !== "string" || value.length > MAX_TEXT) return undefined;
+  if (typeof value !== "string" || Array.from(value).length > MAX_TEXT) return undefined;
   return value.replace(/\s+/g, " ").trim() || null;
 }
 
@@ -103,6 +107,12 @@ export function storedCheckoutCards(value: unknown): CheckoutCardData[] {
   return mergeCheckoutCards([], value.map(readCard).filter((card): card is CheckoutCardData => !!card));
 }
 
+// Whitespace and emoji: the symbol blocks (arrows, ☀ ✨ ➡ ⭐) and, as surrogate
+// pairs, U+1F000 to U+1FAFF (👉 🚀 🎟 and the skin tones), with joiners,
+// variation selectors and flag tags. No u flag: the bundle targets ES5.
+export const EMOJI_OR_SPACE =
+  /^(?:[\s‍️←-⇿⌀-⏿■-➿⤀-⥿⬀-⯿]|[\ud83c\ud83d][\udc00-\udfff]|\ud83e[\udc00-\udeff]|\udb40[\udc20-\udc7f])*$/;
+
 /** The parameters that the server may add to a verified link: they do not change the cart. */
 const BRAND_PARAMS = ["lang", "bklink"];
 const REFERENCE = "sale_params[punku_reference]";
@@ -115,24 +125,28 @@ function parseUrl(href: string): URL | null {
   }
 }
 
-/** The cart: origin and path, without a trailing slash. */
-const cartOf = (url: URL) => url.origin + url.pathname.replace(/\/$/, "");
+/**
+ * The Bookingkit merchant of a link: origin and path (/cart/set/<merchant
+ * id>), without a trailing slash. The cart itself is in the c parameter.
+ */
+const merchantOf = (url: URL) => url.origin + url.pathname.replace(/\/$/, "");
 
-/** The cart and its parameters, decoded and sorted, without the brand parameters. */
+/** The merchant and the parameters, decoded and sorted, without the brand parameters. */
 function canonicalUrl(url: URL): string {
   const params: string[][] = [];
   url.searchParams.forEach((value, key) => {
     if (BRAND_PARAMS.indexOf(key) < 0) params.push([key, value]);
   });
   params.sort((a, b) => (a[0] + "\u0000" + a[1] < b[0] + "\u0000" + b[1] ? -1 : 1));
-  return cartOf(url) + JSON.stringify(params);
+  return merchantOf(url) + JSON.stringify(params);
 }
 
 /**
  * The card of a checkout link. The answer's link is not byte-equal to the
  * card URL: Markdown percent-encodes the href, and the server may add lang
- * or bklink. Two links match on their punku reference when both have one,
- * else on the decoded cart and parameters. The newest card wins.
+ * or bklink. Two links match on their punku reference, merchant and cart (c)
+ * when both have a reference, else on the merchant and all decoded
+ * parameters. The newest card wins.
  */
 export function findCheckoutCard(cards: CheckoutCardData[], href: string | undefined): CheckoutCardData | null {
   const link = href ? parseUrl(href) : null;
@@ -144,26 +158,11 @@ export function findCheckoutCard(cards: CheckoutCardData[], href: string | undef
     if (!card) continue;
     const cardReference = card.searchParams.get(REFERENCE);
     const match = reference && cardReference
-      ? reference === cardReference && cartOf(card) === cartOf(link)
+      ? reference === cardReference && merchantOf(card) === merchantOf(link) && card.searchParams.get("c") === link.searchParams.get("c")
       : canonicalUrl(card) === canonical;
     if (match) return cards[index];
   }
   return null;
-}
-
-/**
- * An experience name in capitals only, in sentence case: "LEZIONI SCI
- * PRIVATE" gives "Lezioni sci private". Other names stay as the vendor
- * writes them. The name is never translated.
- */
-export function experienceName(name: string, language: Language): string {
-  const lower = name.toLocaleLowerCase(language);
-  if (name === lower || name !== name.toLocaleUpperCase(language)) return name;
-  for (let index = 0; index < lower.length; index += 1) {
-    const upper = lower.charAt(index).toLocaleUpperCase(language);
-    if (upper !== lower.charAt(index)) return lower.slice(0, index) + upper + lower.slice(index + 1);
-  }
-  return lower;
 }
 
 type PluralKeys = Record<"one" | "few" | "many" | "other", keyof Translation>;
@@ -205,14 +204,37 @@ export function formatCheckoutCard(card: CheckoutCardData, chatLanguage: Languag
   if (!product) return null;
   const language = toLanguage(card.locale) || chatLanguage;
   const t = translations[language];
-  const name = experienceName(product, language);
   const amount = count === null ? null
     : unit === "person" ? countWith(count, TICKETS, language)
     : unit === "group" ? countWith(count, PEOPLE, language)
     : null;
   return {
-    title: amount ? `${amount} · ${name}` : name,
+    title: amount ? `${amount} · ${product}` : product,
     label: unit === "person" ? t.checkoutBookTickets : t.checkoutBookNow,
     language,
   };
+}
+
+/**
+ * The answer for the status region, with each checkout card as screen
+ * readers hear it: "<title>, <venue>: <label>" in place of the agent's link
+ * text. It follows the cards on screen: a link alone in its own paragraph
+ * (bold, italics and emoji around it allowed) with a matching card. The
+ * rest stays Markdown.
+ */
+export function speakCheckoutCards(
+  markdown: string,
+  { cards, language, venue }: { cards: CheckoutCardData[]; language: Language; venue?: string },
+): string {
+  if (cards.length === 0) return markdown;
+  return markdown.split(/\n[ \t]*\n/).map((paragraph) => {
+    const links = paragraph.match(/\[[^\]]+\]\([^)\s]+\)/g);
+    if (!links || links.length !== 1) return paragraph;
+    if (!EMOJI_OR_SPACE.test(paragraph.replace(links[0], "").replace(/[*_]/g, ""))) return paragraph;
+    const href = /\(([^)\s]+)\)$/.exec(links[0])![1];
+    const card = getBookingkitCheckoutUrl(href) && findCheckoutCard(cards, href);
+    const view = card && formatCheckoutCard(card, language);
+    if (!view) return paragraph;
+    return venue ? `${view.title}, ${venue}: ${view.label}` : `${view.title}: ${view.label}`;
+  }).join("\n\n");
 }

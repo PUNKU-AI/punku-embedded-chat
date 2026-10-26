@@ -205,7 +205,7 @@ The widget then shows the link as a card in the answer:
   It opens the same on-page checkout as a checkout link.
 
 The card uses the language of the answer when the widget has that language, else the chat language.
-The experience name stays as the vendor writes it. A name in capitals only shows in sentence case.
+The experience name shows exactly as the vendor writes it, also in capitals. It is never translated.
 
 The widget shows the filled link button instead in these cases:
 
@@ -216,6 +216,7 @@ The widget shows the filled link button instead in these cases:
 The `swarovski` theme keeps its text links and shows no card.
 
 The card follows the theme. On your own answer colour (`bot_message_color`), the card is a lighter shade of that colour.
+Your answer text colour never reads worse on the card than on the answer. Where it would, the card takes a lighter shade of the answer colour, or the answer colour itself.
 The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
 
 ### on simple HTML

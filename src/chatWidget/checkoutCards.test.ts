@@ -1,6 +1,6 @@
 import {
-  CheckoutCardData, experienceName, findCheckoutCard, formatCheckoutCard, mergeCheckoutCards, readCheckoutCards,
-  storedCheckoutCards,
+  CheckoutCardData, findCheckoutCard, formatCheckoutCard, mergeCheckoutCards, readCheckoutCards,
+  speakCheckoutCards, storedCheckoutCards,
 } from './checkoutCards';
 import { LANGUAGES } from '../translations';
 
@@ -92,6 +92,11 @@ describe('readCheckoutCards', () => {
     expect(readCheckoutCards([block(data)])).toEqual([]);
   });
 
+  it('counts the limit in code points, as the server does: an emoji counts once', () => {
+    expect(readCheckoutCards([block(cardData({}, { product: '🛶'.repeat(120) }))])).toHaveLength(1);
+    expect(readCheckoutCards([block(cardData({}, { product: '🛶'.repeat(121) }))])).toEqual([]);
+  });
+
   it('accepts the limits: 1 and 99, a name of 120 characters, four bookings', () => {
     expect(readCheckoutCards([block(cardData({}, { count: 1 }))])).toHaveLength(1);
     expect(readCheckoutCards([block(cardData({}, { count: 99, product: 'x'.repeat(120) }))])).toHaveLength(1);
@@ -147,8 +152,9 @@ describe('findCheckoutCard', () => {
     const changed = URL_A.replace('utm_medium=chat_widget', 'utm_medium=chat_bubble');
     expect(findCheckoutCard([card()], changed)).toEqual(card());
     expect(findCheckoutCard([card()], URL_A.replace('pk_example_a', 'pk_example_z'))).toBeNull();
-    // The same reference on another cart is not the same checkout.
+    // The same reference with another merchant or another cart is not the same checkout.
     expect(findCheckoutCard([card()], URL_A.replace(CART_A, CART_B))).toBeNull();
+    expect(findCheckoutCard([card()], URL_A.replace('%22q%22%3A2', '%22q%22%3A3'))).toBeNull();
   });
 
   it('finds no card for another cart or other parameters', () => {
@@ -169,24 +175,6 @@ describe('findCheckoutCard', () => {
     expect(findCheckoutCard([card()], 'not a url')).toBeNull();
     expect(findCheckoutCard([], URL_A)).toBeNull();
   });
-});
-
-describe('experienceName', () => {
-  it.each([
-    ['VISITA GUIDATA AL FARO', 'Visita guidata al faro'],
-    ['RUNDFAHRT MIT DEM DAMPFSCHIFF', 'Rundfahrt mit dem dampfschiff'],
-    ['«NOTTE BIANCA»', '«Notte bianca»'],
-    ['2-STUNDEN-TOUR', '2-Stunden-tour'],
-    ['ÉVASION EN CANOË', 'Évasion en canoë'],
-  ])('writes the capitals-only name %p in sentence case', (name, expected) => {
-    expect(experienceName(name, 'it')).toBe(expected);
-  });
-
-  it.each(['Lantern Walk on the Old Wall', 'Kayak SUP Tour', 'taller de cerámica', '1926'])(
-    'keeps the name %p as the vendor writes it', (name) => {
-      expect(experienceName(name, 'en')).toBe(name);
-    },
-  );
 });
 
 describe('formatCheckoutCard', () => {
@@ -233,12 +221,16 @@ describe('formatCheckoutCard', () => {
     expect(formatCheckoutCard(card({ unit: 'person', count: null }), 'de')).toEqual({ title: NAME, label: 'Tickets buchen', language: 'de' });
   });
 
-  it('never translates the name and writes a capitals-only name in sentence case', () => {
+  it('never translates the name', () => {
     for (const language of LANGUAGES) {
       expect(formatCheckoutCard(card({ product: 'Taller de cerámica', count: 1 }), language)?.title).toMatch(/ · Taller de cerámica$/);
     }
-    expect(formatCheckoutCard(card({ product: 'VISITA GUIDATA AL FARO', count: 5 }, 'it'), 'en')?.title)
-      .toBe('5 biglietti · Visita guidata al faro');
+  });
+
+  it.each([
+    'DIE GROSSE HAFENRUNDFAHRT', 'VISITA GUIDATA AL FARO', '31 OTTOBRE | NOTTE DELLE LANTERNE | VIP', 'Kayak SUP Tour', 'taller de cerámica',
+  ])('shows the name %p exactly as the vendor writes it', (product) => {
+    expect(formatCheckoutCard(card({ product, count: 5 }, 'it'), 'en')?.title).toBe(`5 biglietti · ${product}`);
   });
 
   it('takes the language of the card when the widget has it, else the chat language', () => {
@@ -251,5 +243,36 @@ describe('formatCheckoutCard', () => {
     expect(formatCheckoutCard(card({ product: null }), 'en')).toBeNull();
     const two = { ...card(), bookings: [card().bookings[0], { count: 1, unit: 'person' as const, product: 'Kayak at sunset' }] };
     expect(formatCheckoutCard(two, 'en')).toBeNull();
+  });
+});
+
+describe('speakCheckoutCards', () => {
+  const NAME = 'Lantern Walk on the Old Wall';
+  const cards = [card({ count: 2 }, 'de')];
+  const lead = 'Am Samstag sind noch Plätze frei.';
+
+  it.each([
+    ['the agent format', `**[Jetzt sichern](${URL_A})**`],
+    ['emoji around the link', `👉 **[Jetzt sichern](${URL_A})** 🎟️`],
+    ['a plain link that Markdown would encode', `[Jetzt sichern](${URL_A.replace(/\[/g, '%5B').replace(/]/g, '%5D')})`],
+  ])('says the card, not the link text, for %s', (_, link) => {
+    expect(speakCheckoutCards(`${lead}\n\n${link}\n\nBis bald!`, { cards, language: 'en', venue: 'Burg Beispielstein' }))
+      .toBe(`${lead}\n\n2 Tickets · ${NAME}, Burg Beispielstein: Tickets buchen\n\nBis bald!`);
+  });
+
+  it('leaves out the venue when there is none', () => {
+    expect(speakCheckoutCards(`**[Book](${URL_A})**`, { cards: [card({ count: 1 }, 'en')], language: 'en' }))
+      .toBe(`1 ticket · ${NAME}: Book tickets`);
+  });
+
+  it.each([
+    ['no card', `**[Jetzt sichern](${URL_A})**`, []],
+    ['a card for another link', `**[Jetzt sichern](${URL_B})**`, cards],
+    ['text next to the link', `Hier buchen: **[Jetzt sichern](${URL_A})**`, cards],
+    ['a list item', `- **[Jetzt sichern](${URL_A})**`, cards],
+    ['two links', `[Jetzt sichern](${URL_A}) [Gutschein](${URL_B})`, cards],
+    ['a card without a name', `**[Jetzt sichern](${URL_A})**`, [card({ product: null })]],
+  ] as const)('keeps the Markdown with %s', (_, markdown, list) => {
+    expect(speakCheckoutCards(markdown, { cards: [...list] as CheckoutCardData[], language: 'de' })).toBe(markdown);
   });
 });

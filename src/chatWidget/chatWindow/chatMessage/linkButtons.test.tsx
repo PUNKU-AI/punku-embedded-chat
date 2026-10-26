@@ -159,9 +159,10 @@ describe('checkout cards in answers', () => {
   const context = (value: Partial<CheckoutCards> = {}): CheckoutCards => ({
     cards: [card()], language: 'de', venue: 'Burg Beispielstein', ...value,
   });
-  const element = (message: string, value: CheckoutCards, linkButtons = true) => (
+  const element = (message: string, value: CheckoutCards, linkButtons = true, streaming = false) => (
     <CheckoutCardsContext.Provider value={value}>
-      <ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons} />
+      <ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons}
+        streaming={streaming} />
     </CheckoutCardsContext.Provider>
   );
   const describedBy = (link: HTMLElement) => (link.getAttribute('aria-describedby') || '')
@@ -190,7 +191,7 @@ describe('checkout cards in answers', () => {
 
   it.each([
     ['en', card({ count: 1, product: 'Lantern Walk on the Old Wall' }, 'en'), '1 ticket · Lantern Walk on the Old Wall', 'Book tickets'],
-    ['it', card({ count: 4, unit: 'group', product: 'VISITA GUIDATA AL FARO' }, 'it'), '4 persone · Visita guidata al faro', 'Prenota ora'],
+    ['it', card({ count: 4, unit: 'group', product: 'VISITA GUIDATA AL FARO' }, 'it'), '4 persone · VISITA GUIDATA AL FARO', 'Prenota ora'],
     ['fr', card({ count: 5, unit: null, product: 'Atelier de chocolat' }, 'fr'), 'Atelier de chocolat', 'Réserver maintenant'],
     ['pl', card({ count: 5, product: 'Rejs statkiem po jeziorze' }, 'pl'), '5 biletów · Rejs statkiem po jeziorze', 'Zarezerwuj bilety'],
   ])('shows a card in %s', (_, data, title, label) => {
@@ -230,6 +231,39 @@ describe('checkout cards in answers', () => {
     const items = Array.from(document.querySelectorAll('.markdown-body li'));
     items.forEach((item) => expect(item).toHaveClass('cl-link-only'));
     expect(screen.getByRole('link', { name: 'Jetzt buchen' }).closest('p')).not.toHaveClass('cl-link-only');
+  });
+
+  it('shows the card of the last paragraph only when the answer has stopped streaming', () => {
+    const { rerender } = render(element(answer, context(), true, true));
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' }).closest('p')).toHaveClass('cl-link-only');
+
+    rerender(element(answer, context(), true, false));
+    expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
+  });
+
+  it('shows the card while the answer streams when a later block follows the paragraph', () => {
+    render(element(`${answer}\n\nViel Spaß!`, context(), true, true));
+
+    expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
+  });
+
+  it('keeps the link when a streaming paragraph grows past the link, as without a card before', () => {
+    // An old server sends no card. The link-only paragraph gets more text:
+    // only its class changes, as on main.
+    const link = `**[Jetzt Tickets sichern](${cardUrl})**`;
+    const { rerender } = render(element(link, context({ cards: [] }), true, true));
+    const anchor = screen.getByRole('link', { name: 'Jetzt Tickets sichern' });
+    expect(anchor.closest('p')).toHaveClass('cl-link-only');
+
+    rerender(element(`${link} für 2 Personen`, context({ cards: [] }), true, true));
+    expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' })).toBe(anchor);
+    expect(anchor.closest('p')).not.toHaveClass('cl-link-only');
+
+    // With a card, the growing paragraph never becomes a card while it streams.
+    rerender(element(`${link} für 2 Personen, Samstag`, context(), true, true));
+    expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' })).toBe(anchor);
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
   });
 
   it('keeps the same button when the cards, the language, the venue or the text change', () => {
