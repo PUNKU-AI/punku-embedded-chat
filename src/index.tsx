@@ -34,6 +34,7 @@ function createChatElement() {
             loading_messages:"json",
             ai_notice_text: "string",
             show_ai_notice: "boolean",
+            checkout_card_venue: "string",
             input_style:"json",
             input_container_style:"json",
             chat_position:"string",

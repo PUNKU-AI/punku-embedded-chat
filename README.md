@@ -79,7 +79,7 @@ Custom styles will be merged with the theme styles, allowing you to override spe
 
 ### Contrast (WCAG AA)
 
-The `default`, `dark`, `ocean`, `aurora` and `punku-ai-bookingkit` themes meet WCAG AA without your colours: all text reaches 4.5:1 on the colour behind it, and every icon, control and focus mark reaches 3:1. This covers the header, answers and their links and link buttons, visitor bubbles, suggestions, feedback icons, the input field with its placeholder and send button, the AI notice, error messages and the launcher icon, also on hover. `src/chatWidget/themeContrast.test.tsx` measures each pair in the stylesheet. `e2e/theme-contrast.spec.ts` measures the rendered widget in every browser profile.
+The `default`, `dark`, `ocean`, `aurora` and `punku-ai-bookingkit` themes meet WCAG AA without your colours: all text reaches 4.5:1 on the colour behind it, and every icon, control and focus mark reaches 3:1. This covers the header, answers and their links and link buttons, checkout cards, visitor bubbles, suggestions, feedback icons, the input field with its placeholder and send button, the AI notice, error messages and the launcher icon, also on hover. `src/chatWidget/themeContrast.test.tsx` measures each pair in the stylesheet. `e2e/theme-contrast.spec.ts` measures the rendered widget in every browser profile.
 
 - The dark themes (`dark`, `ocean`, `aurora`) fill link buttons in their light link colour with dark text. The same colour marks focus. Their mid accents do not reach 3:1 on the dark answer bubble. On your own light answer colour (`bot_message_color`), link buttons take the mid accent with white text, as before.
 - On the dark themes, the send button and the launcher turn lighter on hover. A darker shade would vanish in the dark input field.
@@ -192,6 +192,32 @@ Other links, middle clicks, and modifier clicks keep their normal browser behavi
 The dialog includes a close button and an explicit link to open checkout in a new tab.
 Browsers without native dialog support keep the normal checkout link.
 
+### Checkout card
+
+When the PUNKU.AI server verifies a Bookingkit checkout link, it also sends the facts of the booking.
+The widget then shows the link as a card in the answer:
+
+- The bold title: the number of tickets and the experience, for example "2 Tickets · Night tour of the old mill".
+  A group booking shows the number of people, for example "4 Personen · Private kayak tour".
+  Without a known unit, the title shows only the experience name.
+- The second line: your venue name from `checkout_card_venue`. Without it, the card has no second line.
+- A full-width button with the widget's own label, for example "Tickets buchen" or "Jetzt buchen".
+  It opens the same on-page checkout as a checkout link.
+
+The card uses the language of the answer when the widget has that language, else the chat language.
+The experience name stays as the vendor writes it. A name in capitals only shows in sentence case.
+
+The widget shows the filled link button instead in these cases:
+
+- The server sends no card for the link, for example an older server or a stored conversation from before.
+- The link has more than one booking.
+- The experience name is unknown.
+
+The `swarovski` theme keeps its text links and shows no card.
+
+The card follows the theme. On your own answer colour (`bot_message_color`), the card is a lighter shade of that colour.
+The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
+
 ### on simple HTML
 ```html
 <html lang="en">
@@ -292,6 +318,7 @@ Use the widget API to customize your widget:
 | additional_headers    | json      | No       |
 | ai_notice_text        | string    | No       |
 | show_ai_notice        | boolean   | No       |
+| checkout_card_venue   | string    | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
@@ -308,6 +335,11 @@ Use the widget API to customize your widget:
   - Required: No
   - Default: `true`
   - Description: `false` hides the AI notice under the input. Use it only when your page tells visitors in another way that they chat with an AI system.
+
+- **checkout_card_venue:**
+  - Type: String
+  - Required: No
+  - Description: The second line of each checkout card, for example the name of your castle or museum. The widget shows it as you write it. Without it, the card shows only the title and the button. See [Checkout card](#checkout-card).
 
 - **api_key:**
   - Type: String

@@ -87,3 +87,65 @@ describe.each([
     }
   );
 });
+
+// An answer with a checkout card, restored from the visitor's session after a
+// page load. Made-up cart, experience and venue: the repository is public.
+describe("checkout card", () => {
+  const cardUrl = "https://eu5.bookingkit.de/cart/set/fedcba9876543210fedcba9876543210?utm_source=web_chat&c=[{\"q\":2}]";
+  const storeConversation = (locale: string | null) => {
+    const now = Date.now();
+    localStorage.setItem("punku-chat-session-localhost-test-flow", JSON.stringify({
+      sessionId: "stored-session", createdAt: now, lastActiveAt: now, expiresAt: now + 60 * 60 * 1000,
+      domain: "localhost", flowId: "test-flow",
+      messages: [
+        { message: "Do you have places for two at sunset?", isSend: true },
+        {
+          message: `Yes, two places are free.\n\n👉 **[Grab your spot](${cardUrl})**`, isSend: false, message_id: "stored-answer",
+          checkoutCards: [{ url: cardUrl, locale, bookings: [{ count: 2, unit: "person", product: "Kayak at sunset" }] }],
+        },
+      ],
+    }));
+  };
+  const renderWidget = () => render(
+    <ChatWidget flow_id="test-flow" input_value="" input_type="chat" output_type="chat" start_open default_language="en"
+      checkout_card_venue="Lakeside Boathouse" />
+  );
+
+  it("shows the card after a page load, opens checkout and returns focus to the same button", () => {
+    storeConversation(null);
+    renderWidget();
+
+    expect(document.querySelector(".cl-checkout-card-title")).toHaveTextContent("2 tickets · Kayak at sunset");
+    expect(document.querySelector(".cl-checkout-card-meta")).toHaveTextContent("Lakeside Boathouse");
+    const button = screen.getByRole("link", { name: "Book tickets" });
+    screen.getByPlaceholderText("Type your message...").focus();
+
+    for (const close of ["Escape", "close button"]) {
+      fireEvent.click(button);
+      expect(screen.getByRole("dialog", { name: "Checkout" })).toBeInTheDocument();
+      // The checkout opens the link of the answer, as Markdown wrote it.
+      expect(screen.getByTitle("Checkout")).toHaveAttribute("src", button.getAttribute("href"));
+      expect(screen.getByRole("button", { name: "Close checkout" })).toHaveFocus();
+      if (close === "Escape") {
+        fireEvent.keyDown(document, { key: "Escape" });
+        fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+      } else {
+        fireEvent.click(screen.getByRole("button", { name: "Close checkout" }));
+      }
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      // The same button: it never remounts while the checkout is open.
+      expect(screen.getByRole("link", { name: "Book tickets" })).toBe(button);
+      expect(button).toHaveFocus();
+    }
+  });
+
+  it("writes the card in the language of the answer", () => {
+    storeConversation("de");
+    renderWidget();
+
+    expect(document.querySelector(".cl-checkout-card-title")).toHaveTextContent("2 Tickets · Kayak at sunset");
+    expect(screen.getByRole("link", { name: "Tickets buchen" })).toHaveClass("cl-checkout-card-button");
+    // The rest of the chat stays in its own language.
+    expect(screen.getByPlaceholderText("Type your message...")).toBeVisible();
+  });
+});

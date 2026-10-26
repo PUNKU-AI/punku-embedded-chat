@@ -5,8 +5,10 @@ import { assertHintVisible, loadWidget } from './widget-helpers';
 // link button reaches 3:1 on the answer bubble and its label 4.5:1, link text
 // reaches 4.5:1 on the bubble and outlines 3:1, the send button reaches 3:1 in
 // the field with an icon at 3:1, and the AI notice reaches 4.5:1 on the input
-// bar. The closed hint text reaches 4.5:1 on the hint. The colour sets come
-// from saved customer embeds (anonymised).
+// bar. The closed hint text reaches 4.5:1 on the hint. On the checkout card,
+// the button reaches 3:1 on the card and its label 4.5:1, and the title and
+// the venue line read as well as the answer text, up to 4.5:1. The colour
+// sets come from saved customer embeds (anonymised).
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -18,6 +20,8 @@ test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
 
+// A made-up cart and experience for the checkout card (checkoutCards.ts).
+const cardUrl = 'https://eu5.bookingkit.de/cart/set/13579bdf13579bdf13579bdf13579bdf?utm_source=web_chat&c=%5B%5D';
 const conversation = [
   { message: 'Do you have places for 2 people on Saturday?', isSend: true },
   {
@@ -26,6 +30,12 @@ const conversation = [
       + '- [Directions and parking](https://example.com/directions)\n- [Gift vouchers](https://example.com/gifts)',
     isSend: false,
     message_id: 'synthetic-answer',
+  },
+  {
+    message: `I have prepared 2 tickets for you.\n\n👉 **[Book my tickets](${cardUrl})**`,
+    isSend: false,
+    message_id: 'synthetic-card',
+    checkoutCards: [{ url: cardUrl, locale: null, bookings: [{ count: 2, unit: 'person', product: 'Gothic evening with dinner' }] }],
   },
 ];
 
@@ -38,7 +48,8 @@ async function openConversation(page: Page, props: Record<string, string>) {
     }));
   }, conversation);
   await loadWidget(page, {
-    start_open: 'true', show_closed_widget_hint: 'false', width: '380', height: '640', ...props,
+    start_open: 'true', show_closed_widget_hint: 'false', width: '380', height: '640',
+    checkout_card_venue: 'Castle of Example', ...props,
   });
   await expect.poll(async () => (await contrasts(page))?.filled).toBeTruthy();
 }
@@ -72,7 +83,21 @@ function contrasts(page: Page) {
     const icon = style('.cl-send-icon');
     const bar = style('.cl-input_container');
     const notice = style('.cl-ai-notice');
+    const card = style('.cl-checkout-card');
+    const cardTitle = style('.cl-checkout-card-title');
+    const cardVenue = style('.cl-checkout-card-meta');
+    const cardButton = style('.cl-checkout-card-button');
     if (!bubble || !filled || !inline || !outlined || !field || !send || !icon || !bar || !notice) return null;
+    if (!card || !cardTitle || !cardVenue || !cardButton) return null;
+    // A translucent card shows the bubble through it.
+    const over = (top: string, back: string) => {
+      const alpha = Number((top.match(/[\d.]+/g) || [])[3] ?? 1);
+      const [a, b] = [channels(top), channels(back)];
+      return `rgb(${a.map((channel, index) => Math.round(channel * alpha + b[index] * (1 - alpha))).join(', ')})`;
+    };
+    const cardSurface = over(card.backgroundColor, bubble.backgroundColor);
+    // The site's own answer contrast, up to 4.5:1, is the floor on the card.
+    const answerContrast = Math.min(4.5, Math.floor(ratio(bubble.color, bubble.backgroundColor) * 100) / 100);
     return {
       filled: ratio(filled.backgroundColor, bubble.backgroundColor),
       filledLabel: ratio(filled.color, filled.backgroundColor),
@@ -82,7 +107,13 @@ function contrasts(page: Page) {
       send: ratio(send.backgroundColor, field.backgroundColor),
       sendIcon: ratio(icon.stroke, send.backgroundColor),
       notice: ratio(notice.color, bar.backgroundColor),
+      cardButton: ratio(cardButton.backgroundColor, cardSurface),
+      cardLabel: ratio(cardButton.color, cardButton.backgroundColor),
+      cardTitle: ratio(cardTitle.color, cardSurface),
+      cardVenue: ratio(cardVenue.color, cardSurface),
+      answerContrast,
       colours: { bubble: bubble.backgroundColor, filled: filled.backgroundColor, label: filled.color },
+      card: { surface: cardSurface, button: cardButton.backgroundColor, label: cardButton.color, venue: cardVenue.color },
     };
   });
 }
@@ -123,6 +154,9 @@ const customers: Record<string, Record<string, string>> = {
     theme: 'dark', button_color: '#3F9B47', button_text_color: '#FFFFFF', background_color: '#111827',
     bot_message_color: '#1F2937', bot_message_text_color: '#F9FAFB', link_color: '#3F9B47',
   },
+  'a green button on near-black answers': {
+    button_color: '#15803d', button_text_color: '#ffffff', bot_message_color: '#111827', bot_message_text_color: '#ffffff',
+  },
   'the dark theme': { theme: 'dark' },
   'the ocean theme': { theme: 'ocean' },
 };
@@ -139,8 +173,20 @@ for (const [name, props] of Object.entries(customers)) {
     expect(result.send).toBeGreaterThanOrEqual(3);
     expect(result.sendIcon).toBeGreaterThanOrEqual(3);
     expect(result.notice).toBeGreaterThanOrEqual(4.5);
+    expect(result.cardButton, JSON.stringify(result.card)).toBeGreaterThanOrEqual(3);
+    expect(result.cardLabel, JSON.stringify(result.card)).toBeGreaterThanOrEqual(4.5);
+    expect(result.cardTitle, JSON.stringify(result.card)).toBeGreaterThanOrEqual(result.answerContrast);
+    expect(result.cardVenue, JSON.stringify(result.card)).toBeGreaterThanOrEqual(result.answerContrast);
   });
 }
+
+test('the checkout card button gets its own fill where the site green vanishes on the card', async ({ page }) => {
+  await openConversation(page, customers['a green button on near-black answers']);
+  const result = (await contrasts(page))!;
+  // Link buttons outside the card keep the site green.
+  expect(result.colours.filled).toBe('rgb(21, 128, 61)');
+  expect(result.card.button).not.toBe('rgb(21, 128, 61)');
+});
 
 test('the closed hint darkens a light green just enough for its white text', async ({ page }) => {
   await loadWidget(page, {

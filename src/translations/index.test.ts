@@ -40,6 +40,19 @@ describe('built-in texts', () => {
     });
   });
 
+  // The checkout card counts 1 to 99 tickets or people (checkoutCards.ts).
+  it.each(LANGUAGES.map((language) => [language]))('%s has a word for each plural form of 1 to 99', (language) => {
+    const forms = new Set<string>();
+    for (let count = 1; count <= 99; count += 1) forms.add(new Intl.PluralRules(language).select(count));
+    const texts = translations[language];
+    const used = (word: 'Ticket' | 'Person') => Array.from(forms).map((form) =>
+      texts[`checkout${word}${form[0].toUpperCase()}${form.slice(1)}` as keyof typeof texts]);
+    expect(used('Ticket').every((text) => !!text)).toBe(true);
+    expect(used('Person').every((text) => !!text)).toBe(true);
+    // Only Polish has a few and a many form below 100.
+    expect(Array.from(forms).sort()).toEqual(language === 'pl' ? ['few', 'many', 'one'] : ['one', 'other']);
+  });
+
   it.each(LANGUAGES.map((language) => [language]))('%s has its own thinking phrases', (language) => {
     const phrases = thinkingMessages[language];
     expect(phrases.length).toBeGreaterThanOrEqual(10);

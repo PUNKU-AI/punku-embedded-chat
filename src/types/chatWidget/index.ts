@@ -1,4 +1,5 @@
 import type { Language } from "../../translations";
+import type { CheckoutCardData } from "../../chatWidget/checkoutCards";
 
 export type ChatMessageType = {
     message: string;
@@ -10,6 +11,8 @@ export type ChatMessageType = {
     feedback?: string;
     message_id?: string;
     streaming?: boolean;
+    /** The checkout cards that the server sent with this answer (checkoutCards.ts). */
+    checkoutCards?: CheckoutCardData[];
   };
 
 

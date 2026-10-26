@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
+import { CheckoutLinkParagraph } from "../../components/CheckoutCard";
 import { getBookingkitCheckoutUrl } from "../../bookingkitCheckout";
 
 // Pins a readable base text size on every message. The widget renders inside a
@@ -92,6 +93,7 @@ type HastNode = {
   value?: string;
   properties?: { href?: unknown };
   children?: HastNode[];
+  data?: Record<string, unknown>;
 };
 
 const meaningfulChildren = (node: unknown) =>
@@ -115,18 +117,24 @@ const nonEmojiChildren = (node: unknown) =>
   );
 
 /**
- * True when an element holds one Bookingkit checkout link and nothing else but
- * emoji or whitespace. The link may sit in one strong or em: the agent writes
- * **[Book now](url)**, which gives p > strong > a.
+ * The checkout link of an element that holds one Bookingkit checkout link and
+ * nothing else but emoji or whitespace, else null. The link may sit in one
+ * strong or em: the agent writes **[Book now](url)**, which gives p > strong > a.
  */
-export function isCheckoutLinkOnly(node: unknown): boolean {
+export function checkoutLinkOnly(node: unknown): string | null {
   let children = nonEmojiChildren(node);
   if (children.length === 1 && (isElement(children[0], "strong") || isElement(children[0], "em"))) {
     children = nonEmojiChildren(children[0]);
   }
   const href = children[0]?.properties?.href;
-  return children.length === 1 && isElement(children[0], "a") &&
-    getBookingkitCheckoutUrl(typeof href === "string" ? href : undefined) !== null;
+  return children.length === 1 && isElement(children[0], "a")
+    ? getBookingkitCheckoutUrl(typeof href === "string" ? href : undefined)
+    : null;
+}
+
+/** True when an element holds one checkout link and nothing else but emoji or whitespace. */
+export function isCheckoutLinkOnly(node: unknown): boolean {
+  return checkoutLinkOnly(node) !== null;
 }
 
 /**
@@ -153,6 +161,25 @@ export function isLinkList(node: unknown): boolean {
   const items = meaningfulChildren(node);
   return items.length > 0 && items.every((item) => isElement(item, "li") && isLinkOnlyListItem(item));
 }
+
+const TOP_LEVEL = "punkuTopLevel";
+
+/**
+ * Marks the paragraphs at the top level of an answer (a rehype plugin). Only
+ * they become checkout cards: a checkout link in a list item stays an
+ * outlined link button.
+ */
+function markTopLevelParagraphs() {
+  return (tree: HastNode) => {
+    for (const child of tree.children || []) {
+      if (isElement(child, "p")) child.data = { ...child.data, [TOP_LEVEL]: true };
+    }
+  };
+}
+
+const REHYPE_PLUGINS = [markTopLevelParagraphs];
+
+const isTopLevel = (node: unknown) => (node as HastNode | undefined)?.data?.[TOP_LEVEL] === true;
 
 /** The class names of an element, with `added` when it is a string. */
 const withClass = (className: string | undefined, added: string | false) =>
@@ -208,16 +235,23 @@ export default function ChatMessage({
   // A link that stands alone in a paragraph or list item is an action: it
   // renders as a button (see .cl-link-only in the widget stylesheet), unless
   // linkButtons is false. A checkout link also does in the agent's bold
-  // format, next to emoji (isCheckoutLinkOnly).
+  // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
+  // top-level paragraph is a checkout card when the server sent one for it
+  // (CheckoutLinkParagraph). The cards and the language come from a context:
+  // these components never change while a checkout is open.
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
       <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
         {children}
       </BookingkitCheckoutLink>
     ),
-    p: ({ node, children, ...props }) => (
-      <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
-    ),
+    p: ({ node, children, ...props }) => {
+      const checkoutLink = linkButtons && isTopLevel(node) ? checkoutLinkOnly(node) : null;
+      if (checkoutLink) {
+        return <CheckoutLinkParagraph {...props} href={checkoutLink} onCheckout={onCheckout}>{children}</CheckoutLinkParagraph>;
+      }
+      return <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>;
+    },
     // react-markdown 8 passes ordered, checked, index and depth to lists and
     // list items; they are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
@@ -349,6 +383,7 @@ export default function ChatMessage({
             <Markdown
               className={"markdown-body prose flex flex-col word-break-break-word"}
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={REHYPE_PLUGINS}
               components={markdownComponents}
             >
               {parsedMessage}

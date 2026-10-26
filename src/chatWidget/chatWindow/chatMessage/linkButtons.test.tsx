@@ -1,6 +1,8 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import ChatMessage, { isCheckoutLinkOnly, isLinkList, isLinkOnly, isLinkOnlyListItem } from './index';
+import { CheckoutCards, CheckoutCardsContext } from '../../components/CheckoutCard';
+import type { CheckoutCardData } from '../../checkoutCards';
 
 // Real markdown rendering: a link that stands alone in a paragraph or a list
 // item gets the cl-link-only class, so the stylesheet draws it as a button.
@@ -138,6 +140,109 @@ describe('checkout links in the agent format', () => {
   it('keeps text links for the swarovski theme', () => {
     expect(linkOnlyParagraph(`👉 **[Book now](${checkout})**`, false)).toBe(false);
     expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+});
+
+// The server sends card facts for a verified checkout link (checkoutCards.ts).
+// The answer's link then shows as a checkout card. Made-up carts, experiences
+// and venues: the repository is public.
+describe('checkout cards in answers', () => {
+  // As the server writes the link: Markdown percent-encodes the brackets,
+  // braces and quotes, so the rendered href differs from the card URL.
+  const cardUrl = 'https://eu5.bookingkit.de/cart/set/9a8b7c6d5e4f30211203f4e5d6c7b8a9?c=[{"t":{"q":2}}]'
+    + '&sale_params[source]=web_chat&utm_source=web_chat&sale_params[punku_reference]=pk_example_card';
+  const otherUrl = 'https://eu5.bookingkit.de/cart/set/11112222333344445555666677778888?utm_source=web_chat';
+  const card = (booking: Partial<CheckoutCardData['bookings'][0]> = {}, locale: string | null = 'de', url = cardUrl): CheckoutCardData => ({
+    url, locale, bookings: [{ count: 2, unit: 'person', product: 'Nachtführung in der Alten Mühle', ...booking }],
+  });
+  const answer = `Am Samstag um 18:00 Uhr sind noch Plätze frei.\n\n👉 **[Jetzt Tickets sichern](${cardUrl})** 🎟️`;
+  const context = (value: Partial<CheckoutCards> = {}): CheckoutCards => ({
+    cards: [card()], language: 'de', venue: 'Burg Beispielstein', ...value,
+  });
+  const element = (message: string, value: CheckoutCards, linkButtons = true) => (
+    <CheckoutCardsContext.Provider value={value}>
+      <ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons} />
+    </CheckoutCardsContext.Provider>
+  );
+  const describedBy = (link: HTMLElement) => (link.getAttribute('aria-describedby') || '')
+    .split(' ').map((id) => document.getElementById(id)?.textContent).join(' / ');
+
+  it('shows the card of a checkout link in the agent format', () => {
+    render(element(answer, context()));
+
+    const body = document.querySelector('.markdown-body')!;
+    const cardElement = body.querySelector(':scope > .cl-checkout-card')!;
+    expect(cardElement.querySelector('.cl-checkout-card-title')).toHaveTextContent('2 Tickets · Nachtführung in der Alten Mühle');
+    expect(cardElement.querySelector('.cl-checkout-card-meta')).toHaveTextContent('Burg Beispielstein');
+    // The widget's own label, not the agent's link text; no emoji, no bold.
+    const button = screen.getByRole('link', { name: 'Tickets buchen' });
+    expect(cardElement).toContainElement(button);
+    expect(button.getAttribute('href')).not.toBe(cardUrl);
+    expect(button.getAttribute('href')).toContain('sale_params%5Bpunku_reference%5D=pk_example_card');
+    expect(body).not.toHaveTextContent('Jetzt Tickets sichern');
+    expect(cardElement.textContent).not.toMatch(/👉|🎟/);
+    expect(cardElement.querySelector('strong')).toBeNull();
+    expect(describedBy(button)).toBe('2 Tickets · Nachtführung in der Alten Mühle / Burg Beispielstein');
+    // The lead-in stays a paragraph; no link button is left.
+    expect(body.querySelector('p')).toHaveTextContent('Am Samstag um 18:00 Uhr sind noch Plätze frei.');
+    expect(body.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+
+  it.each([
+    ['en', card({ count: 1, product: 'Lantern Walk on the Old Wall' }, 'en'), '1 ticket · Lantern Walk on the Old Wall', 'Book tickets'],
+    ['it', card({ count: 4, unit: 'group', product: 'VISITA GUIDATA AL FARO' }, 'it'), '4 persone · Visita guidata al faro', 'Prenota ora'],
+    ['fr', card({ count: 5, unit: null, product: 'Atelier de chocolat' }, 'fr'), 'Atelier de chocolat', 'Réserver maintenant'],
+    ['pl', card({ count: 5, product: 'Rejs statkiem po jeziorze' }, 'pl'), '5 biletów · Rejs statkiem po jeziorze', 'Zarezerwuj bilety'],
+  ])('shows a card in %s', (_, data, title, label) => {
+    render(element(`**[Book](${cardUrl})**`, context({ cards: [data], language: 'en', venue: undefined })));
+
+    expect(document.querySelector('.cl-checkout-card-title')).toHaveTextContent(title);
+    expect(document.querySelector('.cl-checkout-card-meta')).toBeNull();
+    expect(screen.getByRole('link')).toHaveAccessibleName(label);
+  });
+
+  it.each<[string, CheckoutCardData[]]>([
+    ['no card', []],
+    ['a card for another link', [card({}, 'de', otherUrl)]],
+    ['a card with two bookings', [{ ...card(), bookings: [card().bookings[0], { count: 1, unit: 'person', product: 'Kayak at sunset' }] }]],
+    ['a card without a name', [card({ product: null })]],
+  ])('keeps the filled link button with %s', (_, cards) => {
+    render(element(answer, context({ cards })));
+
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
+    const link = screen.getByRole('link', { name: 'Jetzt Tickets sichern' });
+    expect(link.closest('p')).toHaveClass('cl-link-only');
+  });
+
+  it('keeps the text link of the swarovski theme', () => {
+    render(element(answer, context(), false));
+
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+    expect(screen.getByRole('link')).toHaveAccessibleName('Jetzt Tickets sichern');
+  });
+
+  it('keeps a checkout link in a list item or a sentence as before', () => {
+    render(element(`- **[Samstag buchen](${cardUrl})**\n\n- **[Sonntag buchen](${otherUrl})**\n\n`
+      + `Hier buchen: **[Jetzt buchen](${cardUrl})**`, context()));
+
+    expect(document.querySelector('.cl-checkout-card')).toBeNull();
+    const items = Array.from(document.querySelectorAll('.markdown-body li'));
+    items.forEach((item) => expect(item).toHaveClass('cl-link-only'));
+    expect(screen.getByRole('link', { name: 'Jetzt buchen' }).closest('p')).not.toHaveClass('cl-link-only');
+  });
+
+  it('keeps the same button when the cards, the language, the venue or the text change', () => {
+    const { rerender } = render(element(answer, context({ cards: [card({}, null)] })));
+    const button = screen.getByRole('link', { name: 'Tickets buchen' });
+
+    rerender(element(answer, context({ cards: [card({}, null), card({}, 'de', otherUrl)], language: 'it', venue: 'Rocca di Esempio' })));
+    expect(screen.getByRole('link', { name: 'Prenota i biglietti' })).toBe(button);
+    expect(document.querySelector('.cl-checkout-card-title')).toHaveTextContent('2 biglietti · Nachtführung in der Alten Mühle');
+    expect(describedBy(button)).toBe('2 biglietti · Nachtführung in der Alten Mühle / Rocca di Esempio');
+
+    rerender(element(`${answer}\n\nBis bald!`, context({ cards: [card({}, null)], language: 'it' })));
+    expect(screen.getByRole('link', { name: 'Prenota i biglietti' })).toBe(button);
   });
 });
 

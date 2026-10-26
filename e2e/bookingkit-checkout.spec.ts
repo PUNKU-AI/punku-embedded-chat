@@ -20,10 +20,11 @@ test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
 
-async function loadCheckout(page: Page, nitro = true, message = agentFormat) {
+async function loadCheckout(page: Page, nitro = true, message = agentFormat, props: Record<string, string> = {}) {
   await loadWidget(page, {
     start_open: 'true', nitro: String(nitro),
     welcome_message: message,
+    ...props,
   });
   // Register after loadWidget's external-request blocker. Never contact Bookingkit.
   await page.context().route(checkoutUrl, (route) => route.fulfill({
@@ -212,4 +213,121 @@ test('modified Nitro checkout clicks keep the separate-tab behavior', async ({ p
   await assertSettled(page, 1, 1);
   expect(await elementState(page, dialogSelector)).toBeNull();
   expect(context.pages()).toHaveLength(2);
+});
+
+// The server sends the facts of a verified checkout link as a JSON content
+// block of the agent message (checkoutCards.ts): when the checkout tool ends,
+// before any text, and again with the text. The answer then shows a checkout
+// card. Made-up experience and venue.
+const cardBlocks = [{
+  title: 'Checkout',
+  contents: [{
+    type: 'json',
+    data: {
+      kind: 'punku.checkout_card', v: 1, url: checkoutUrl, locale: 'de',
+      bookings: [{ count: 2, unit: 'person', product: 'Nachtführung in der Alten Mühle' }],
+    },
+  }],
+}];
+const cardAnswer = `Am Samstag um 18:00 Uhr sind noch Plätze frei.\n\n👉 **[Jetzt Tickets sichern](${checkoutUrl})**`;
+const cardButton = '.cl-checkout-card-button';
+
+async function loadCardAnswer(page: Page, nitro: boolean) {
+  await page.route('**/api/v1/run/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/x-ndjson',
+    body: [
+      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: '', content_blocks: cardBlocks } },
+      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: cardAnswer.split('\n\n')[0], content_blocks: cardBlocks } },
+      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: cardAnswer, content_blocks: cardBlocks } },
+      { event: 'end', data: { result: { session_id: 'synthetic-session' } } },
+    ].map((event) => JSON.stringify(event)).join('\n') + '\n',
+  }));
+  await loadCheckout(page, nitro, 'Hallo!', {
+    width: '380', height: '640', default_language: 'de', checkout_card_venue: 'Burg Beispielstein',
+  });
+  // Send through the public API: no click or tap that could move the page.
+  await page.evaluate(() => {
+    (window as unknown as Record<string, { open: (message: string) => void }>)['browser-fixture_api']
+      .open('Habt ihr am Samstag noch Plätze?');
+  });
+  await expectCard(page);
+  await waitForAnswerDone(page);
+}
+
+async function waitForAnswerDone(page: Page) {
+  // The list is busy while the answer streams. The input takes focus 100 ms
+  // after the answer is complete: let that timer run before focusing the card.
+  await expect.poll(() => page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+    .querySelector('.cl-messages_container')?.getAttribute('aria-busy'))).toBe('false');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
+async function expectCard(page: Page) {
+  await expect.poll(() => page.evaluate((selector) => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const button = root.querySelector<HTMLAnchorElement>(selector);
+    const card = button?.closest('.cl-checkout-card');
+    if (!button || !card) return null;
+    const style = getComputedStyle(button);
+    return {
+      title: card.querySelector('.cl-checkout-card-title')?.textContent,
+      venue: card.querySelector('.cl-checkout-card-meta')?.textContent,
+      label: button.textContent,
+      description: (button.getAttribute('aria-describedby') || '').split(' ').map((id) => root.getElementById(id)?.textContent).join(' / '),
+      href: button.href,
+      filled: style.backgroundColor !== 'rgba(0, 0, 0, 0)',
+      fullWidth: Math.abs(button.getBoundingClientRect().width - (card.clientWidth - 24)) <= 1,
+      linkButtons: root.querySelectorAll('.cl-link-only').length,
+    };
+  }, cardButton)).toEqual({
+    title: '2 Tickets · Nachtführung in der Alten Mühle',
+    venue: 'Burg Beispielstein',
+    label: 'Tickets buchen',
+    description: '2 Tickets · Nachtführung in der Alten Mühle / Burg Beispielstein',
+    href: checkoutUrl,
+    filled: true,
+    fullWidth: true,
+    linkButtons: 0,
+  });
+}
+
+async function assertCardButtonFocused(page: Page) {
+  await expect.poll(() => page.evaluate((selector) => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    return root.activeElement === root.querySelector(selector);
+  }, cardButton)).toBe(true);
+}
+
+test.describe('checkout card', () => {
+  for (const nitro of [false, true]) {
+    test(`a streamed card opens the on-page checkout and returns focus to its button (Nitro ${nitro})`, async ({ page, hasTouch }) => {
+      await loadCardAnswer(page, nitro);
+      await activate(page, cardButton, hasTouch);
+      await waitForCheckout(page);
+      await activate(page, `${dialogSelector} button`, hasTouch);
+      await expect.poll(() => elementState(page, dialogSelector)).toBeNull();
+      await assertCardButtonFocused(page);
+      await assertNoPopup(page, nitro ? 2 : 0);
+    });
+  }
+
+  test('a card opens with the keyboard and comes back after a page load', async ({ page, hasTouch }) => {
+    test.skip(hasTouch, 'Keyboard input runs on the three desktop engines.');
+    await loadCardAnswer(page, false);
+    await page.evaluate((selector) => {
+      window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLAnchorElement>(selector)!.focus();
+    }, cardButton);
+    await page.keyboard.press('Enter');
+    await waitForCheckout(page);
+    await page.keyboard.press('Escape');
+    await expect.poll(() => elementState(page, dialogSelector)).toBeNull();
+    await assertCardButtonFocused(page);
+
+    // The session keeps the card: no new request, the same card.
+    await page.unroute('**/api/v1/run/**');
+    await page.reload();
+    await expectCard(page);
+  });
 });

@@ -25,6 +25,8 @@ import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
 import ConfirmationModal from "../components/ConfirmationModal";
+import { CheckoutCards, CheckoutCardsContext } from "../components/CheckoutCard";
+import { CheckoutCardData, mergeCheckoutCards, readCheckoutCards, storedCheckoutCards } from "../checkoutCards";
 import { translations, Language, Translation } from "../../translations";
 import {
   createPunkuChatErrorDetail,
@@ -147,6 +149,7 @@ export default function ChatWindow({
   removeLastMessage,
   ai_notice_text,
   show_ai_notice = true,
+  checkout_card_venue,
 }: {
   api_key?: string;
   output_type: string,
@@ -226,6 +229,8 @@ export default function ChatWindow({
   ai_notice_text?: string;
   /** false hides the AI notice, for sites that show it elsewhere. */
   show_ai_notice?: boolean;
+  /** The second line of each checkout card, for example the name of the venue. */
+  checkout_card_venue?: string;
 }) {
   const [value, setValue] = useState<string>("");
   // Use translations based on language prop
@@ -473,6 +478,11 @@ export default function ChatWindow({
       // Streaming version
       let currentMessageId: string | null = null;
       let message_to_add = "";
+      // The checkout cards of the answer (checkoutCards.ts). The server sends
+      // them when the checkout tool ends, also before any text, and again
+      // with each later add_message. Each update of the answer keeps them.
+      let checkoutCards: CheckoutCardData[] = [];
+      const withCards = () => (checkoutCards.length > 0 ? { checkoutCards } : {});
       let streamErrorHandled = false;
       let terminalReceived = false;
 
@@ -533,6 +543,7 @@ export default function ChatWindow({
           if (data.event === 'add_message' && data.data?.sender === "Machine") {
             // console.log('Data from :', data.data.sender);
             // console.log('Streaming text:', data.data.text);
+            checkoutCards = mergeCheckoutCards(checkoutCards, readCheckoutCards(data.data.content_blocks));
             const new_message = data.data.text;
             if (new_message) {
               setIsStreaming(true);
@@ -542,7 +553,8 @@ export default function ChatWindow({
                   message: message_to_add,
                   message_id: currentMessageId,
                   isSend: false,
-                  streaming: true
+                  streaming: true,
+                  ...withCards(),
                 });
               } else {
                 currentMessageId = data.data.id;
@@ -550,7 +562,8 @@ export default function ChatWindow({
                   message: message_to_add,
                   message_id: currentMessageId,
                   isSend: false,
-                  streaming: true
+                  streaming: true,
+                  ...withCards(),
                 });
               }
             }
@@ -616,7 +629,8 @@ export default function ChatWindow({
               message: message_to_add,
               message_id: currentMessageId,
               isSend: false,
-              streaming: false
+              streaming: false,
+              ...withCards(),
             });
           }
         },
@@ -663,6 +677,21 @@ export default function ChatWindow({
         .map((suggestion) => suggestion.trim())
         .slice(0, 4)
     : [];
+
+  // The checkout cards of the whole conversation: a checkout link that a
+  // later answer repeats finds the card of the earlier one.
+  const conversationCards = useMemo(
+    () => messages.reduce<CheckoutCardData[]>(
+      (cards, message) => (message.checkoutCards ? mergeCheckoutCards(cards, storedCheckoutCards(message.checkoutCards)) : cards),
+      []
+    ),
+    [messages]
+  );
+  const venue = checkout_card_venue?.trim() || undefined;
+  const checkoutCardsContext = useMemo<CheckoutCards>(
+    () => ({ cards: conversationCards, language, venue }),
+    [conversationCards, language, venue]
+  );
 
   // The newest answer keeps its feedback buttons visible; older ones show
   // them on hover, on focus or after a vote.
@@ -1333,9 +1362,13 @@ export default function ChatWindow({
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
           ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
           ...(guarded.noticeInk ? {"--cl-notice-ink": guarded.noticeInk} : {}),
+          ...(guarded.cardBg ? {"--cl-card-bg": guarded.cardBg} : {}),
+          ...(guarded.cardMeta ? {"--cl-card-meta": guarded.cardMeta} : {}),
+          ...(guarded.cardButtonFill ? {"--cl-card-button-fill": guarded.cardButtonFill} : {}),
+          ...(guarded.cardButtonLabel ? {"--cl-card-button-label": guarded.cardButtonLabel} : {}),
         } as React.CSSProperties}
         ref={ref}
-        className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}`}
+        className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}${guarded.cardSurface ? ` cl-card-${guarded.cardSurface}` : ""}`}
       >
         {/* One row: the avatar, the title with the status under it, and the actions. */}
         <div
@@ -1486,43 +1519,46 @@ export default function ChatWindow({
             </div>
           )}
 
-          {messages.map((message, index) => (
-            <ChatMessage
-              bot_message_style={
-                bot_message_style ||
-                (bot_message_color || bot_message_text_color ?
-                  {
-                    ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
-                    ...(bot_message_text_color ? {color: bot_message_text_color} : {})
-                  } : undefined)
-              }
-              user_message_style={
-                user_message_style ||
-                (user_message_color || user_message_text_color ?
-                  {
-                    ...(user_message_color ? {backgroundColor: user_message_color} : {}),
-                    ...(user_message_text_color ? {color: user_message_text_color} : {})
-                  } : undefined)
-              }
-              error_message_style={error_message_style}
-              key={index}
-              message_id={message.message_id}
-              message={message.message}
-              isSend={message.isSend}
-              error={message.error}
-              api_key={api_key}
-              additional_headers={additional_headers}
-              host_url={hostUrl}
-              onClientError={notifyClientError}
-              onCheckout={onCheckout}
-              linkButtons={linkButtons}
-              isLatest={index === latestAnswerIndex}
-              onRetry={index === messages.length - 1 ? handleRetry : undefined}
-              retryLabel={t.retry}
-              helpfulLabel={t.helpful}
-              notHelpfulLabel={t.notHelpful}
-            />
-          ))}
+          {/* The answers read their checkout cards from here (CheckoutCard.tsx). */}
+          <CheckoutCardsContext.Provider value={checkoutCardsContext}>
+            {messages.map((message, index) => (
+              <ChatMessage
+                bot_message_style={
+                  bot_message_style ||
+                  (bot_message_color || bot_message_text_color ?
+                    {
+                      ...(bot_message_color ? {backgroundColor: bot_message_color} : {}),
+                      ...(bot_message_text_color ? {color: bot_message_text_color} : {})
+                    } : undefined)
+                }
+                user_message_style={
+                  user_message_style ||
+                  (user_message_color || user_message_text_color ?
+                    {
+                      ...(user_message_color ? {backgroundColor: user_message_color} : {}),
+                      ...(user_message_text_color ? {color: user_message_text_color} : {})
+                    } : undefined)
+                }
+                error_message_style={error_message_style}
+                key={index}
+                message_id={message.message_id}
+                message={message.message}
+                isSend={message.isSend}
+                error={message.error}
+                api_key={api_key}
+                additional_headers={additional_headers}
+                host_url={hostUrl}
+                onClientError={notifyClientError}
+                onCheckout={onCheckout}
+                linkButtons={linkButtons}
+                isLatest={index === latestAnswerIndex}
+                onRetry={index === messages.length - 1 ? handleRetry : undefined}
+                retryLabel={t.retry}
+                helpfulLabel={t.helpful}
+                notHelpfulLabel={t.notHelpful}
+              />
+            ))}
+          </CheckoutCardsContext.Provider>
           {sendingMessage && !isStreaming && (
             <ChatMessagePlaceholder
               bot_message_style={
