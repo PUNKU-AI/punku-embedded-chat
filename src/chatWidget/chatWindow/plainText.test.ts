@@ -10,6 +10,12 @@ describe('markdownToPlainText', () => {
       .toBe('Book on our ticket page.');
   });
 
+  it('reads a reference link as its text and leaves out its definition, but keeps a footnote', () => {
+    expect(markdownToPlainText('Book [our ticket page][tickets] or [the shop][].\n\n[tickets]: https://example.com/tickets\n'
+      + '  [the shop]: <https://example.com/shop> "Shop"\n\nPrices[^1]\n\n[^1]: Children pay half.'))
+      .toBe('Book our ticket page or the shop.\n\nPrices[^1]\n\n[^1]: Children pay half.');
+  });
+
   it('reads the alt text of images', () => {
     expect(markdownToPlainText('![Museum entrance](https://example.com/entrance.jpg)')).toBe('Museum entrance');
   });

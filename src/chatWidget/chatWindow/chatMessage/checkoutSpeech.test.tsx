@@ -45,12 +45,17 @@ function screenAndSpeech(markdown: string) {
   return { shown, reported, spoken };
 }
 
-/** The spoken text holds the words of each card on screen, and nothing else changed. */
+/**
+ * The spoken text holds the words of each card on screen, and nothing of the
+ * link it replaces: no link text, no URL, no bold marks. Without a card, it
+ * is the plain text of the answer.
+ */
 function expectSpeechFollowsScreen(markdown: string) {
   const { shown, reported, spoken } = screenAndSpeech(markdown);
   expect(reported).toHaveLength(shown.length);
   for (const words of shown) expect(spoken).toContain(words);
-  if (shown.length === 0) expect(spoken).toBe(markdownToPlainText(markdown));
+  if (shown.length > 0) expect(spoken).not.toMatch(/Jetzt|sichern|https?:\/\/|\*\*|kasse/);
+  else expect(spoken).toBe(markdownToPlainText(markdown));
   return shown.length;
 }
 
@@ -137,6 +142,11 @@ describe('the status region says what the screen shows', () => {
     } finally {
       cards.pop();
     }
+  });
+
+  it('says a reference link card without its definition', () => {
+    expect(screenAndSpeech(`${lead}\n\n**[Jetzt sichern][kasse]**\n\n[kasse]: ${URL_A}\n\nBis bald!`).spoken)
+      .toBe(`${lead}\n\n${CARD_WORDS}\n\nBis bald!`);
   });
 
   it('says the card words in place of the link, and keeps the text around it', () => {

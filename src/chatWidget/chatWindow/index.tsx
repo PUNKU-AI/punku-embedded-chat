@@ -549,7 +549,10 @@ export default function ChatWindow({
             // console.log('Data from :', data.data.sender);
             // console.log('Streaming text:', data.data.text);
             checkoutCards = mergeCheckoutCards(checkoutCards, readCheckoutCards(data.data.content_blocks));
-            const new_message = data.data.text;
+            // Markdown skips a leading byte order mark (U+FEFF); without it, the
+            // offsets of the cards on screen fit the text that the status
+            // region reads.
+            const new_message = typeof data.data.text === "string" ? data.data.text.replace(/^\uFEFF/, "") : data.data.text;
             if (new_message) {
               setIsStreaming(true);
               message_to_add = new_message;

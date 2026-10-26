@@ -1680,6 +1680,17 @@ describe('ChatWindow', () => {
       ]);
     });
 
+    it('leaves out a leading byte order mark, so the screen and the status region read the same text', async () => {
+      streamWith([{ text: `\uFEFF${answer}`, content_blocks: blocks }]);
+      const { addMessage, updateLastMessage } = ask();
+
+      await waitFor(() => expect(updateLastMessage).toHaveBeenCalledWith(expect.objectContaining({ streaming: false })));
+      expect(addMessage).toHaveBeenCalledWith(expect.objectContaining({ message: answer }));
+      expect(updateLastMessage).toHaveBeenLastCalledWith(expect.objectContaining({ message: answer }));
+      expect(screen.getByRole('status')).toHaveTextContent('Ich habe 2 Tickets vorbereitet. Tickets buchen');
+      expect(screen.getByRole('status').textContent).not.toContain('\uFEFF');
+    });
+
     it('adds a card that comes with a later part of the answer', async () => {
       streamWith([{ text: 'Ich habe' }, { text: answer, content_blocks: blocks }]);
       const { addMessage, updateLastMessage } = ask();
