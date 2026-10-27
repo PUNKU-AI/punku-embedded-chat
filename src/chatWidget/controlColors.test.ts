@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
   BOUNDARY_MIN, cardMetaColor, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline,
-  cardSurface, guardOwnText, ICON_MIN, siteFilled, TEXT_MIN, THEME_COLORS, ThemeName,
+  cardSurface, guardOwnText, hoverShade, ICON_MIN, siteFilled, TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -79,8 +79,9 @@ describe('guardFilled', () => {
 
 describe('siteFilled', () => {
   const white = { rgb: WHITE, alpha: 1 };
-  const site = (color: string, surface: string, label = white) => {
-    const result = siteFilled(rgb(color), label, rgb(surface), TEXT_MIN);
+  const site = (color: string, surface: string | string[], labels = [white]) => {
+    const surfaces = (Array.isArray(surface) ? surface : [surface]).map(rgb);
+    const result = siteFilled(rgb(color), labels, surfaces, TEXT_MIN);
     return result && { fill: toHex(result.fill), label: toHex(result.label) };
   };
 
@@ -98,7 +99,26 @@ describe('siteFilled', () => {
     // The gold reads at 2.6:1 on white; 5% darker, at 3:1.
     expect(ratio('#c69300', '#ffffff')).toBeLessThan(BOUNDARY_MIN);
     const dark = { rgb: rgb('#1c1c1c'), alpha: 1 };
-    expect(site('#c69300', '#ffffff', dark)).toEqual({ fill: toHex(mix(rgb('#c69300'), BLACK, 0.05)), label: '#1c1c1c' });
+    expect(site('#c69300', '#ffffff', [dark, white])).toEqual({ fill: toHex(mix(rgb('#c69300'), BLACK, 0.05)), label: '#1c1c1c' });
+  });
+
+  it('gives no fill for a pale colour that would need a black label', () => {
+    // Before, #93c5fd became a dull #6e94be with a black label at 3.16:1.
+    for (const pale of ['#93c5fd', '#c4b5fd', '#f0a0c0', '#60a5fa', '#d4a853', '#23beef']) {
+      expect(site(pale, '#ffffff')).toBeNull();
+    }
+  });
+
+  it('takes the theme label where white does not read', () => {
+    // The ocean theme's dark label on a light site blue.
+    expect(site('#0ea5e9', ['#1e293b', '#1f3550'], [white, { rgb: rgb('#082f49'), alpha: 1 }]))
+      .toEqual({ fill: '#0ea5e9', label: '#082f49' });
+  });
+
+  it('checks the colour on every surface: the bubble and the card', () => {
+    // The green reads on the near-black bubble (3.5:1), not on the lighter card.
+    const card = toHex(mix(rgb('#111827'), WHITE, 0.08));
+    expect(site('#15803d', ['#111827', card])).toEqual({ fill: toHex(mix(rgb('#15803d'), WHITE, 0.05)), label: '#ffffff' });
   });
 
   it('moves a site colour at most a quarter of the way to black or white', () => {
@@ -106,6 +126,23 @@ describe('siteFilled', () => {
     expect(site('#3aaa35', '#3aaa35')).toBeNull();
     // A dark green on that bubble needs 15% only.
     expect(site('#046035', '#3aaa35')).toEqual({ fill: toHex(mix(rgb('#046035'), BLACK, 0.15)), label: '#ffffff' });
+  });
+});
+
+describe('hoverShade', () => {
+  it('makes a fill 10% darker while it and its label still read', () => {
+    expect(toHex(hoverShade(rgb('#c74388'), WHITE, [rgb('#ffffff')]))).toBe(toHex(mix(rgb('#c74388'), BLACK, 0.1)));
+  });
+
+  it('makes a fill lighter where darker would not read', () => {
+    // A dark label on a light blue in a dark bubble: darker would fail.
+    const shade = hoverShade(rgb('#0ea5e9'), rgb('#082f49'), [rgb('#1e293b')]);
+    expect(toHex(shade)).toBe(toHex(mix(rgb('#0ea5e9'), WHITE, 0.1)));
+  });
+
+  it('keeps the fill where no shade reads', () => {
+    const fill = mix(rgb('#15803d'), WHITE, 0.05);
+    expect(hoverShade(fill, WHITE, [rgb('#111827'), mix(rgb('#111827'), WHITE, 0.08)])).toEqual(fill);
   });
 });
 
@@ -211,10 +248,11 @@ describe('guardControlColors', () => {
       theme: 'default', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827', link_color: '#2760CF',
     });
     // The site's answer colour gives the checkout card its own surface. The
-    // filled link button takes the site's link colour; no colour is changed
-    // for readability.
+    // filled link button takes the site's link colour, with a hover shade of
+    // it; no colour is changed for readability.
     expect(colors).toEqual({
-      linkButtonFill: '#2760cf', cardSurface: 'custom', cardBg: expect.any(String), cardMeta: expect.any(String),
+      linkButtonFill: '#2760cf', linkButtonHover: toHex(mix(rgb('#2760cf'), BLACK, 0.1)),
+      cardSurface: 'custom', cardBg: expect.any(String), cardMeta: expect.any(String),
     });
   });
 
@@ -462,14 +500,134 @@ describe('link buttons in the site colours', () => {
     expect(colors.cardButtonFill).toBeUndefined();
   });
 
-  it('tries the site colours again on the card where the link button colour vanishes there', () => {
-    // The green reads on the near-black bubble (3.5:1), not on the lighter card.
+  it('keeps one site colour for the link button and the card button', () => {
+    // The green reads on the near-black bubble (3.5:1), not on the lighter
+    // card (2.9:1). 5% lighter, it reads on both: one colour for both buttons.
     const { colors, pairs } = guardControlColors({ link_color: '#15803d', bot_message_color: '#111827', bot_message_text_color: '#ffffff' });
-    expect(colors.linkButtonFill).toBe('#15803d');
-    // The card button keeps the site green, 5% lighter: no white or black.
-    expect(colors.cardButtonFill).toBe(toHex(mix(rgb('#15803d'), WHITE, 0.05)));
+    expect(colors.linkButtonFill).toBe(toHex(mix(rgb('#15803d'), WHITE, 0.05)));
+    expect(colors.cardButtonFill).toBeUndefined();
     expect(pairs.find((pair) => pair.control === 'checkout card button')!.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
     expect(pairs.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
+  });
+
+  it('keeps the theme accent where a pale site colour would need a black label', () => {
+    // Saved embeds with a pale send button, and pale visitor colours.
+    for (const props of [
+      { send_button_style: { backgroundColor: '#d4a853' } }, { send_button_style: { backgroundColor: '#23beef' } },
+      { user_message_color: '#93c5fd' }, { user_message_color: '#c4b5fd' }, { user_message_color: '#f0a0c0' },
+    ]) {
+      const { colors } = guardControlColors({ theme: 'default', ...props });
+      expect([colors.linkButtonFill, colors.linkButtonLabel, colors.linkButtonHover]).toEqual([undefined, undefined, undefined]);
+    }
+  });
+
+  it('checks a translucent visitor colour as it shows on the message list', () => {
+    // 60% blue on the dark list shows #1d459d; on the white bubble it would be pale.
+    const { colors } = guardControlColors({
+      background_color: '#111827', bot_message_color: '#ffffff', bot_message_text_color: '#111111',
+      user_message_color: 'rgba(37, 99, 235, 0.6)',
+    });
+    expect(colors.linkButtonFill).toBe(toHex(paintOver(rgb('#2563eb'), 0.6, rgb('#111827'))));
+    expect(colors.linkButtonLabel).toBeUndefined();
+  });
+
+  it('checks a translucent send colour as it shows on the input field', () => {
+    const { colors } = guardControlColors({ send_button_style: { backgroundColor: 'rgba(7, 89, 133, 0.9)' } });
+    expect(colors.linkButtonFill).toBe(toHex(paintOver(rgb('#075985'), 0.9, rgb('#ffffff'))));
+  });
+});
+
+describe('link buttons in the site colours on the dark themes', () => {
+  const result = (props: Parameters<typeof guardControlColors>[0]) => {
+    const { colors, pairs } = guardControlColors(props);
+    const pair = (control: string) => pairs.find((item) => item.control === control)!;
+    return {
+      colors, fill: pair('filled link button').foreground, label: pair('filled link button label').foreground,
+      card: pair('checkout card button').foreground, cardLabel: pair('checkout card button label').foreground,
+      failing: pairs.filter((item) => item.ratio < item.minimum),
+    };
+  };
+
+  it.each([['dark', '#a5b4fc', '#1e1b4b'], ['ocean', '#7dd3fc', '#082f49'], ['aurora', '#f0abfc', '#3b0764']] as const)(
+    'keeps the %s accent where a dark site colour does not read on the dark bubble', (theme, accent, onAccent) => {
+      const { colors, fill, label, card, cardLabel, failing } = result({ theme, link_color: '#075985' });
+      expect({ fill, label, card, cardLabel }).toEqual({ fill: accent, label: onAccent, card: accent, cardLabel: onAccent });
+      expect(colors.linkButtonFill).toBeUndefined();
+      expect(failing).toEqual([]);
+    },
+  );
+
+  it('fills the ocean button in a light site blue with the theme label', () => {
+    const { colors, fill, label, card, cardLabel, failing } = result({ theme: 'ocean', user_message_color: '#0ea5e9' });
+    expect({ fill, label, card, cardLabel }).toEqual({ fill: '#0ea5e9', label: '#082f49', card: '#0ea5e9', cardLabel: '#082f49' });
+    expect(colors.cardButtonFill).toBeUndefined();
+    expect(colors.linkButtonHover).toBe(toHex(mix(rgb('#0ea5e9'), WHITE, 0.1)));
+    expect(failing).toEqual([]);
+  });
+
+  it('fills the aurora button in a light site pink with the theme label', () => {
+    const { fill, label, card, failing } = result({ theme: 'aurora', link_color: '#f472b6' });
+    expect({ fill, label, card }).toEqual({ fill: '#f472b6', label: '#3b0764', card: '#f472b6' });
+    expect(failing).toEqual([]);
+  });
+
+  it('takes a site blue with white text on a white site bubble in the dark theme', () => {
+    const { fill, label, card, failing } = result({ theme: 'dark', bot_message_color: '#ffffff', link_color: '#2760CF' });
+    expect({ fill, label, card }).toEqual({ fill: '#2760cf', label: '#ffffff', card: '#2760cf' });
+    expect(failing).toEqual([]);
+  });
+
+  it.each(['dark', 'ocean', 'aurora'] as const)('lets every control of the real colour sets pass in the %s theme', (theme) => {
+    const sets = [
+      { link_color: '#C69300', button_text_color: '#1C1C1C', send_button_style: { backgroundColor: '#F2B705' }, user_message_color: '#FFF2CC' },
+      { link_color: '#dd4a97', send_button_style: { backgroundColor: '#dd4a97' }, user_message_color: '#ed719e' },
+      { link_color: '#075985', user_message_color: '#075985' },
+      { link_color: '#2760CF', user_message_color: '#2760CF' },
+      { send_button_style: { backgroundColor: '#2a3849' }, user_message_color: '#2a3849' },
+      { user_message_color: '#003a5d' },
+    ];
+    for (const props of sets) {
+      const { colors, card, fill, failing } = result({ theme, ...props });
+      expect(failing).toEqual([]);
+      // A site colour reads on the card too: both buttons show one colour.
+      if (colors.linkButtonFill) expect(card).toBe(fill);
+    }
+  });
+});
+
+describe('hover shades of the link buttons', () => {
+  it('darkens a site colour on hover, on the link button and the card button', () => {
+    const { colors, pairs } = guardControlColors({ link_color: '#dd4a97' });
+    expect(colors.linkButtonHover).toBe(toHex(mix(rgb('#c74388'), BLACK, 0.1)));
+    expect(colors.cardButtonHover).toBeUndefined();
+    const hovers = pairs.filter((pair) => pair.control.endsWith('on hover'));
+    expect(hovers.map((pair) => pair.control)).toEqual([
+      'filled link button on hover', 'checkout card button on hover', 'filled link button label on hover',
+    ]);
+    expect(hovers.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
+  });
+
+  it('gives a white fallback fill a light grey hover', () => {
+    const { colors } = guardControlColors({ bot_message_color: '#791f0d', bot_message_text_color: '#ffffff' });
+    expect(colors).toMatchObject({ linkButtonFill: '#ffffff', linkButtonHover: toHex(mix(WHITE, BLACK, 0.1)) });
+  });
+
+  it('gives a card button with its own fill its own hover', () => {
+    // The theme blue reads on the near-black bubble, not on the card: the card button turns white.
+    const { colors, pairs } = guardControlColors({ bot_message_color: '#111827', bot_message_text_color: '#ffffff' });
+    expect(colors.linkButtonHover).toBeUndefined();
+    expect(colors).toMatchObject({ cardButtonFill: '#ffffff', cardButtonHover: toHex(mix(WHITE, BLACK, 0.1)) });
+    expect(pairs.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
+  });
+
+  it('sets no hover for the theme colours, button_color or the swarovski theme', () => {
+    expect(guardControlColors({ theme: 'default' }).colors.linkButtonHover).toBeUndefined();
+    const ownButton = guardControlColors({
+      button_color: '#9e183b', bot_message_color: '#9e183b', bot_message_text_color: '#ffffff', link_color: '#FFD700',
+    }).colors;
+    expect(ownButton.linkButtonFill).toBe('#ffd700');
+    expect(ownButton.linkButtonHover).toBeUndefined();
+    expect(guardControlColors({ theme: 'swarovski', bot_message_color: '#791f0d' }).colors.linkButtonHover).toBeUndefined();
   });
 });
 

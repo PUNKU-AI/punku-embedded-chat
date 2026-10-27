@@ -1380,12 +1380,14 @@ export default function ChatWindow({
           // Readable replacements where a colour would vanish (controlColors.ts).
           ...(guarded.linkButtonFill ? {"--cl-link-button-fill": guarded.linkButtonFill} : {}),
           ...(guarded.linkButtonLabel ? {"--cl-link-button-label": guarded.linkButtonLabel} : {}),
+          ...(guarded.linkButtonHover ? {"--cl-link-button-hover": guarded.linkButtonHover} : {}),
           ...(guarded.retryLabel ? {"--cl-retry-ink": guarded.retryLabel} : {}),
           ...(guarded.noticeInk ? {"--cl-notice-ink": guarded.noticeInk} : {}),
           ...(guarded.cardBg ? {"--cl-card-bg": guarded.cardBg} : {}),
           ...(guarded.cardMeta ? {"--cl-card-meta": guarded.cardMeta} : {}),
           ...(guarded.cardButtonFill ? {"--cl-card-button-fill": guarded.cardButtonFill} : {}),
           ...(guarded.cardButtonLabel ? {"--cl-card-button-label": guarded.cardButtonLabel} : {}),
+          ...(guarded.cardButtonHover ? {"--cl-card-button-hover": guarded.cardButtonHover} : {}),
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}${guarded.cardSurface ? ` cl-card-${guarded.cardSurface}` : ""}`}

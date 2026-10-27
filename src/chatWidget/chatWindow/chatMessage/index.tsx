@@ -108,16 +108,20 @@ const meaningfulChildren = (node: unknown) =>
 const isElement = (node: HastNode | undefined, tagName: string) =>
   node?.type === "element" && node.tagName === tagName;
 
-/** The children that are not only emoji or whitespace, such as "👉 " or " 🚀✨". */
+/**
+ * The children that are not only emoji, whitespace or a line break, such as
+ * "👉 " or " 🚀✨". A hard line break (br) counts as whitespace, as a soft one.
+ */
 const nonEmojiChildren = (node: unknown) =>
   ((node as HastNode | undefined)?.children || []).filter(
-    (child) => !(child.type === "text" && EMOJI_OR_SPACE.test(child.value || ""))
+    (child) => !(child.type === "text" && EMOJI_OR_SPACE.test(child.value || "")) && !isElement(child, "br")
   );
 
 /**
  * The checkout link of an element that holds one Bookingkit checkout link and
- * nothing else but emoji or whitespace, else null. The link may sit in one
- * strong or em: the agent writes **[Book now](url)**, which gives p > strong > a.
+ * nothing else but emoji, whitespace or line breaks, else null. The link may
+ * sit in one strong or em: the agent writes **[Book now](url)**, which gives
+ * p > strong > a.
  */
 export function checkoutLinkOnly(node: unknown): string | null {
   let children = nonEmojiChildren(node);
@@ -165,8 +169,6 @@ function pointAt(source: string, offset: number): Point {
   const before = source.slice(0, offset);
   return { line: before.split("\n").length, column: offset - before.lastIndexOf("\n"), offset };
 }
-
-const isEmojiOrSpace = (node: HastNode) => node.type === "text" && EMOJI_OR_SPACE.test(node.value || "");
 
 /** A text node with its place in the Markdown, or nothing when it is empty. */
 const textAt = (value: string, start: number, end: number, source: string): HastNode[] =>
@@ -220,14 +222,14 @@ function lineBreaks(paragraph: HastNode, source: string): LineBreak[] {
  * buchen](url)**", after a soft or a hard line break. Returns the lines above
  * and the link lines as two paragraphs with their places in the Markdown,
  * else null. Emoji lines right above the link go with the link, as in a
- * paragraph of its own (isCheckoutLinkOnly). Lines of only emoji above stay
- * as they are.
+ * paragraph of its own (isCheckoutLinkOnly). A paragraph of only emoji lines
+ * and the link is a link paragraph already and needs no split.
  */
 function splitLinkLines(paragraph: HastNode, source: string): { above: HastNode; line: HastNode } | null {
   const position = paragraph.position;
   if (!position || isCheckoutLinkOnly(paragraph)) return null;
   const found = lineBreaks(paragraph, source).find(({ below }) => isCheckoutLinkOnly({ children: below }));
-  if (!found || found.above.every((node) => isEmojiOrSpace(node) || isElement(node, "br"))) return null;
+  if (!found) return null;
   return {
     above: {
       ...paragraph, properties: { ...paragraph.properties }, children: found.above,

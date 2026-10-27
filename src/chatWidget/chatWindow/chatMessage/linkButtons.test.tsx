@@ -141,6 +141,14 @@ describe('checkout links in the agent format', () => {
     ]);
   });
 
+  it('makes a button of a checkout link under an emoji line, after a hard break as after a soft one', () => {
+    for (const lineBreak of ['  \n', '\n']) {
+      const { unmount } = renderAnswer(`👉${lineBreak}**[Book now](${checkout})**`);
+      expect(paragraphs()).toEqual([{ text: expect.stringContaining('Book now'), button: true }]);
+      unmount();
+    }
+  });
+
   it('gives each checkout link on the last lines a button of its own', () => {
     renderAnswer(`Zwei Termine sind frei:\n**[Book Saturday](${checkout})**\n**[Book Sunday](${checkout})**`);
 
@@ -155,7 +163,6 @@ describe('checkout links in the agent format', () => {
     ['text after the link on the last line', `Hier buchen:\n**[Book now](${checkout})** für 2 Personen.`],
     ['text on the line under the link', `**[Book now](${checkout})**\nWir freuen uns auf euch.`],
     ['a link that is not a checkout link', 'Hier buchen:\n**[Book now](https://example.com/book)**'],
-    ['only an emoji above, after a hard break', `👉  \n**[Book now](${checkout})**`],
   ])('keeps one paragraph with %s', (_, message) => {
     renderAnswer(message);
 
@@ -460,6 +467,8 @@ describe('isCheckoutLinkOnly', () => {
 
   it('accepts a checkout link in one strong or em, between emoji', () => {
     expect(isCheckoutLinkOnly(wrap('p', wrap('strong', link(checkout))))).toBe(true);
+    // A hard line break counts as whitespace, as a soft one.
+    expect(isCheckoutLinkOnly(wrap('p', text('👉'), wrap('br'), text('\n'), wrap('strong', link(checkout))))).toBe(true);
     expect(isCheckoutLinkOnly(wrap('p', text('👉 '), wrap('em', link(checkout)), text(' 🚀✨\n')))).toBe(true);
     expect(isCheckoutLinkOnly(wrap('li', text('👍🏽 '), link(checkout)))).toBe(true);
   });

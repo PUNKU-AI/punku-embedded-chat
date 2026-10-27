@@ -272,7 +272,7 @@ describe('built-in theme contrast (WCAG AA)', () => {
       .toBe('2px solid currentColor');
   });
 
-  it('paints a site colour on the filled link button, also on hover and when visited', () => {
+  it('paints a site colour on the link buttons, with a hover shade, also when visited', () => {
     // Without button_color, the guard sets --cl-link-button-fill and
     // --cl-link-button-label to the site's own colour (controlColors.ts).
     // Without them, the theme accent stays.
@@ -281,7 +281,13 @@ describe('built-in theme contrast (WCAG AA)', () => {
       expect(declared([selector, 'background'])).toBe('var(--cl-link-button-fill, var(--cl-accent))');
       expect(declared([selector, 'color'])).toBe('var(--cl-link-button-label, var(--cl-on-accent))');
     }
-    expect(declared([`${filled}:hover`, 'background'])).toBe('var(--cl-link-button-fill, var(--cl-accent-hover))');
+    // The guard's hover shade of that fill (--cl-link-button-hover), else the fill, else the theme hover.
+    expect(declared([`${filled}:hover`, 'background']))
+      .toBe('var(--cl-link-button-hover, var(--cl-link-button-fill, var(--cl-accent-hover)))');
+    const cardButton = '.cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button';
+    expect(declared([`${cardButton}:hover`, 'background'])).toBe(
+      'var(--cl-card-button-hover, var(--cl-card-button-fill, var(--cl-link-button-hover, var(--cl-link-button-fill, var(--cl-accent-hover)))))',
+    );
   });
 
   it('draws the checkout card button in the colours the contrast guard checks', () => {

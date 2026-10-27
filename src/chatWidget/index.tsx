@@ -3020,8 +3020,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-/* --cl-link-button-fill and --cl-link-button-label are set only where the
-   accent would vanish on the answer bubble (controlColors.ts). */
+/* --cl-link-button-fill and --cl-link-button-label are set where the button
+   takes a site colour or the accent would vanish on the answer bubble
+   (controlColors.ts). Without button_color, --cl-link-button-hover is the
+   hover shade of that fill. */
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only a,
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only a:hover,
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only a:visited {
@@ -3030,7 +3032,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window .cl-bot_message .markdown-body > p.cl-link-only a:hover {
-  background: var(--cl-link-button-fill, var(--cl-accent-hover));
+  background: var(--cl-link-button-hover, var(--cl-link-button-fill, var(--cl-accent-hover)));
   opacity: 1 !important;
 }
 
@@ -3081,9 +3083,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
    so it follows each theme and a site's button_color. The contrast guard
    repeats these colours (THEME_COLORS card and cardMeta in controlColors.ts):
    change both together. On a site's own answer colour, the guard sets
-   --cl-card-bg and --cl-card-meta inline, and --cl-card-button-fill and
-   --cl-card-button-label where the link button fill would vanish on the
-   card. Text sizes are in em, so they follow the answer size. */
+   --cl-card-bg and --cl-card-meta inline, and --cl-card-button-fill,
+   --cl-card-button-label and --cl-card-button-hover where the link button
+   fill would vanish on the card. Text sizes are in em, so they follow the
+   answer size. */
 .cl-window {
   --cl-card-bg: #ffffff;
   --cl-card-line: rgba(15, 23, 42, 0.08);
@@ -3229,7 +3232,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window .cl-bot_message .markdown-body div.cl-checkout-card a.cl-checkout-card-button:hover {
-  background: var(--cl-card-button-fill, var(--cl-link-button-fill, var(--cl-accent-hover)));
+  background: var(--cl-card-button-hover, var(--cl-card-button-fill, var(--cl-link-button-hover, var(--cl-link-button-fill, var(--cl-accent-hover)))));
   opacity: 1 !important;
 }
 

@@ -92,6 +92,8 @@ describe('the status region says what the screen shows', () => {
     ['a lead-in line above, Windows line ends', `Hier entlang:\r\n**[Jetzt sichern](${URL_A})**`],
     ['a lead-in line with a link above', `Erst [die Preise](https://example.com/preise):\n**[Jetzt sichern](${URL_A})**`],
     ['a lead-in line with an entity above', `Hier &amp; jetzt:\n**[Jetzt sichern](${URL_A})**`],
+    ['an emoji line above, after a hard break', `👉  \n**[Jetzt sichern](${URL_A})**`],
+    ['a lead-in line, an emoji line and hard breaks', `Hier entlang:  \n👉  \n**[Jetzt sichern](${URL_A})**`],
   ])('shows and says a card for %s', (_, link) => {
     expect(expectSpeechFollowsScreen(`${lead}\n\n${link}\n\nBis bald!`)).toBe(1);
   });
@@ -123,7 +125,6 @@ describe('the status region says what the screen shows', () => {
     ['a card for another link', `**[Jetzt sichern](${URL_B})**`],
     ['a lead-in line above and text after the link', `Hier entlang:\n**[Jetzt sichern](${URL_A})** für zwei.`],
     ['text on the line under the link', `**[Jetzt sichern](${URL_A})**\nfür zwei Personen.`],
-    ['only an emoji line above, after a hard break', `👉  \n**[Jetzt sichern](${URL_A})**`],
   ])('shows and says no card for %s', (_, link) => {
     expect(expectSpeechFollowsScreen(`${lead}\n\n${link}\n\nBis bald!`)).toBe(0);
   });

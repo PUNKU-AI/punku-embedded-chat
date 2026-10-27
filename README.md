@@ -143,7 +143,7 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 
 **Link buttons:** a link that stands alone on its own line in an answer is an action, so the widget shows it as a button with an arrow:
 - A link alone in a paragraph is a filled button. With `button_color`, the button uses `button_color` and `button_text_color`.
-- Without `button_color`, the filled button takes your own colours, in this order: `link_color`, the send button colour (`send_button_style`), the visitor bubble colour (`user_message_color` or `user_message_style`). The first colour that reaches 3:1 on the answer bubble wins, as it is or a little darker or lighter. The text on it is `button_text_color`, else white. If that text falls below 4.5:1, the widget makes the colour a little darker or lighter, else the text takes the bubble colour, white or black. A gradient does not count. Only without such a colour, the button takes the theme accent.
+- Without `button_color`, the filled button takes your own colours, in this order: `link_color`, the send button colour (`send_button_style`), the visitor bubble colour (`user_message_color` or `user_message_style`). The first colour that reaches 3:1 on the answer bubble and on the checkout card wins, as it is or at most a quarter of the way darker or lighter. Its text must reach 4.5:1 in `button_text_color`, white, or the theme's own button text colour. A pale colour that would need black text, or a larger change, does not count, and neither does a gradient. Only without such a colour, the button takes the theme accent. On hover, the button shows a slightly darker or lighter shade of its colour.
 - A checkout link on the last line of a paragraph, under a line of text, is a filled button too (or a checkout card). The text above it stays a paragraph of its own.
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
@@ -219,7 +219,7 @@ The `swarovski` theme keeps its text links and shows no card.
 
 The card follows the theme. On your own answer colour (`bot_message_color`), the card is a lighter shade of that colour.
 On the card, your answer text keeps at least 4.5:1, or its own contrast on the answer when that is lower. Where the theme card or the lighter shade would not give that, the card takes a lighter shade of the answer colour, or the answer colour itself.
-The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button takes the next of your colours that reaches 3:1 there, else a readable theme colour, white or black.
+The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
 
 ### on simple HTML
 ```html

@@ -174,6 +174,8 @@ const customers: Record<string, Record<string, string>> = {
   'a green button on near-black answers': {
     button_color: '#15803d', button_text_color: '#ffffff', bot_message_color: '#111827', bot_message_text_color: '#ffffff',
   },
+  'a light blue visitor colour in the ocean theme': { theme: 'ocean', user_message_color: '#0ea5e9' },
+  'a dark blue link colour in the dark theme': { theme: 'dark', link_color: '#075985' },
   'the dark theme': { theme: 'dark' },
   'the ocean theme': { theme: 'ocean' },
 };
@@ -245,6 +247,10 @@ const siteFills: Record<string, { fill: string; label: string }> = {
   'a mid blue window': { fill: 'rgb(42, 56, 73)', label: 'rgb(255, 255, 255)' },
   'a gradient send button and dark blue visitor bubbles': { fill: 'rgb(0, 58, 93)', label: 'rgb(255, 255, 255)' },
   'a button in the bubble colour, gold links': { fill: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)' },
+  // The ocean theme: the site's light blue with the theme's dark label.
+  'a light blue visitor colour in the ocean theme': { fill: 'rgb(14, 165, 233)', label: 'rgb(8, 47, 73)' },
+  // The dark theme: the dark site blue does not read on the dark bubble, so the theme accent stays.
+  'a dark blue link colour in the dark theme': { fill: 'rgb(165, 180, 252)', label: 'rgb(30, 27, 75)' },
 };
 
 for (const [name, { fill, label }] of Object.entries(siteFills)) {
@@ -255,3 +261,25 @@ for (const [name, { fill, label }] of Object.entries(siteFills)) {
     expect({ button: result.card.button, label: result.card.label }).toEqual({ button: fill, label });
   });
 }
+
+// A site colour fill gets a hover shade: the pink, 10% darker, on the link
+// button and on the card button. Touch screens show no hover.
+test('link buttons in a site colour darken on hover', async ({ page, hasTouch }) => {
+  test.skip(hasTouch, 'Hover runs on the three desktop engines.');
+  await openConversation(page, customers['pink links on white answers']);
+  const hovered = async (selector: string) => {
+    const box = await page.evaluate((target) => {
+      const element = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>(target)!;
+      element.scrollIntoView({ block: 'center' });
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }, selector);
+    await page.mouse.move(box.x, box.y);
+    await expect.poll(() => page.evaluate((target) => getComputedStyle(
+      window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector(target)!,
+    ).backgroundColor, selector)).toBe('rgb(179, 60, 122)');
+    await page.mouse.move(0, 0);
+  };
+  await hovered('.markdown-body > p.cl-link-only > a');
+  await hovered('.cl-checkout-card-button');
+});
