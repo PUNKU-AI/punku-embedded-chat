@@ -268,8 +268,11 @@ for (const [name, { fill, label }] of Object.entries(siteFills)) {
 // button and on the card button. Touch screens show no hover.
 test('link buttons in a site colour darken on hover', async ({ page, hasTouch }) => {
   test.skip(hasTouch, 'Hover runs on the three desktop engines.');
+  // No window or scroll motion: the pointer must stay on the button.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await openConversation(page, customers['pink links on white answers']);
-  const hovered = async (selector: string) => {
+  const hovered = (selector: string) => expect.poll(async () => {
+    // The pointer goes to the button's current centre on every try.
     const box = await page.evaluate((target) => {
       const element = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>(target)!;
       element.scrollIntoView({ block: 'center' });
@@ -277,11 +280,11 @@ test('link buttons in a site colour darken on hover', async ({ page, hasTouch })
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     }, selector);
     await page.mouse.move(box.x, box.y);
-    await expect.poll(() => page.evaluate((target) => getComputedStyle(
+    return page.evaluate((target) => getComputedStyle(
       window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector(target)!,
-    ).backgroundColor, selector)).toBe('rgb(179, 60, 122)');
-    await page.mouse.move(0, 0);
-  };
+    ).backgroundColor, selector);
+  }).toBe('rgb(179, 60, 122)');
   await hovered('.markdown-body > p.cl-link-only > a');
+  await page.mouse.move(0, 0);
   await hovered('.cl-checkout-card-button');
 });
