@@ -8,7 +8,9 @@ import { assertHintVisible, loadWidget } from './widget-helpers';
 // bar. The closed hint text reaches 4.5:1 on the hint. On the checkout card,
 // the button reaches 3:1 on the card and its label 4.5:1, and the title and
 // the venue line read as well as the answer text, up to 4.5:1. The colour
-// sets come from saved customer embeds (anonymised).
+// sets come from saved customer embeds (anonymised). Without button_color,
+// the filled link button and the card button take the site's own colours:
+// link_color, else the send button, else the visitor bubbles.
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -141,14 +143,29 @@ const customers: Record<string, Record<string, string>> = {
   'gold links and a yellow send button on white': {
     button_text_color: '#1C1C1C', background_color: '#FAFAF8', bot_message_color: '#FFFFFF',
     bot_message_text_color: '#2A2A2A', link_color: '#C69300',
-    send_button_style: JSON.stringify({ backgroundColor: '#F2B705' }),
+    send_button_style: JSON.stringify({ backgroundColor: '#F2B705' }), user_message_color: '#FFF2CC',
   },
   'white text on mid green answers, a light grey window': {
     button_text_color: '#ffffff', background_color: '#f1efee', bot_message_color: '#3aaa35',
     bot_message_text_color: '#ffffff', send_button_style: JSON.stringify({ backgroundColor: '#3aaa35' }),
+    user_message_color: '#046035',
   },
   'a mid blue window': {
-    background_color: '#33a1e6', send_button_style: JSON.stringify({ backgroundColor: '#2a3849' }),
+    background_color: '#33a1e6', send_button_style: JSON.stringify({ backgroundColor: '#2a3849' }), user_message_color: '#2a3849',
+  },
+  'pink links on white answers': {
+    link_color: '#dd4a97', send_button_style: JSON.stringify({ backgroundColor: '#dd4a97' }), user_message_color: '#ed719e',
+  },
+  'dark blue links on white answers': {
+    link_color: '#075985', send_button_style: JSON.stringify({ backgroundColor: '#075985' }), user_message_color: '#075985',
+  },
+  'blue links on light blue answers': {
+    button_text_color: '#FFFFFF', background_color: '#FFFFFF', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827',
+    link_color: '#2760CF', user_message_color: '#2760CF',
+  },
+  'a gradient send button and dark blue visitor bubbles': {
+    send_button_style: JSON.stringify({ background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)' }),
+    user_message_color: '#003a5d',
   },
   'green buttons and links in the dark theme': {
     theme: 'dark', button_color: '#3F9B47', button_text_color: '#FFFFFF', background_color: '#111827',
@@ -214,3 +231,27 @@ test('the filled button in the bubble colour turns gold with the bubble colour a
     bubble: 'rgb(158, 24, 59)', filled: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)',
   });
 });
+
+// The filled link button and the card button in the site's own colour, as
+// it is or a little darker (controlColors.ts siteFilled). Before, every set
+// without button_color showed the theme blue rgb(9, 105, 218), the mid green
+// answers black. With button_color, the gold stays.
+const siteFills: Record<string, { fill: string; label: string }> = {
+  'gold links and a yellow send button on white': { fill: 'rgb(188, 140, 0)', label: 'rgb(28, 28, 28)' },
+  'pink links on white answers': { fill: 'rgb(199, 67, 136)', label: 'rgb(255, 255, 255)' },
+  'dark blue links on white answers': { fill: 'rgb(7, 89, 133)', label: 'rgb(255, 255, 255)' },
+  'blue links on light blue answers': { fill: 'rgb(39, 96, 207)', label: 'rgb(255, 255, 255)' },
+  'white text on mid green answers, a light grey window': { fill: 'rgb(3, 82, 45)', label: 'rgb(255, 255, 255)' },
+  'a mid blue window': { fill: 'rgb(42, 56, 73)', label: 'rgb(255, 255, 255)' },
+  'a gradient send button and dark blue visitor bubbles': { fill: 'rgb(0, 58, 93)', label: 'rgb(255, 255, 255)' },
+  'a button in the bubble colour, gold links': { fill: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)' },
+};
+
+for (const [name, { fill, label }] of Object.entries(siteFills)) {
+  test(`link buttons take the site colour: ${name}`, async ({ page }) => {
+    await openConversation(page, customers[name]);
+    const result = (await contrasts(page))!;
+    expect({ filled: result.colours.filled, label: result.colours.label }).toEqual({ filled: fill, label });
+    expect({ button: result.card.button, label: result.card.label }).toEqual({ button: fill, label });
+  });
+}

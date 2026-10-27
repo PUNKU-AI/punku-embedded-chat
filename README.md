@@ -142,7 +142,9 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 - Works seamlessly with all themes and custom color schemes
 
 **Link buttons:** a link that stands alone on its own line in an answer is an action, so the widget shows it as a button with an arrow:
-- A link alone in a paragraph is a filled button in the accent colour. With `button_color`, the button uses `button_color` and `button_text_color`.
+- A link alone in a paragraph is a filled button. With `button_color`, the button uses `button_color` and `button_text_color`.
+- Without `button_color`, the filled button takes your own colours, in this order: `link_color`, the send button colour (`send_button_style`), the visitor bubble colour (`user_message_color` or `user_message_style`). The first colour that reaches 3:1 on the answer bubble wins, as it is or a little darker or lighter. The text on it is `button_text_color`, else white. If that text falls below 4.5:1, the widget makes the colour a little darker or lighter, else the text takes the bubble colour, white or black. A gradient does not count. Only without such a colour, the button takes the theme accent.
+- A checkout link on the last line of a paragraph, under a line of text, is a filled button too (or a checkout card). The text above it stays a paragraph of its own.
 - Links alone in list items are outlined buttons in the link colour, stacked without bullets. This also applies to a list with blank lines between its items.
 - A link inside a sentence stays a normal link with a light underline. Without `link_color`, each theme uses a link colour that is readable on its answer bubbles.
 - With your own answer colour (`bot_message_color`, or a background in `bot_message_style`) and no `link_color`, the widget checks the theme's link colour on your colour. Below 4.5:1 (WCAG AA), links and outlined link buttons take the answer's text colour and keep their underline. They do the same when the widget cannot read your colour, for example a gradient or a colour with transparency.
@@ -151,7 +153,7 @@ The `link_color` property allows you to customize the color of hyperlinks in cha
 **Readable controls on your colours:** your colours can make a control vanish, for example a filled link button in the same colour as the answer bubble. The widget checks every control on the surface behind it (WCAG 1.4.11 and 1.4.3) and keeps every colour that reads:
 - A filled link button, a suggestion chip and the send button need 3:1 against the bubble, the message list or the input field. Their text needs 4.5:1, the send icon 3:1.
 - A send button in the colour of the input field (for example `send_button_style='{"backgroundColor":"#FFFFFF"}'` in a white field) shows only its icon. The widget then checks only the icon: 3:1 on the field.
-- If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1. Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
+- If a fill or an outline falls below 3:1, the widget uses your `link_color` if that reaches 3:1 (without `button_color`, filled link buttons first try your own colours, see **Link buttons**). Else it moves your colour just enough to be readable, as long as its text still reads. Else it uses white or black. For a theme colour it uses the theme's link colour, else white or black.
 - The text on the new fill keeps its colour if it reads. Else it takes the surface colour (for example dark red text on a gold button in a dark red bubble), else white or black.
 - Link text needs 4.5:1 on the answer bubble. Your `link_color` stays if it reaches that. Below that, the widget makes it just dark or light enough.
 - Without `link_color`, links use the theme's link colour if it reaches 4.5:1. Else they take the answer text colour. If that text colour also falls below 4.5:1, links take a dark or light shade of the bubble colour.
@@ -195,7 +197,7 @@ Browsers without native dialog support keep the normal checkout link.
 ### Checkout card
 
 When the PUNKU.AI server verifies a Bookingkit checkout link, it also sends the facts of the booking.
-The widget then shows the link as a card in the answer:
+The widget then shows the link as a card in the answer. The link must stand alone on its line: in its own paragraph, or on the last line of a paragraph under a line of text, with emoji and bold allowed. The text above it then shows as a paragraph of its own.
 
 - The bold title: the number of tickets and the experience, for example "2 Tickets · Night tour of the old mill".
   A group booking shows the number of people, for example "4 Personen · Private kayak tour".
@@ -217,7 +219,7 @@ The `swarovski` theme keeps its text links and shows no card.
 
 The card follows the theme. On your own answer colour (`bot_message_color`), the card is a lighter shade of that colour.
 On the card, your answer text keeps at least 4.5:1, or its own contrast on the answer when that is lower. Where the theme card or the lighter shade would not give that, the card takes a lighter shade of the answer colour, or the answer colour itself.
-The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
+The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button takes the next of your colours that reaches 3:1 there, else a readable theme colour, white or black.
 
 ### on simple HTML
 ```html

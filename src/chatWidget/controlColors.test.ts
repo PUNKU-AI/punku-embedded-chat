@@ -1,7 +1,7 @@
 import { BLACK, contrastRatio, mix, paintOver, parseColor, parseOpaqueColor, Rgb, toHex, WHITE } from './colorContrast';
 import {
   BOUNDARY_MIN, cardMetaColor, guardControlColors, guardDialogConfirm, guardFilled, guardHintColors, guardOutline,
-  cardSurface, guardOwnText, ICON_MIN, TEXT_MIN, THEME_COLORS, ThemeName,
+  cardSurface, guardOwnText, ICON_MIN, siteFilled, TEXT_MIN, THEME_COLORS, ThemeName,
 } from './controlColors';
 
 const rgb = (hex: string) => parseOpaqueColor(hex) as Rgb;
@@ -74,6 +74,38 @@ describe('guardFilled', () => {
     });
     expect(toHex(result.fill)).toBe('#0ea5e9');
     expect(contrastRatio(result.label, result.fill)).toBeGreaterThanOrEqual(ICON_MIN);
+  });
+});
+
+describe('siteFilled', () => {
+  const white = { rgb: WHITE, alpha: 1 };
+  const site = (color: string, surface: string, label = white) => {
+    const result = siteFilled(rgb(color), label, rgb(surface), TEXT_MIN);
+    return result && { fill: toHex(result.fill), label: toHex(result.label) };
+  };
+
+  it('keeps a site colour and its label that read', () => {
+    expect(site('#075985', '#ffffff')).toEqual({ fill: '#075985', label: '#ffffff' });
+  });
+
+  it('makes a site colour a little darker so that its label still reads', () => {
+    // White on the pink reads at 3.8:1. 10% darker, it reads at 4.6:1.
+    expect(ratio('#ffffff', '#dd4a97')).toBeLessThan(TEXT_MIN);
+    expect(site('#dd4a97', '#ffffff')).toEqual({ fill: toHex(mix(rgb('#dd4a97'), BLACK, 0.1)), label: '#ffffff' });
+  });
+
+  it('keeps a dark site label on a mid gold, a little darker for 3:1', () => {
+    // The gold reads at 2.6:1 on white; 5% darker, at 3:1.
+    expect(ratio('#c69300', '#ffffff')).toBeLessThan(BOUNDARY_MIN);
+    const dark = { rgb: rgb('#1c1c1c'), alpha: 1 };
+    expect(site('#c69300', '#ffffff', dark)).toEqual({ fill: toHex(mix(rgb('#c69300'), BLACK, 0.05)), label: '#1c1c1c' });
+  });
+
+  it('moves a site colour at most a quarter of the way to black or white', () => {
+    // The bubble's own green needs more than half the way to reach 3:1.
+    expect(site('#3aaa35', '#3aaa35')).toBeNull();
+    // A dark green on that bubble needs 15% only.
+    expect(site('#046035', '#3aaa35')).toEqual({ fill: toHex(mix(rgb('#046035'), BLACK, 0.15)), label: '#ffffff' });
   });
 });
 
@@ -178,8 +210,12 @@ describe('guardControlColors', () => {
     const { colors } = guardControlColors({
       theme: 'default', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827', link_color: '#2760CF',
     });
-    // The site's answer colour gives the checkout card its own surface; no colour changes.
-    expect(colors).toEqual({ cardSurface: 'custom', cardBg: expect.any(String), cardMeta: expect.any(String) });
+    // The site's answer colour gives the checkout card its own surface. The
+    // filled link button takes the site's link colour; no colour is changed
+    // for readability.
+    expect(colors).toEqual({
+      linkButtonFill: '#2760cf', cardSurface: 'custom', cardBg: expect.any(String), cardMeta: expect.any(String),
+    });
   });
 
   it('leaves colours alone that it cannot read', () => {
@@ -350,6 +386,91 @@ describe('dark themes on a light site bubble', () => {
       expect(pairs.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
     },
   );
+});
+
+// Without button_color, filled link buttons and the checkout card button
+// follow the site's own colours: link_color, then the send button, then the
+// visitor bubbles, each as it is or a little darker or lighter. The colour
+// sets come from real staging embeds (not named: the repository is public).
+describe('link buttons in the site colours', () => {
+  const SITE_SETS: Array<[string, Parameters<typeof guardControlColors>[0], string, string]> = [
+    // Before: the theme blue #0969da on every white bubble.
+    ['a gold link colour and a dark button text', {
+      button_text_color: '#1C1C1C', background_color: '#FAFAF8', bot_message_color: '#FFFFFF', bot_message_text_color: '#2A2A2A',
+      link_color: '#C69300', send_button_style: { backgroundColor: '#F2B705' }, user_message_color: '#FFF2CC',
+    }, '#bc8c00', '#1c1c1c'],
+    ['a pink link colour', {
+      link_color: '#dd4a97', send_button_style: { backgroundColor: '#dd4a97' }, user_message_color: '#ed719e',
+    }, '#c74388', '#ffffff'],
+    ['a dark blue link colour', {
+      link_color: '#075985', send_button_style: { backgroundColor: '#075985' }, user_message_color: '#075985',
+    }, '#075985', '#ffffff'],
+    ['a blue link colour on light blue answers', {
+      button_text_color: '#FFFFFF', background_color: '#FFFFFF', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827',
+      link_color: '#2760CF', user_message_color: '#2760CF',
+    }, '#2760cf', '#ffffff'],
+    // Before: black. The send button has the bubble colour; the dark green
+    // visitor bubbles win, 15% darker.
+    ['a dark green visitor colour on mid green answers', {
+      button_text_color: '#ffffff', background_color: '#f1efee', bot_message_color: '#3aaa35', bot_message_text_color: '#ffffff',
+      send_button_style: { backgroundColor: '#3aaa35' }, user_message_color: '#046035',
+    }, '#03522d', '#ffffff'],
+    ['a navy send button without a link colour', {
+      background_color: '#33a1e6', send_button_style: { backgroundColor: '#2a3849' }, user_message_color: '#2a3849',
+    }, '#2a3849', '#ffffff'],
+    // A gradient send button does not count: the visitor colour wins.
+    ['a gradient send button', {
+      send_button_style: { background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)' }, user_message_color: '#003a5d',
+    }, '#003a5d', '#ffffff'],
+    // With button_color, nothing changes: the gold link colour, as before.
+    ['button_color in the bubble colour', {
+      button_color: '#9e183b', button_text_color: '#ffffff', background_color: '#ffffff', bot_message_color: '#9e183b',
+      bot_message_text_color: '#ffffff', link_color: '#FFD700', send_button_style: { backgroundColor: '#9e183b' },
+    }, '#ffd700', '#9e183b'],
+  ];
+
+  it.each(SITE_SETS)('fills the link button and the card button for %s', (_name, props, fill, label) => {
+    const { pairs } = guardControlColors({ theme: 'default', ...props });
+    const pair = (control: string) => pairs.find((item) => item.control === control)!;
+    expect(pair('filled link button')).toMatchObject({ foreground: fill });
+    expect(pair('filled link button label')).toMatchObject({ foreground: label, background: fill });
+    // The card is the same colour or lighter: the button keeps its fill there.
+    expect(pair('checkout card button')).toMatchObject({ foreground: fill });
+    expect(pair('checkout card button label')).toMatchObject({ foreground: label });
+    expect(pairs.filter((item) => item.ratio < item.minimum)).toEqual([]);
+  });
+
+  it('takes the link colour first, then the send button, then the visitor bubbles', () => {
+    const fill = (props: Parameters<typeof guardControlColors>[0]) => guardControlColors(props).colors.linkButtonFill;
+    const send = { send_button_style: { backgroundColor: '#075985' } };
+    expect(fill({ link_color: '#2a3849', ...send, user_message_color: '#003a5d' })).toBe('#2a3849');
+    expect(fill({ ...send, user_message_color: '#003a5d' })).toBe('#075985');
+    expect(fill({ user_message_color: '#003a5d' })).toBe('#003a5d');
+    expect(fill({ user_message_style: { backgroundColor: '#003a5d' } })).toBe('#003a5d');
+    // A gold link colour needs more than a small move on white: the next colour wins.
+    expect(fill({ link_color: '#FFD700', user_message_color: '#003a5d' })).toBe('#003a5d');
+    // A gradient visitor bubble hides its colour: the theme blue stays.
+    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'linear-gradient(#003a5d, #2a3849)' } }))
+      .toBeUndefined();
+  });
+
+  it('keeps the theme colours of the swarovski theme, which shows text links', () => {
+    const { colors } = guardControlColors({
+      theme: 'swarovski', link_color: '#075985', send_button_style: { backgroundColor: '#2a3849' }, user_message_color: '#003a5d',
+    });
+    expect(colors.linkButtonFill).toBeUndefined();
+    expect(colors.cardButtonFill).toBeUndefined();
+  });
+
+  it('tries the site colours again on the card where the link button colour vanishes there', () => {
+    // The green reads on the near-black bubble (3.5:1), not on the lighter card.
+    const { colors, pairs } = guardControlColors({ link_color: '#15803d', bot_message_color: '#111827', bot_message_text_color: '#ffffff' });
+    expect(colors.linkButtonFill).toBe('#15803d');
+    // The card button keeps the site green, 5% lighter: no white or black.
+    expect(colors.cardButtonFill).toBe(toHex(mix(rgb('#15803d'), WHITE, 0.05)));
+    expect(pairs.find((pair) => pair.control === 'checkout card button')!.ratio).toBeGreaterThanOrEqual(BOUNDARY_MIN);
+    expect(pairs.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
+  });
 });
 
 describe('link button focus marks', () => {

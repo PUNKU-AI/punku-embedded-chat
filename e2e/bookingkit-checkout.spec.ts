@@ -181,6 +181,15 @@ test('a link with the bold inside is still a filled button that opens checkout',
   await assertNoPopup(page, 2);
 });
 
+test('a checkout link on the line under a lead-in is a filled button of its own', async ({ page }) => {
+  await loadCheckout(page, false, `Du kannst die Buchung über folgenden Link abschließen:\n${agentFormat}`);
+  await expect.poll(() => page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)
+    ?.querySelectorAll('.markdown-body > p').length)).toBe(2);
+  await assertFilledButton(page);
+  expect(await page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+    .querySelector('.markdown-body > p')!.textContent)).toBe('Du kannst die Buchung über folgenden Link abschließen:');
+});
+
 test('Nitro checkout falls back to exactly one tab without modal support', async ({ page, context, hasTouch }) => {
   await page.addInitScript(() => {
     Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: undefined });
@@ -233,16 +242,16 @@ const cardAnswer = `Am Samstag um 18:00 Uhr sind noch Plätze frei.\n\n👉 **[J
 const cardButton = '.cl-checkout-card-button';
 
 async function loadCardAnswer(page: Page, nitro: boolean, {
-  product = 'Nachtführung in der Alten Mühle', venue = 'Burg Beispielstein', check = true,
-}: { product?: string; venue?: string; check?: boolean } = {}) {
+  product = 'Nachtführung in der Alten Mühle', venue = 'Burg Beispielstein', check = true, answer = cardAnswer,
+}: { product?: string; venue?: string; check?: boolean; answer?: string } = {}) {
   const cardBlocks = blocksFor(product);
   await page.route('**/api/v1/run/**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/x-ndjson',
     body: [
       { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: '', content_blocks: cardBlocks } },
-      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: cardAnswer.split('\n\n')[0], content_blocks: cardBlocks } },
-      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: cardAnswer, content_blocks: cardBlocks } },
+      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: answer.split('\n')[0], content_blocks: cardBlocks } },
+      { event: 'add_message', data: { sender: 'Machine', id: 'synthetic-card', text: answer, content_blocks: cardBlocks } },
       { event: 'end', data: { result: { session_id: 'synthetic-session' } } },
     ].map((event) => JSON.stringify(event)).join('\n') + '\n',
   }));
@@ -360,6 +369,25 @@ test.describe('checkout card', () => {
     });
     expect(layout.venueLines).toBeGreaterThanOrEqual(testInfo.project.name === 'narrow-phone' ? 3 : 2);
   });
+
+  // About 1% of real answers put the link on the line under the lead-in,
+  // after a hard line break (two spaces) or a soft one.
+  for (const [lineBreak, answer] of [
+    ['a hard', `Sichere dir eure Plätze direkt hier:  \n👉 **[Jetzt Tickets sichern](${checkoutUrl})**`],
+    ['a soft', `Sichere dir eure Plätze direkt hier:\n**[Jetzt Tickets sichern](${checkoutUrl})**`],
+  ]) {
+    test(`a checkout link after ${lineBreak} line break under the lead-in shows the card`, async ({ page }) => {
+      await loadCardAnswer(page, false, { answer });
+      expect(await page.evaluate(() => {
+        const answers = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelectorAll('.cl-bot_message');
+        const body = answers[answers.length - 1].querySelector('.markdown-body')!;
+        return {
+          paragraphs: Array.from(body.querySelectorAll(':scope > p')).map((paragraph) => paragraph.textContent),
+          cardAfterLeadIn: !!body.querySelector(':scope > p + .cl-checkout-card'),
+        };
+      })).toEqual({ paragraphs: ['Sichere dir eure Plätze direkt hier:'], cardAfterLeadIn: true });
+    });
+  }
 
   test('a card opens with the keyboard and comes back after a page load', async ({ page, hasTouch }) => {
     test.skip(hasTouch, 'Keyboard input runs on the three desktop engines.');

@@ -272,6 +272,18 @@ describe('built-in theme contrast (WCAG AA)', () => {
       .toBe('2px solid currentColor');
   });
 
+  it('paints a site colour on the filled link button, also on hover and when visited', () => {
+    // Without button_color, the guard sets --cl-link-button-fill and
+    // --cl-link-button-label to the site's own colour (controlColors.ts).
+    // Without them, the theme accent stays.
+    const filled = '.cl-window .cl-bot_message .markdown-body > p.cl-link-only a';
+    for (const selector of [filled, `${filled}:visited`]) {
+      expect(declared([selector, 'background'])).toBe('var(--cl-link-button-fill, var(--cl-accent))');
+      expect(declared([selector, 'color'])).toBe('var(--cl-link-button-label, var(--cl-on-accent))');
+    }
+    expect(declared([`${filled}:hover`, 'background'])).toBe('var(--cl-link-button-fill, var(--cl-accent-hover))');
+  });
+
   it('draws the checkout card button in the colours the contrast guard checks', () => {
     // The guard sets --cl-card-button-fill and --cl-card-button-label only
     // where the link button fill would vanish on the card.

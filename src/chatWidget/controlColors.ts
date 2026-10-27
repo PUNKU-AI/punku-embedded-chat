@@ -18,6 +18,12 @@
  * The label then gets a colour that reaches 4.5:1 on the new fill: its own
  * colour, the surface colour, or white or black.
  *
+ * Without button_color, the filled link buttons follow the site's own
+ * colours: its link colour, else its send button, else its visitor bubbles.
+ * The first that reaches 3:1 on the bubble wins, as it is or a little darker
+ * or lighter (siteFilled). Only where none does, the theme accent, the theme
+ * fallback or white or black fill the button.
+ *
  * The header icon sits on the header without a plate. Only where its colour
  * would vanish on the header (below 3:1), it gets a plate: a shade of the
  * header colour on which the icon reaches 3:1.
@@ -203,6 +209,8 @@ export type ControlColorProps = {
   button_color?: string;
   button_text_color?: string;
   link_color?: string;
+  user_message_color?: string;
+  user_message_style?: React.CSSProperties;
   bot_message_color?: string;
   bot_message_text_color?: string;
   bot_message_style?: React.CSSProperties;
@@ -336,6 +344,25 @@ export function guardFilled(options: {
     return withLabel(themeFallback);
   }
   return withLabel(blackOrWhite(surface));
+}
+
+/** How far a site colour may move toward black or white to fill a link button: a little. */
+const SITE_NUDGE = 0.25;
+
+/**
+ * A filled link button in a site colour on `surface`, or null where the
+ * colour does not reach 3:1 there, even a little darker or lighter. First the
+ * colour as it is with `label`, then the smallest move that keeps `label`,
+ * then the colour (as it is or a little moved) with a label that reads.
+ */
+export function siteFilled(color: Rgb, label: { rgb: Rgb; alpha: number }, surface: Rgb, labelMin: number): Filled | null {
+  const labelOn = (fill: Rgb) => (label.alpha >= 0.999 ? label.rgb : paintOver(label.rgb, label.alpha, fill));
+  const visible = (fill: Rgb) => contrast(fill, surface) >= BOUNDARY_MIN;
+  const keepsLabel = (fill: Rgb) => visible(fill) && contrast(labelOn(fill), fill) >= labelMin;
+  const withOwnLabel = keepsLabel(color) ? color : nudge(color, surface, keepsLabel, SITE_NUDGE);
+  if (withOwnLabel) return { fill: withOwnLabel, label: labelOn(withOwnLabel) };
+  const fill = visible(color) ? color : nudge(color, surface, visible, SITE_NUDGE);
+  return fill ? { fill, label: pickLabel(fill, labelMin, labelOn(fill), surface) } : null;
 }
 
 /** Text in a site colour on `surface`: kept from 4.5:1, else moved just enough to read. */
@@ -569,12 +596,35 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
   const ownAccent = resolve(props.button_color, bubble);
   const accent = ownAccent || resolve(theme.accent, null)!;
   const accentLabel = parseColor(props.button_color ? props.button_text_color || "#ffffff" : theme.onAccent);
+  // Without button_color, the button takes the site's own colours first: its
+  // link colour, its send button, its visitor bubbles (a gradient or an image
+  // does not count). Their label is button_text_color, else white. The
+  // swarovski theme shows text links and keeps the theme colours.
+  const sendStyle = styleBackground(props.send_button_style);
+  const userStyle = styleBackground(props.user_message_style);
+  const siteColors = props.button_color || props.theme === "swarovski" ? [] : [
+    props.link_color,
+    sendStyle === IMAGE ? undefined : sendStyle,
+    userStyle === IMAGE ? undefined : props.user_message_color || userStyle,
+  ].filter((color): color is string => !!color);
+  const siteLabel = parseColor(props.button_text_color || "#ffffff") || { rgb: WHITE, alpha: 1 };
+  const siteFilledOn = (surface: Rgb) => {
+    for (const value of siteColors) {
+      const color = resolve(value, surface);
+      const filled = color && siteFilled(color, siteLabel, surface, TEXT_MIN);
+      if (filled) return filled;
+    }
+    return null;
+  };
   if (bubble && accentLabel && (!props.button_color || ownAccent)) {
-    const guarded = guardFilled({
-      fill: accent, label: accentLabel.rgb, labelAlpha: accentLabel.alpha, surface: bubble, labelMin: TEXT_MIN,
+    // The theme's order: button_color or the theme accent, else the site
+    // link colour, else (a theme colour) the theme fallback, else white or black.
+    const themeFilledOn = (surface: Rgb) => guardFilled({
+      fill: accent, label: accentLabel.rgb, labelAlpha: accentLabel.alpha, surface, labelMin: TEXT_MIN,
       own: !!props.button_color, linkColor: link && ownLink ? link : null,
-      themeFallback: themeFallback(bubble),
+      themeFallback: themeFallback(surface),
     });
+    const guarded = siteFilledOn(bubble) || themeFilledOn(bubble);
     const fillChanged = !same(guarded.fill, accent);
     if (fillChanged) colors.linkButtonFill = toHex(guarded.fill);
     // A translucent label is set too when the fill changes: the stylesheet
@@ -590,12 +640,16 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
 
     // The checkout card button takes the same fill. The card is lighter than
     // the bubble, so the fill is checked again on the card; only where it
-    // fails there does the card button get a colour of its own.
+    // fails there does the card button get a colour of its own. With site
+    // colours, that is the first site colour that reads on the card, else
+    // the theme's order on the card.
     if (card) {
-      const onCard = guardFilled({
-        fill: guarded.fill, label: guarded.label, surface: card, labelMin: TEXT_MIN,
-        own: !!props.button_color, linkColor: link && ownLink ? link : null, themeFallback: themeFallback(card),
-      });
+      const onCard = siteColors.length && contrast(guarded.fill, card) < BOUNDARY_MIN
+        ? siteFilledOn(card) || themeFilledOn(card)
+        : guardFilled({
+          fill: guarded.fill, label: guarded.label, surface: card, labelMin: TEXT_MIN,
+          own: !!props.button_color, linkColor: link && ownLink ? link : null, themeFallback: themeFallback(card),
+        });
       if (!same(onCard.fill, guarded.fill)) colors.cardButtonFill = toHex(onCard.fill);
       if (!same(onCard.label, guarded.label)) colors.cardButtonLabel = toHex(onCard.label);
       measure("checkout card button", onCard.fill, card, BOUNDARY_MIN);
@@ -643,7 +697,6 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
 
   // The send button in the input field. send_button_style wins (spread
   // last); a gradient or an image in it leaves the button as it is.
-  const sendStyle = styleBackground(props.send_button_style);
   const sendFill = sendStyle === IMAGE ? null : resolve(sendStyle || props.button_color || theme.send || undefined, field);
   const sendIcon = parseColor(props.send_icon_style?.stroke || props.button_text_color || theme.sendIcon);
   if (field && sendFill && sendIcon && same(sendFill, field)) {

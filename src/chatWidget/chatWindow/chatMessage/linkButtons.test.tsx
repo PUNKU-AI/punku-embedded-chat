@@ -110,6 +110,67 @@ describe('checkout links in the agent format', () => {
     expect(linkOnlyParagraph(message)).toBe(false);
   });
 
+  // About 1% of real answers put the link on the line under the lead-in, in
+  // the same paragraph. The link line then gets a paragraph of its own.
+  const paragraphs = () => Array.from(document.querySelectorAll('.markdown-body > p')).map((paragraph) => ({
+    text: paragraph.textContent, button: paragraph.classList.contains('cl-link-only'),
+  }));
+
+  it.each([
+    ['a soft line break', `Du kannst die Buchung über folgenden Link abschließen:\n**[Book now](${checkout})**`],
+    ['a hard line break (two spaces)', `Du kannst die Buchung über folgenden Link abschließen:  \n👉 **[Book now](${checkout})**`],
+    ['a hard line break (a backslash)', `Du kannst die Buchung über folgenden Link abschließen:\\\n**[Book now](${checkout})**`],
+    ['Windows line ends', `Du kannst die Buchung über folgenden Link abschließen:\r\n**[Book now](${checkout})** 🎟️`],
+  ])('makes a button of a checkout link on the line under the lead-in, after %s', (_, message) => {
+    renderAnswer(message);
+
+    expect(paragraphs()).toEqual([
+      { text: 'Du kannst die Buchung über folgenden Link abschließen:', button: false },
+      { text: expect.stringContaining('Book now'), button: true },
+    ]);
+    expect(document.querySelector('.markdown-body br')).toBeNull();
+  });
+
+  it('keeps emoji lines with the link and the other lines with the lead-in', () => {
+    renderAnswer(`Am Samstag sind Plätze frei.\nHier geht es weiter:\n👉\n**[Book now](${checkout})**\n\nBis bald!`);
+
+    expect(paragraphs()).toEqual([
+      { text: 'Am Samstag sind Plätze frei.\nHier geht es weiter:', button: false },
+      { text: expect.stringMatching(/^👉\s+Book now$/), button: true },
+      { text: 'Bis bald!', button: false },
+    ]);
+  });
+
+  it('gives each checkout link on the last lines a button of its own', () => {
+    renderAnswer(`Zwei Termine sind frei:\n**[Book Saturday](${checkout})**\n**[Book Sunday](${checkout})**`);
+
+    expect(paragraphs()).toEqual([
+      { text: 'Zwei Termine sind frei:', button: false },
+      { text: 'Book Saturday', button: true },
+      { text: 'Book Sunday', button: true },
+    ]);
+  });
+
+  it.each([
+    ['text after the link on the last line', `Hier buchen:\n**[Book now](${checkout})** für 2 Personen.`],
+    ['text on the line under the link', `**[Book now](${checkout})**\nWir freuen uns auf euch.`],
+    ['a link that is not a checkout link', 'Hier buchen:\n**[Book now](https://example.com/book)**'],
+    ['only an emoji above, after a hard break', `👉  \n**[Book now](${checkout})**`],
+  ])('keeps one paragraph with %s', (_, message) => {
+    renderAnswer(message);
+
+    expect(document.querySelectorAll('.markdown-body > p')).toHaveLength(1);
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+
+  it('keeps the lead-in and the link in one paragraph for the swarovski theme', () => {
+    render(<ChatMessage message={`Hier buchen:\n**[Book now](${checkout})**`} isSend={false} message_id="answer"
+      host_url="http://localhost:3000" linkButtons={false} />);
+
+    expect(document.querySelectorAll('.markdown-body > p')).toHaveLength(1);
+    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
+  });
+
   it('keeps a bold link that is not a checkout link as a bold text link', () => {
     renderAnswer('**[Opening hours](https://example.com/hours)**\n\n👉 [Prices](https://example.com/prices)\n\n'
       + '**[Book now](https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef)**');
@@ -236,6 +297,40 @@ describe('checkout cards in answers', () => {
     const venue = document.querySelector('.cl-checkout-card-meta')!.textContent;
     expect(title).toBe('2 Tickets · Kayak at sunset');
     expect(speakCheckoutCards(message, registry.get('answer'))).toBe(`Zwei Plätze sind frei.\n\n${title}, ${venue}: Tickets buchen`);
+  });
+
+  // Real agent answers, with the link on the line under the lead-in.
+  it.each([
+    ['a soft line break', 'Du kannst die Buchung über folgenden Link abschließen:', `\n**[Direkter Buchungslink](${cardUrl})**`],
+    ['a hard line break', 'Sichere dir eure Plätze direkt hier:', `  \n👉 **[Jetzt Tickets buchen](${cardUrl})**`],
+  ])('shows the card of a checkout link on the line under the lead-in, after %s', (_, leadIn, linkLine) => {
+    render(element(`${leadIn}${linkLine}`, context()));
+
+    const body = document.querySelector('.markdown-body')!;
+    expect(Array.from(body.querySelectorAll(':scope > p')).map((paragraph) => paragraph.textContent)).toEqual([leadIn]);
+    expect(body.querySelector(':scope > p + .cl-checkout-card')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
+    expect(body).not.toHaveTextContent(/Buchungslink|Jetzt Tickets buchen/);
+    expect(body.querySelectorAll('.cl-link-only, br')).toHaveLength(0);
+  });
+
+  it('keeps the lead-in element while the link line streams in and turns into a card', () => {
+    const leadIn = 'Sichere dir eure Plätze direkt hier:';
+    const full = `${leadIn}  \n👉 **[Jetzt Tickets buchen](${cardUrl})**`;
+    const { rerender } = render(element(`${leadIn}  \n👉 **[Jetzt Tickets`, context(), true, true));
+    const paragraph = document.querySelector('.markdown-body > p')!;
+    expect(document.querySelectorAll('.markdown-body > p')).toHaveLength(1);
+
+    // The link is complete: the lead-in stays, the link line is a link button.
+    rerender(element(full, context(), true, true));
+    expect(document.querySelector('.markdown-body > p')).toBe(paragraph);
+    expect(paragraph).toHaveTextContent(leadIn);
+    expect(screen.getByRole('link', { name: 'Jetzt Tickets buchen' }).closest('p')).toHaveClass('cl-link-only');
+
+    // The answer is complete: the link line is the card.
+    rerender(element(full, context(), true, false));
+    expect(document.querySelector('.markdown-body > p')).toBe(paragraph);
+    expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
   });
 
   it('keeps the text link of the swarovski theme', () => {

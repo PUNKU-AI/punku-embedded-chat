@@ -986,15 +986,15 @@ export default function ChatWindow({
   // same red as the answer bubble, or blue links on dark red (1.6:1). The
   // guard keeps every colour that reads and replaces the others
   // (controlColors.ts). The style props are objects, so compare their contents.
-  const colorStyles = JSON.stringify([bot_message_style, input_style, input_container_style, send_button_style, send_icon_style, error_message_style]);
+  const colorStyles = JSON.stringify([bot_message_style, user_message_style, input_style, input_container_style, send_button_style, send_icon_style, error_message_style]);
   const dialogConfirm = useMemo(() => guardDialogConfirm(button_text_color), [button_text_color]);
   const guarded = useMemo(() => guardControlColors({
-    theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color,
-    bot_message_style, background_color, input_style, input_container_style, send_button_style, send_icon_style,
-    error_message_style,
+    theme, button_color, button_text_color, link_color, user_message_color, user_message_style, bot_message_color,
+    bot_message_text_color, bot_message_style, background_color, input_style, input_container_style, send_button_style,
+    send_icon_style, error_message_style,
   }).colors,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [theme, button_color, button_text_color, link_color, bot_message_color, bot_message_text_color, background_color, colorStyles]);
+  [theme, button_color, button_text_color, link_color, user_message_color, bot_message_color, bot_message_text_color, background_color, colorStyles]);
   const linkColor = link_color ? guarded.link || link_color : undefined;
 
   const effectiveBranding =
