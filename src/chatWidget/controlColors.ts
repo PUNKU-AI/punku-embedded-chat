@@ -459,6 +459,17 @@ function styleBackground(style: React.CSSProperties | undefined): string | undef
   return typeof color === "string" && color.trim() ? color : undefined;
 }
 
+/**
+ * The first colour stop of a gradient in a style's background, where the
+ * gradient starts (linear-gradient(135deg, #00496F 0%, #246479 100%) gives
+ * #00496F), or undefined: no gradient, or no stop the widget can read.
+ */
+function gradientStart(style: React.CSSProperties | undefined): string | undefined {
+  const background = style?.background;
+  if (typeof background !== "string" || !/gradient\(/i.test(background)) return undefined;
+  return /#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/i.exec(background)?.[0];
+}
+
 /** A surface colour: null for an image or a colour that cannot be read. */
 const surface = (value: string | undefined, backdrop: Rgb | null) =>
   value === IMAGE ? null : resolve(value, backdrop);
@@ -627,17 +638,23 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
   const accentLabel = parseColor(props.button_color ? props.button_text_color || "#ffffff" : theme.onAccent);
   // Without button_color, the button takes the site's own colours first: its
   // link colour, its send button, its visitor bubbles, each as the visitor
-  // sees it (on the bubble, the input field and the message list; a gradient
-  // or an image does not count). Its label is a colour that the site or the
-  // theme chose: button_text_color, white, or the theme's label. The
-  // swarovski theme shows text links and keeps the theme colours.
+  // sees it (on the bubble, the input field and the message list). A
+  // gradient gives its first colour stop; behind a gradient visitor style,
+  // user_message_color comes next. An image gives no colour. Its label is a
+  // colour that the site or the theme chose: button_text_color, white, or
+  // the theme's label. The swarovski theme shows text links and keeps the
+  // theme colours.
   const followsSite = !props.button_color && props.theme !== "swarovski";
   const sendStyle = styleBackground(props.send_button_style);
   const userStyle = styleBackground(props.user_message_style);
+  const sendColors = sendStyle === IMAGE ? [gradientStart(props.send_button_style)] : [sendStyle];
+  const userColors = userStyle === IMAGE
+    ? [gradientStart(props.user_message_style), props.user_message_color]
+    : [props.user_message_color || userStyle];
   const siteColors = !followsSite ? [] : [
     ownLink,
-    sendStyle === IMAGE ? null : resolve(sendStyle, field),
-    userStyle === IMAGE ? null : resolve(props.user_message_color || userStyle, list),
+    ...sendColors.map((color) => resolve(color, field)),
+    ...userColors.map((color) => resolve(color, list)),
   ].filter((color): color is Rgb => !!color);
   const siteLabels = [parseColor(props.button_text_color), { rgb: WHITE, alpha: 1 }, parseColor(theme.onAccent)]
     .filter((label): label is Paint => !!label);

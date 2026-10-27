@@ -456,10 +456,12 @@ describe('link buttons in the site colours', () => {
     ['a navy send button without a link colour', {
       background_color: '#33a1e6', send_button_style: { backgroundColor: '#2a3849' }, user_message_color: '#2a3849',
     }, '#2a3849', '#ffffff'],
-    // A gradient send button does not count: the visitor colour wins.
-    ['a gradient send button', {
+    // The real snippet: a gradient send button and gradient visitor bubbles
+    // over user_message_color. The send gradient's first stop wins.
+    ['a gradient send button and gradient visitor bubbles', {
       send_button_style: { background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)' }, user_message_color: '#003a5d',
-    }, '#003a5d', '#ffffff'],
+      user_message_style: { background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)', color: '#FFFFFF' },
+    }, '#00496f', '#ffffff'],
     // With button_color, nothing changes: the gold link colour, as before.
     ['button_color in the bubble colour', {
       button_color: '#9e183b', button_text_color: '#ffffff', background_color: '#ffffff', bot_message_color: '#9e183b',
@@ -487,9 +489,16 @@ describe('link buttons in the site colours', () => {
     expect(fill({ user_message_style: { backgroundColor: '#003a5d' } })).toBe('#003a5d');
     // A gold link colour needs more than a small move on white: the next colour wins.
     expect(fill({ link_color: '#FFD700', user_message_color: '#003a5d' })).toBe('#003a5d');
-    // A gradient visitor bubble hides its colour: the theme blue stays.
-    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'linear-gradient(#003a5d, #2a3849)' } }))
-      .toBeUndefined();
+    // A gradient gives its first colour stop, on a visitor bubble and a send button.
+    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'linear-gradient(#2a3849, #003a5d)' } }))
+      .toBe('#2a3849');
+    expect(fill({ send_button_style: { background: 'linear-gradient(90deg, rgb(7, 89, 133), #2a3849)' } })).toBe('#075985');
+    // Behind a gradient with no stop the widget can read, or an image, user_message_color comes next.
+    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'linear-gradient(navy, teal)' } })).toBe('#003a5d');
+    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'url(bubble.png)' } })).toBe('#003a5d');
+    // A pale first stop goes on to user_message_color.
+    expect(fill({ user_message_color: '#003a5d', user_message_style: { background: 'linear-gradient(#e0f2fe, #003a5d)' } }))
+      .toBe('#003a5d');
   });
 
   it('keeps the theme colours of the swarovski theme, which shows text links', () => {

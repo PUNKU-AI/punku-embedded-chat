@@ -166,6 +166,7 @@ const customers: Record<string, Record<string, string>> = {
   'a gradient send button and dark blue visitor bubbles': {
     send_button_style: JSON.stringify({ background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)' }),
     user_message_color: '#003a5d',
+    user_message_style: JSON.stringify({ background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)', color: '#FFFFFF' }),
   },
   'green buttons and links in the dark theme': {
     theme: 'dark', button_color: '#3F9B47', button_text_color: '#FFFFFF', background_color: '#111827',
@@ -245,7 +246,8 @@ const siteFills: Record<string, { fill: string; label: string }> = {
   'blue links on light blue answers': { fill: 'rgb(39, 96, 207)', label: 'rgb(255, 255, 255)' },
   'white text on mid green answers, a light grey window': { fill: 'rgb(3, 82, 45)', label: 'rgb(255, 255, 255)' },
   'a mid blue window': { fill: 'rgb(42, 56, 73)', label: 'rgb(255, 255, 255)' },
-  'a gradient send button and dark blue visitor bubbles': { fill: 'rgb(0, 58, 93)', label: 'rgb(255, 255, 255)' },
+  // The first stop of the send gradient, #00496F.
+  'a gradient send button and dark blue visitor bubbles': { fill: 'rgb(0, 73, 111)', label: 'rgb(255, 255, 255)' },
   'a button in the bubble colour, gold links': { fill: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)' },
   // The ocean theme: the site's light blue with the theme's dark label.
   'a light blue visitor colour in the ocean theme': { fill: 'rgb(14, 165, 233)', label: 'rgb(8, 47, 73)' },

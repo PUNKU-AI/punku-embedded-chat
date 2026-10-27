@@ -1,7 +1,8 @@
 // The colour settings of the saved customer embeds, without names, URLs or
 // IDs: only the theme and the colours that the controls use. Captured on
 // 2026-10-23 from demos/live-sites (24 embeds). The visitor bubble colours
-// (user_message_color) were added on 2026-10-27 from the staging embeds.
+// (user_message_color, user_message_style) were added on 2026-10-27 from the
+// staging embeds.
 import type { ControlColorProps } from "../controlColors";
 
 export type CustomerColors = ControlColorProps & {
@@ -14,7 +15,7 @@ export const CUSTOMER_COLORS: CustomerColors[] = [
   {"name": "customer 01", "theme": "default", "bot_message_color": "#7a2022", "bot_message_text_color": "#ffffff", "link_color": "#ffffff", "closed_widget_hint_background_color": "#ffffff", "bot_message_style": {"backgroundColor": "#7a2022", "color": "#ffffff"}, "send_button_style": {"backgroundColor": "#7a2022"}},
   {"name": "customer 02", "user_message_color": "#2a3849", "theme": "default", "background_color": "#33a1e6", "closed_widget_hint_text_color": "#2a3849", "send_button_style": {"backgroundColor": "#2a3849"}},
   {"name": "customer 03"},
-  {"name": "customer 04", "user_message_color": "#003a5d", "theme": "default", "closed_widget_hint_text_color": "#003a5d", "send_button_style": {"background": "linear-gradient(135deg, #00496F 0%, #246479 100%)"}},
+  {"name": "customer 04", "user_message_color": "#003a5d", "theme": "default", "closed_widget_hint_text_color": "#003a5d", "send_button_style": {"background": "linear-gradient(135deg, #00496F 0%, #246479 100%)"}, "user_message_style": {"background": "linear-gradient(135deg, #00496F 0%, #246479 100%)", "color": "#FFFFFF"}},
   {"name": "customer 05", "theme": "default", "send_button_style": {"backgroundColor": "#0c7cb1"}},
   {"name": "customer 06", "theme": "default", "button_color": "#9e183b", "button_text_color": "#ffffff", "background_color": "#ffffff", "bot_message_color": "#9e183b", "bot_message_text_color": "#ffffff", "link_color": "#FFD700", "bot_message_style": {"backgroundColor": "#9e183b", "color": "#ffffff"}, "input_style": {"backgroundColor": "#ffffff"}, "input_container_style": {"backgroundColor": "#ffffff"}, "send_button_style": {"backgroundColor": "#9e183b"}},
   {"name": "customer 07", "theme": "default", "button_color": "#9e183b", "button_text_color": "#ffffff", "background_color": "#ffffff", "bot_message_color": "#9e183b", "bot_message_text_color": "#ffffff", "link_color": "#FFD700", "bot_message_style": {"backgroundColor": "#9e183b", "color": "#ffffff"}, "input_style": {"backgroundColor": "#ffffff"}, "input_container_style": {"backgroundColor": "#ffffff"}, "send_button_style": {"backgroundColor": "#9e183b"}},
