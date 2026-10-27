@@ -88,6 +88,8 @@ function parseMessage(message: any): string {
   }
 }
 
+type Point = { line?: number; column?: number; offset?: number };
+
 type HastNode = {
   type: string;
   tagName?: string;
@@ -95,7 +97,7 @@ type HastNode = {
   properties?: { href?: unknown };
   children?: HastNode[];
   data?: Record<string, unknown>;
-  position?: { start: { offset?: number }; end: { offset?: number } };
+  position?: { start: Point; end: Point };
 };
 
 const meaningfulChildren = (node: unknown) =>
@@ -106,16 +108,20 @@ const meaningfulChildren = (node: unknown) =>
 const isElement = (node: HastNode | undefined, tagName: string) =>
   node?.type === "element" && node.tagName === tagName;
 
-/** The children that are not only emoji or whitespace, such as "👉 " or " 🚀✨". */
+/**
+ * The children that are not only emoji, whitespace or a line break, such as
+ * "👉 " or " 🚀✨". A hard line break (br) counts as whitespace, as a soft one.
+ */
 const nonEmojiChildren = (node: unknown) =>
   ((node as HastNode | undefined)?.children || []).filter(
-    (child) => !(child.type === "text" && EMOJI_OR_SPACE.test(child.value || ""))
+    (child) => !(child.type === "text" && EMOJI_OR_SPACE.test(child.value || "")) && !isElement(child, "br")
   );
 
 /**
  * The checkout link of an element that holds one Bookingkit checkout link and
- * nothing else but emoji or whitespace, else null. The link may sit in one
- * strong or em: the agent writes **[Book now](url)**, which gives p > strong > a.
+ * nothing else but emoji, whitespace or line breaks, else null. The link may
+ * sit in one strong or em: the agent writes **[Book now](url)**, which gives
+ * p > strong > a.
  */
 export function checkoutLinkOnly(node: unknown): string | null {
   let children = nonEmojiChildren(node);
@@ -158,6 +164,108 @@ export function isLinkList(node: unknown): boolean {
   return items.length > 0 && items.every((item) => isElement(item, "li") && isLinkOnlyListItem(item));
 }
 
+/** The line and column of an offset in the Markdown, as the parser counts them (from 1). */
+function pointAt(source: string, offset: number): Point {
+  const before = source.slice(0, offset);
+  return { line: before.split("\n").length, column: offset - before.lastIndexOf("\n"), offset };
+}
+
+/** A text node with its place in the Markdown, or nothing when it is empty. */
+const textAt = (value: string, start: number, end: number, source: string): HastNode[] =>
+  value ? [{ type: "text", value, position: { start: pointAt(source, start), end: pointAt(source, end) } }] : [];
+
+type LineBreak = { above: HastNode[]; below: HastNode[]; aboveEnd: number; belowStart: number };
+
+/**
+ * The line breaks of a paragraph, in order: a hard break (br), or a soft
+ * break (a newline in a text node), with the children above and below it and
+ * the break's offsets in the Markdown. A text node whose newlines the
+ * Markdown does not show one to one (a character reference) gives none.
+ */
+function lineBreaks(paragraph: HastNode, source: string): LineBreak[] {
+  const children = paragraph.children || [];
+  const breaks: LineBreak[] = [];
+  children.forEach((child, index) => {
+    const start = child.position?.start.offset;
+    const end = child.position?.end.offset;
+    if (start === undefined || end === undefined) return;
+    const before = children.slice(0, index);
+    const after = children.slice(index + 1);
+    if (isElement(child, "br")) {
+      breaks.push({ above: before, below: after, aboveEnd: start, belowStart: end });
+      return;
+    }
+    const value = child.type === "text" ? child.value || "" : "";
+    const valueBreaks = value.split("\n").length - 1;
+    const markdown = source.slice(start, end);
+    if (!valueBreaks || markdown.split("\n").length - 1 !== valueBreaks) return;
+    let valueAt = -1;
+    let markdownAt = -1;
+    for (let count = 0; count < valueBreaks; count += 1) {
+      valueAt = value.indexOf("\n", valueAt + 1);
+      markdownAt = markdown.indexOf("\n", markdownAt + 1);
+      const aboveText = value.slice(0, valueAt).replace(/\s+$/, "");
+      breaks.push({
+        above: [...before, ...textAt(aboveText, start, start + markdownAt, source)],
+        below: [...textAt(value.slice(valueAt + 1), start + markdownAt + 1, end, source), ...after],
+        aboveEnd: start + markdownAt,
+        belowStart: start + markdownAt + 1,
+      });
+    }
+  });
+  return breaks;
+}
+
+/**
+ * A paragraph whose last lines hold only a checkout link, as the agent
+ * sometimes writes it under its lead-in: "Hier buchen:\n👉 **[Jetzt
+ * buchen](url)**", after a soft or a hard line break. Returns the lines above
+ * and the link lines as two paragraphs with their places in the Markdown,
+ * else null. Emoji lines right above the link go with the link, as in a
+ * paragraph of its own (isCheckoutLinkOnly). A paragraph of only emoji lines
+ * and the link is a link paragraph already and needs no split.
+ */
+function splitLinkLines(paragraph: HastNode, source: string): { above: HastNode; line: HastNode } | null {
+  const position = paragraph.position;
+  if (!position || isCheckoutLinkOnly(paragraph)) return null;
+  const found = lineBreaks(paragraph, source).find(({ below }) => isCheckoutLinkOnly({ children: below }));
+  if (!found) return null;
+  return {
+    above: {
+      ...paragraph, properties: { ...paragraph.properties }, children: found.above,
+      position: { start: position.start, end: pointAt(source, found.aboveEnd) },
+    },
+    line: {
+      ...paragraph, properties: { ...paragraph.properties }, children: found.below,
+      position: { start: pointAt(source, found.belowStart), end: position.end },
+    },
+  };
+}
+
+/**
+ * Gives a checkout link on the last line of a top-level paragraph a
+ * paragraph of its own (a rehype plugin), so it becomes a checkout card or a
+ * filled link button as a link alone in its paragraph does. The lines above
+ * stay one paragraph. Checkout links on several last lines split one by one.
+ * A link inside a sentence stays inline. The swarovski theme, with text
+ * links only, does not use this plugin.
+ */
+function splitCheckoutLinkLines() {
+  return (tree: HastNode, file: { value?: unknown }) => {
+    const source = String(file.value ?? "");
+    tree.children = (tree.children || []).flatMap((child) => {
+      if (!isElement(child, "p")) return [child];
+      const lines: HastNode[] = [];
+      let rest = child;
+      for (let split = splitLinkLines(rest, source); split; split = splitLinkLines(rest, source)) {
+        lines.unshift({ type: "text", value: "\n" }, split.line);
+        rest = split.above;
+      }
+      return [rest, ...lines];
+    });
+  };
+}
+
 const TOP_LEVEL = "punkuTopLevel";
 const FOLLOWED = "punkuFollowed";
 
@@ -178,6 +286,7 @@ function markTopLevelParagraphs() {
 }
 
 const REHYPE_PLUGINS = [markTopLevelParagraphs];
+const LINK_BUTTON_PLUGINS = [splitCheckoutLinkLines, markTopLevelParagraphs];
 
 const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
 
@@ -402,7 +511,7 @@ export default function ChatMessage({
               <Markdown
                 className={"markdown-body prose flex flex-col word-break-break-word"}
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={REHYPE_PLUGINS}
+                rehypePlugins={linkButtons ? LINK_BUTTON_PLUGINS : REHYPE_PLUGINS}
                 components={markdownComponents}
               >
                 {parsedMessage}

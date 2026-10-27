@@ -8,7 +8,9 @@ import { assertHintVisible, loadWidget } from './widget-helpers';
 // bar. The closed hint text reaches 4.5:1 on the hint. On the checkout card,
 // the button reaches 3:1 on the card and its label 4.5:1, and the title and
 // the venue line read as well as the answer text, up to 4.5:1. The colour
-// sets come from saved customer embeds (anonymised).
+// sets come from saved customer embeds (anonymised). Without button_color,
+// the filled link button and the card button take the site's own colours:
+// link_color, else the send button, else the visitor bubbles.
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -141,14 +143,30 @@ const customers: Record<string, Record<string, string>> = {
   'gold links and a yellow send button on white': {
     button_text_color: '#1C1C1C', background_color: '#FAFAF8', bot_message_color: '#FFFFFF',
     bot_message_text_color: '#2A2A2A', link_color: '#C69300',
-    send_button_style: JSON.stringify({ backgroundColor: '#F2B705' }),
+    send_button_style: JSON.stringify({ backgroundColor: '#F2B705' }), user_message_color: '#FFF2CC',
   },
   'white text on mid green answers, a light grey window': {
     button_text_color: '#ffffff', background_color: '#f1efee', bot_message_color: '#3aaa35',
     bot_message_text_color: '#ffffff', send_button_style: JSON.stringify({ backgroundColor: '#3aaa35' }),
+    user_message_color: '#046035',
   },
   'a mid blue window': {
-    background_color: '#33a1e6', send_button_style: JSON.stringify({ backgroundColor: '#2a3849' }),
+    background_color: '#33a1e6', send_button_style: JSON.stringify({ backgroundColor: '#2a3849' }), user_message_color: '#2a3849',
+  },
+  'pink links on white answers': {
+    link_color: '#dd4a97', send_button_style: JSON.stringify({ backgroundColor: '#dd4a97' }), user_message_color: '#ed719e',
+  },
+  'dark blue links on white answers': {
+    link_color: '#075985', send_button_style: JSON.stringify({ backgroundColor: '#075985' }), user_message_color: '#075985',
+  },
+  'blue links on light blue answers': {
+    button_text_color: '#FFFFFF', background_color: '#FFFFFF', bot_message_color: '#EAF1FF', bot_message_text_color: '#111827',
+    link_color: '#2760CF', user_message_color: '#2760CF',
+  },
+  'a gradient send button and dark blue visitor bubbles': {
+    send_button_style: JSON.stringify({ background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)' }),
+    user_message_color: '#003a5d',
+    user_message_style: JSON.stringify({ background: 'linear-gradient(135deg, #00496F 0%, #246479 100%)', color: '#FFFFFF' }),
   },
   'green buttons and links in the dark theme': {
     theme: 'dark', button_color: '#3F9B47', button_text_color: '#FFFFFF', background_color: '#111827',
@@ -157,6 +175,8 @@ const customers: Record<string, Record<string, string>> = {
   'a green button on near-black answers': {
     button_color: '#15803d', button_text_color: '#ffffff', bot_message_color: '#111827', bot_message_text_color: '#ffffff',
   },
+  'a light blue visitor colour in the ocean theme': { theme: 'ocean', user_message_color: '#0ea5e9' },
+  'a dark blue link colour in the dark theme': { theme: 'dark', link_color: '#075985' },
   'the dark theme': { theme: 'dark' },
   'the ocean theme': { theme: 'ocean' },
 };
@@ -213,4 +233,58 @@ test('the filled button in the bubble colour turns gold with the bubble colour a
   expect(result.colours).toEqual({
     bubble: 'rgb(158, 24, 59)', filled: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)',
   });
+});
+
+// The filled link button and the card button in the site's own colour, as
+// it is or a little darker (controlColors.ts siteFilled). Before, every set
+// without button_color showed the theme blue rgb(9, 105, 218), the mid green
+// answers black. With button_color, the gold stays.
+const siteFills: Record<string, { fill: string; label: string }> = {
+  'gold links and a yellow send button on white': { fill: 'rgb(188, 140, 0)', label: 'rgb(28, 28, 28)' },
+  'pink links on white answers': { fill: 'rgb(199, 67, 136)', label: 'rgb(255, 255, 255)' },
+  'dark blue links on white answers': { fill: 'rgb(7, 89, 133)', label: 'rgb(255, 255, 255)' },
+  'blue links on light blue answers': { fill: 'rgb(39, 96, 207)', label: 'rgb(255, 255, 255)' },
+  'white text on mid green answers, a light grey window': { fill: 'rgb(3, 82, 45)', label: 'rgb(255, 255, 255)' },
+  'a mid blue window': { fill: 'rgb(42, 56, 73)', label: 'rgb(255, 255, 255)' },
+  // The first stop of the send gradient, #00496F.
+  'a gradient send button and dark blue visitor bubbles': { fill: 'rgb(0, 73, 111)', label: 'rgb(255, 255, 255)' },
+  'a button in the bubble colour, gold links': { fill: 'rgb(255, 215, 0)', label: 'rgb(158, 24, 59)' },
+  // The ocean theme: the site's light blue with the theme's dark label.
+  'a light blue visitor colour in the ocean theme': { fill: 'rgb(14, 165, 233)', label: 'rgb(8, 47, 73)' },
+  // The dark theme: the dark site blue does not read on the dark bubble, so the theme accent stays.
+  'a dark blue link colour in the dark theme': { fill: 'rgb(165, 180, 252)', label: 'rgb(30, 27, 75)' },
+};
+
+for (const [name, { fill, label }] of Object.entries(siteFills)) {
+  test(`link buttons take the site colour: ${name}`, async ({ page }) => {
+    await openConversation(page, customers[name]);
+    const result = (await contrasts(page))!;
+    expect({ filled: result.colours.filled, label: result.colours.label }).toEqual({ filled: fill, label });
+    expect({ button: result.card.button, label: result.card.label }).toEqual({ button: fill, label });
+  });
+}
+
+// A site colour fill gets a hover shade: the pink, 10% darker, on the link
+// button and on the card button. Touch screens show no hover.
+test('link buttons in a site colour darken on hover', async ({ page, hasTouch }) => {
+  test.skip(hasTouch, 'Hover runs on the three desktop engines.');
+  // No window or scroll motion: the pointer must stay on the button.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openConversation(page, customers['pink links on white answers']);
+  const hovered = (selector: string) => expect.poll(async () => {
+    // The pointer goes to the button's current centre on every try.
+    const box = await page.evaluate((target) => {
+      const element = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>(target)!;
+      element.scrollIntoView({ block: 'center' });
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }, selector);
+    await page.mouse.move(box.x, box.y);
+    return page.evaluate((target) => getComputedStyle(
+      window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector(target)!,
+    ).backgroundColor, selector);
+  }).toBe('rgb(179, 60, 122)');
+  await hovered('.markdown-body > p.cl-link-only > a');
+  await page.mouse.move(0, 0);
+  await hovered('.cl-checkout-card-button');
 });
