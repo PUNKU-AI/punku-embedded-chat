@@ -15,7 +15,8 @@ Everything the widget touches lives across **two repos**. Both are checked out l
 
 ### Build facts (this repo)
 - Build command: `npm run build` compiles the widget with Webpack, Babel, and Terser into a **single self-contained file**.
-- **The CDN artifacts:** `dist/build/static/js/bundle.min.js` + `dist/build/static/js/bundle.min.js.LICENSE.txt`. No code-split chunks — hosting that one bundle is enough.
+- **The widget:** `dist/build/static/js/widget.min.js` + `dist/build/static/js/widget.min.js.LICENSE.txt`. No code-split chunks — hosting that one file is enough. S3 gets it under the name `bundle.min.js`.
+- **The forwarder:** no build writes `dist/build/static/js/bundle.min.js`. It is a small loader for old jsDelivr embeds. See [jsDelivr forwarder](#jsdelivr-forwarder-old-embeds).
 - Webpack output path is the default (`dist/`); see [`webpack.config.js`](./webpack.config.js).
 - Releases are **manual today**: `git tag v1.0.x && git push --tags`. jsDelivr auto-serves the tag. Tags so far: `v1.0.0`–`v1.0.6`. The embed uses `@v1`, which jsDelivr resolves to the latest `v1.x.x`.
 
@@ -89,10 +90,14 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 3. Tests that file across eight browser and device profiles, with one parallel job for each profile.
 4. Merges the profile reports and runs real Gemini checks on the screenshots.
 5. Downloads the tested artifact in the publish job and verifies its commit and checksums.
-6. Uploads the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache).
-7. Overwrites the floating copy → `chat/v1/bundle.min.js` (5-min cache).
+6. Uploads `widget.min.js` as the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache), and reads it back.
+7. Overwrites the floating copy with `widget.min.js` → `chat/v1/bundle.min.js` (5-min cache), and reads it back.
 8. Invalidates the floating path on CloudFront.
-9. Purges the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
+9. Purges `bundle.min.js` and `widget.min.js` under the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
+
+Steps 6 and 7 read each S3 object back after the upload.
+The release fails if an object is the forwarder, is shorter than 100 KiB, or is not the tested file.
+A failed check stops the release before the next upload.
 
 Step 9 is for the sites that still load jsDelivr `@v1` or a URL without a version.
 jsDelivr keeps these aliases in its cache for up to 7 days, so the purge makes a release reach them sooner.
@@ -140,6 +145,41 @@ gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7
 A run from any other branch or tag fails, unless `dry_run` is on.
 A manual run uses the workflow file of the selected tag.
 Old tags that lack the gate files fail validation.
+
+### jsDelivr forwarder (old embeds)
+
+Some customer sites load the widget from jsDelivr, without a version or with `@v1`:
+
+```
+https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js
+https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat@v1/dist/build/static/js/bundle.min.js
+```
+
+jsDelivr tells browsers to keep these files for 7 days (`max-age=604800`).
+`cdn.punku.ai` sends 5 minutes.
+So a returning visitor on these sites could run an old release for a week.
+We cannot change these snippets.
+
+On jsDelivr, `bundle.min.js` is therefore a forwarder of about 1 KB:
+
+1. If `<punku-chat>` is already defined, it does nothing.
+2. It loads `https://cdn.punku.ai/chat/v1/bundle.min.js`, the file that current embeds load.
+3. If that load fails, it loads `widget.min.js` of the same release from jsDelivr `@v1`. Then it stops.
+
+The fallback must never be a jsDelivr `bundle.min.js`: that file is the forwarder, and the two would load each other.
+`scripts/release-forwarder.test.cjs` and `e2e/jsdelivr-forwarder.spec.ts` check this.
+The forwarder has no timeout. A slow `cdn.punku.ai` response on a slow phone must not start a second download of the widget.
+
+How it goes live:
+
+- jsDelivr serves the newest `v*` tag at both URLs, not `main`. The response header `x-jsd-version` shows the tag. A merge to `main` changes nothing for these sites.
+- The first tag with the forwarder puts it live. The release purges both files, so jsDelivr serves that tag at once.
+- A browser that holds the old full bundle keeps it until its copy is 7 days old. Then it gets the forwarder, and every later release within 5 minutes.
+- Browsers also keep the forwarder for 7 days. A fault in the forwarder therefore stays for a week. Keep it small and change it rarely.
+- The forwarder adds one small request before the widget. In Chrome on 2026-10-28, with an empty cache, the widget was defined about 65 ms later on a fast connection and about 330 ms later on emulated Slow 4G.
+- At a pinned tag (`@v1.0.28` or newer), `bundle.min.js` is also the forwarder, so it loads the newest v1 release. For a pinned widget, load `widget.min.js` at that tag, or `https://cdn.punku.ai/chat/v1.0.28/bundle.min.js`.
+
+Rollback: revert the forwarder commit and rebuild `dist`, so that `bundle.min.js` is the full widget again. Release that as a new tag. The release purge then serves the full file at once. Browsers that hold the forwarder keep loading `cdn.punku.ai/chat/v1`, so they also get the rollback release.
 
 ### Header icons (`header_icon_name`)
 
@@ -232,7 +272,7 @@ Make our CloudFront URL the **primary**, jsDelivr/githack the **fallbacks**, via
 (function () {
   var SOURCES = [
     "https://cdn.punku.ai/chat/v1/bundle.min.js",                                                       // PRIMARY (ours)
-    "https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat@v1/dist/build/static/js/bundle.min.js",   // fallback 1
+    "https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat@v1/dist/build/static/js/widget.min.js",   // fallback 1
     "https://raw.githack.com/PUNKU-AI/punku-embedded-chat/v1.0.6/dist/build/static/js/bundle.min.js"    // fallback 2
   ];
   function load(i) {
@@ -249,6 +289,9 @@ Make our CloudFront URL the **primary**, jsDelivr/githack the **fallbacks**, via
 </script>
 <punku-chat ...></punku-chat>
 ```
+
+Fallback 1 must be `widget.min.js`. On jsDelivr, `bundle.min.js` is the [forwarder](#jsdelivr-forwarder-old-embeds), which tries `cdn.punku.ai` again.
+The platform now emits only the `cdn.punku.ai` URL, without this loader.
 
 Files to update (and their tests/docs):
 - `src/frontend/src/modals/apiModal/utils/get-widget-code.tsx`
