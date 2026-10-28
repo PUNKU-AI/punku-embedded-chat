@@ -202,12 +202,13 @@ describe('ChatWidget', () => {
       );
     });
 
-    it('should give the swarovski theme the link colour that the contrast guard checks', () => {
+    it('should give the swarovski theme the link and button colours that the contrast guard checks', () => {
       const { container } = render(<ChatWidget {...defaultProps} />);
 
       const css = container.querySelector('style')?.textContent ?? '';
       const rule = css.match(/\.cl-window\.theme-swarovski \{([^}]*)\}/);
       expect(rule?.[1]).toContain(`--cl-link: ${THEME_COLORS.swarovski.link};`);
+      expect(rule?.[1]).toContain(`--cl-accent: ${THEME_COLORS.swarovski.accent};`);
       // Dark focus instead of the blue ring.
       expect(css).toMatch(/\.cl-window\.theme-swarovski \.cl-composer-field:focus-within \{\s*border-color: #1a1a1a;/);
     });

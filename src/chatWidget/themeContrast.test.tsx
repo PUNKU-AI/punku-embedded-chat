@@ -12,7 +12,8 @@ jest.mock('./chatWindow', () => () => null);
 // guard: text at 4.5:1 (1.4.3), controls, icons and focus marks at 3:1
 // against the colour behind them (1.4.11). The colours come from the real
 // widget stylesheet. The swarovski theme keeps the look of the
-// swarovski-widget branch: its colours are pinned and not measured.
+// swarovski-widget branch: its colours are pinned and not measured, except
+// its black link and checkout card buttons.
 
 type Rule = { selectors: string[]; declarations: Map<string, string> };
 
@@ -307,7 +308,9 @@ describe('built-in theme contrast (WCAG AA)', () => {
     expect(shown).toMatchObject({
       'visitor text': '#ffffff',
       'link in an answer': '#0969da',
-      'filled link button': '#2563eb',
+      'filled link button': '#1a1a1a',
+      'filled link button on hover': '#333333',
+      'checkout card button': '#1a1a1a',
       'feedback icons': '#9ca3af',
       'chosen thumbs up': '#10b981',
       placeholder: '#9ca3af',
@@ -317,5 +320,13 @@ describe('built-in theme contrast (WCAG AA)', () => {
     const backgrounds = Object.fromEntries(pairs.map((pair) => [pair.what, worst(pair).background]));
     expect(backgrounds).toMatchObject({ 'visitor text': '#3b82f6', 'answer text': '#e5e7eb', 'header title and icons': '#1a1a1a' });
     expect(declared(['.cl-window.theme-swarovski .cl-header .cl-header-subtitle', 'opacity'])).toBe('0.85');
+    // The black buttons and their white labels read on the answer and on the card.
+    const buttons = pairs.filter((pair) => /filled link button|checkout card button/.test(pair.what));
+    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    for (const pair of buttons) {
+      const { ratio, foreground, background } = worst(pair);
+      const result = ratio >= pair.minimum ? 'passes' : `${ratio}:1, below ${pair.minimum}:1`;
+      expect(`${pair.what}: ${foreground} on ${background}: ${result}`).toBe(`${pair.what}: ${foreground} on ${background}: passes`);
+    }
   });
 });

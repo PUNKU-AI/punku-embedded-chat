@@ -272,11 +272,11 @@ export default function ChatWindow({
   // Viewport units measure the small page on a scaled page. See viewportLength.
   const vh = (percent: number) => viewportLength(percent, "vh", scaledPage);
   const vw = (percent: number) => viewportLength(percent, "vw", scaledPage);
-  // The swarovski theme keeps the look of the swarovski-widget branch: links
-  // on their own line stay text links, the send button is a paper plane, and
-  // the phone window keeps its side margins (mobileChatWindowStyle.ts).
+  // The swarovski theme keeps the look of the swarovski-widget branch: the
+  // send button is a paper plane, and the phone window keeps its side margins
+  // (mobileChatWindowStyle.ts). Its link buttons and checkout cards are black
+  // (.theme-swarovski in the widget stylesheet).
   const branchLook = theme === "swarovski";
-  const linkButtons = !branchLook;
   const SendIcon = branchLook ? Send : ArrowUp;
   const sendIconSize = branchLook ? "18px" : "20px";
   const sendIconStroke = branchLook ? 2 : 2.5;
@@ -1510,7 +1510,6 @@ export default function ChatWindow({
               onClientError={notifyClientError}
               onCheckout={onCheckout}
               onFeedbackUpdate={undefined}
-              linkButtons={linkButtons}
             />
           )}
 
@@ -1574,7 +1573,6 @@ export default function ChatWindow({
                 host_url={hostUrl}
                 onClientError={notifyClientError}
                 onCheckout={onCheckout}
-                linkButtons={linkButtons}
                 streaming={message.streaming}
                 isLatest={index === latestAnswerIndex}
                 onRetry={index === messages.length - 1 ? handleRetry : undefined}

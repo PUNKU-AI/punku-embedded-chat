@@ -33,7 +33,6 @@ jest.mock('./chatMessage', () => {
     onRetry,
     retryLabel,
     isLatest,
-    linkButtons,
     streaming,
     message_id,
   }: {
@@ -43,7 +42,6 @@ jest.mock('./chatMessage', () => {
     onRetry?: () => void;
     retryLabel?: string;
     isLatest?: boolean;
-    linkButtons?: boolean;
     streaming?: boolean;
   }) {
     // The checkout cards, the language and the venue that the answers read.
@@ -61,7 +59,6 @@ jest.mock('./chatMessage', () => {
       <div
         data-testid={isSend ? 'user-message' : 'bot-message'}
         data-latest={isLatest ? 'true' : undefined}
-        data-link-buttons={String(linkButtons)}
         data-streaming={streaming ? 'true' : undefined}
         data-checkout-cards={checkout.cards.map((card: { url: string }) => card.url).join(' ')}
         data-checkout-language={checkout.language}
@@ -2397,15 +2394,13 @@ describe('ChatWindow', () => {
   });
 
   describe('Theming', () => {
-    it('keeps the swarovski-widget branch look in the swarovski theme: text links and a paper plane', () => {
+    it('keeps the paper plane of the swarovski-widget branch in the swarovski theme', () => {
       const { unmount } = render(<ChatWindow {...defaultProps} theme="default" />);
-      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'true');
       // eslint-disable-next-line testing-library/no-node-access
       expect(document.querySelector('.cl-send-icon')).toHaveClass('lucide-arrow-up');
       unmount();
 
       render(<ChatWindow {...defaultProps} theme="swarovski" />);
-      expect(screen.getByTestId('bot-message')).toHaveAttribute('data-link-buttons', 'false');
       // eslint-disable-next-line testing-library/no-node-access
       const icon = document.querySelector('.cl-send-icon')!;
       expect(icon).toHaveClass('lucide-send');
