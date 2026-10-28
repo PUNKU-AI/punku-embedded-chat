@@ -5,8 +5,8 @@ import { loadWidget } from './widget-helpers';
 // 4.5:1 on the colour behind it (1.4.3), each icon and control at 3:1
 // (1.4.11). The pages show a conversation with a link and link buttons, a
 // checkout card, a typed question, an error with Try again, and the suggestions. The swarovski
-// theme keeps the look of the swarovski-widget branch (swarovski-look.spec.ts)
-// and is not measured here. The unit test themeContrast.test.tsx checks the
+// theme keeps the look of the swarovski-widget branch (swarovski-look.spec.ts,
+// with its black link and card buttons) and is not measured here. The unit test themeContrast.test.tsx checks the
 // same colours in the stylesheet, also on hover.
 
 const pageErrors = new WeakMap<Page, string[]>();

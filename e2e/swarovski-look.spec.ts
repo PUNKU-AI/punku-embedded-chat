@@ -2,10 +2,13 @@ import { expect, Page, test } from '@playwright/test';
 import { loadWidget, waitForInputFocus } from './widget-helpers';
 
 // The swarovski theme keeps the look of the swarovski-widget branch, the
-// bundle that its page loaded before v1.0.22: links on their own line stay
-// text links, the send button is a black paper plane in the white field, and
-// the focused field gets a dark frame instead of the blue ring. The styles are
-// the ones of the live embed (no flow ID, host or texts).
+// bundle that its page loaded before v1.0.22: links in a sentence stay text
+// links in the branch blue, the send button is a black paper plane in the
+// white field, and the focused field gets a dark frame instead of the blue
+// ring. Links on their own line are buttons as in the other themes: black
+// with white text, outlined in the link blue in a list. A verified checkout
+// link shows the checkout card with a black button. The styles are the ones
+// of the live embed (no flow ID, host or texts).
 const swarovskiEmbed = {
   theme: 'swarovski',
   bot_message_color: 'rgba(255, 228, 149, 0.4)',
@@ -21,9 +24,11 @@ const swarovskiEmbed = {
   height: '640',
 };
 
-// The links of the release test answers: a link alone in a paragraph, a list
-// of links, a loose list, and the checkout link in the agent's bold format.
-const answer = 'You can find more details here:\n\n[See all prices and tickets](https://example.com/tickets)\n\n'
+// The links of the release test answers: a link in a sentence, a link alone in
+// a paragraph, a list of links, a loose list, and the checkout link in the
+// agent's bold format.
+const answer = 'You can find more details [on our website](https://example.com/info) and here:\n\n'
+  + '[See all prices and tickets](https://example.com/tickets)\n\n'
   + '- [Directions and parking](https://example.com/directions)\n- [Frequently asked questions](https://example.com/faq)\n\n'
   + 'More to see:\n\n- [Gift shop](https://example.com/gifts)\n\n- [Museum café](https://example.com/cafe)\n\n'
   + 'I prepared 2 tickets for you.\n\n**[Book now](https://eu5.bookingkit.de/cart/set/feedfacefeedfacefeedfacefeedface?utm_source=web_chat&c=%5B%5D)** 🎟️';
@@ -38,20 +43,26 @@ test.afterEach(({ page }) => {
   expect(pageErrors.get(page)).toEqual([]);
 });
 
-async function openConversation(page: Page, props: Record<string, string>) {
+// A made-up cart and experience for the checkout card (checkoutCards.ts).
+const cardUrl = 'https://eu5.bookingkit.de/cart/set/13579bdf13579bdf13579bdf13579bdf?utm_source=web_chat&c=%5B%5D';
+const cardAnswer = {
+  message: `Two day tickets are free on Saturday.\n\n**[Complete your purchase](${cardUrl})**`,
+  isSend: false,
+  message_id: 'synthetic-card',
+  checkoutCards: [{ url: cardUrl, locale: 'en', bookings: [{ count: 2, unit: 'person', product: 'Day ticket' }] }],
+};
+
+async function openConversation(page: Page, props: Record<string, string>, reply: object = { message: answer, isSend: false, message_id: 'synthetic-answer' }) {
   // A stored session: the chat opens with the answer, no request is sent.
-  await page.addInitScript((message) => {
+  await page.addInitScript((stored) => {
     const now = Date.now();
     localStorage.setItem(`punku-chat-session-${window.location.hostname}-browser-fixture`, JSON.stringify({
       sessionId: 'synthetic-session',
-      messages: [
-        { message: 'How do I get there?', isSend: true },
-        { message, isSend: false, message_id: 'synthetic-answer' },
-      ],
+      messages: [{ message: 'How do I get there?', isSend: true }, stored],
       createdAt: now, lastActiveAt: now, expiresAt: now + 60 * 60 * 1000,
       domain: window.location.hostname, flowId: 'browser-fixture',
     }));
-  }, answer);
+  }, reply);
   await loadWidget(page, props);
   await waitForInputFocus(page);
 }
@@ -98,27 +109,64 @@ function composer(page: Page) {
   });
 }
 
-test('links stay text links in the branch blue and the answer weight', async ({ page }) => {
+test('a link in a sentence stays a text link in the branch blue and the answer weight', async ({ page }) => {
   await openConversation(page, swarovskiEmbed);
   const shown = await links(page);
 
   expect(shown.map((link) => link.text)).toEqual([
-    'See all prices and tickets', 'Directions and parking', 'Frequently asked questions', 'Gift shop', 'Museum café', 'Book now',
+    'on our website', 'See all prices and tickets', 'Directions and parking', 'Frequently asked questions', 'Gift shop', 'Museum café', 'Book now',
   ]);
-  for (const link of shown) {
+  expect(shown[0]).toMatchObject({
+    linkOnly: false, display: 'inline', padding: '0px', background: 'rgba(0, 0, 0, 0)', border: '0px',
+    color: 'rgb(9, 105, 218)', weight: '300',
+  });
+  expect(['none', 'normal']).toContain(shown[0].arrow);
+  // The light underline of v1.0.22 stays (WCAG 1.4.1).
+  expect(shown[0].underline).toContain('underline');
+});
+
+test('links on their own line are black buttons, and outlined buttons in the link blue in a list', async ({ page }) => {
+  await openConversation(page, swarovskiEmbed);
+  const shown = await links(page);
+
+  // A link alone in a paragraph and the checkout link in the agent's bold format: black, white text.
+  for (const link of [shown[1], shown[6]]) {
     expect(link).toMatchObject({
-      linkOnly: false, display: 'inline', padding: '0px', background: 'rgba(0, 0, 0, 0)', border: '0px',
-      color: 'rgb(9, 105, 218)',
+      linkOnly: true, display: 'inline-flex', background: 'rgb(26, 26, 26)', color: 'rgb(255, 255, 255)', border: '0px',
     });
-    expect(['none', 'normal']).toContain(link.arrow);
-    // The light underline of v1.0.22 stays (WCAG 1.4.1).
-    expect(link.underline).toContain('underline');
+    expect(Number(link.weight)).toBeGreaterThanOrEqual(600);
+    expect(link.arrow).not.toBe('none');
   }
-  // The answer weight (300); the checkout link is bold because the answer makes it bold.
-  expect(shown.slice(0, 5).map((link) => link.weight)).toEqual(['300', '300', '300', '300', '300']);
-  expect(Number(shown[5].weight)).toBeGreaterThanOrEqual(600);
-  // Lists of links keep their bullets.
-  expect(shown.slice(1, 5).map((link) => link.listStyle)).toEqual(['disc', 'disc', 'disc', 'disc']);
+  // The lists of links: outlined buttons in the link blue, without bullets.
+  for (const link of shown.slice(2, 6)) {
+    expect(link).toMatchObject({
+      linkOnly: true, display: 'inline-flex', background: 'rgba(0, 0, 0, 0)', border: '1px', color: 'rgb(9, 105, 218)', listStyle: 'none',
+    });
+  }
+});
+
+test('a verified checkout link shows the checkout card with a black button', async ({ page }) => {
+  await openConversation(page, swarovskiEmbed, cardAnswer);
+  const card = await page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const box = root.querySelector<HTMLElement>('.cl-checkout-card');
+    const button = box?.querySelector<HTMLAnchorElement>('a.cl-checkout-card-button');
+    if (!box || !button) return null;
+    const style = getComputedStyle(box);
+    const inner = box.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
+    return {
+      title: box.querySelector('.cl-checkout-card-title')?.textContent,
+      button: button.textContent,
+      fill: getComputedStyle(button).backgroundColor,
+      label: getComputedStyle(button).color,
+      fullWidth: button.getBoundingClientRect().width >= inner - 2,
+    };
+  });
+
+  expect(card).toEqual({
+    title: '2 tickets · Day ticket', button: 'Book tickets', fill: 'rgb(26, 26, 26)', label: 'rgb(255, 255, 255)', fullWidth: true,
+  });
 });
 
 test('the send button is a black paper plane in the white field, and focus is dark', async ({ page }) => {
@@ -140,7 +188,7 @@ test('the send button is a black paper plane in the white field, and focus is da
   expect(state.fieldRing).not.toContain('37, 99, 235');
 });
 
-test('other themes keep the link buttons and the arrow', async ({ page }) => {
+test('other themes keep their link buttons and the arrow', async ({ page }) => {
   await openConversation(page, { ...swarovskiEmbed, theme: 'default' });
   const shown = await links(page);
   const state = await composer(page);

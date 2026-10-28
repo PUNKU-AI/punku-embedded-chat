@@ -201,8 +201,9 @@ export const THEME_COLORS: Record<ThemeName, ThemeColors> = {
     cardMeta: "#c4b5fd",
   },
   "punku-ai-bookingkit": { ...LIGHT_BASE, send: "#2563eb" },
-  // Links in the blue of the swarovski-widget branch (.theme-swarovski in the stylesheet).
-  swarovski: { ...LIGHT_BASE, link: "#0969da" },
+  // Links in the blue of the swarovski-widget branch, link buttons and the
+  // checkout card button in the black of the header (.theme-swarovski in the stylesheet).
+  swarovski: { ...LIGHT_BASE, accent: "#1a1a1a", link: "#0969da" },
 };
 
 /** The props that set colours of the controls. */
@@ -642,8 +643,7 @@ export function guardControlColors(props: ControlColorProps): { colors: GuardedC
   // gradient gives its first colour stop; behind a gradient visitor style,
   // user_message_color comes next. An image gives no colour. Its label is a
   // colour that the site or the theme chose: button_text_color, white, or
-  // the theme's label. The swarovski theme shows text links and keeps the
-  // theme colours.
+  // the theme's label. The swarovski theme keeps its black buttons.
   const followsSite = !props.button_color && props.theme !== "swarovski";
   const sendStyle = styleBackground(props.send_button_style);
   const userStyle = styleBackground(props.user_message_style);

@@ -80,8 +80,8 @@ describe('link buttons in answers', () => {
 // link (p > strong > a), and about one answer in ten puts an emoji next to it.
 describe('checkout links in the agent format', () => {
   const checkout = 'https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef?utm_source=web_chat&c=%5B%5D';
-  const linkOnlyParagraph = (message: string, linkButtons = true) => {
-    render(<ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons} />);
+  const linkOnlyParagraph = (message: string) => {
+    render(<ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" />);
     const link = document.querySelector<HTMLAnchorElement>('.markdown-body a')!;
     expect(link).toHaveAttribute('href', checkout);
     return link.closest('p')!.classList.contains('cl-link-only');
@@ -170,14 +170,6 @@ describe('checkout links in the agent format', () => {
     expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
   });
 
-  it('keeps the lead-in and the link in one paragraph for the swarovski theme', () => {
-    render(<ChatMessage message={`Hier buchen:\n**[Book now](${checkout})**`} isSend={false} message_id="answer"
-      host_url="http://localhost:3000" linkButtons={false} />);
-
-    expect(document.querySelectorAll('.markdown-body > p')).toHaveLength(1);
-    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
-  });
-
   it('keeps a bold link that is not a checkout link as a bold text link', () => {
     renderAnswer('**[Opening hours](https://example.com/hours)**\n\n👉 [Prices](https://example.com/prices)\n\n'
       + '**[Book now](https://eu5.bookingkit.de/cart/set/0123456789abcdef0123456789abcdef)**');
@@ -205,11 +197,6 @@ describe('checkout links in the agent format', () => {
     expect(items.map((item) => item.classList.contains('cl-link-only'))).toEqual([true, false]);
     expect(document.querySelector('.markdown-body ul')).not.toHaveClass('cl-link-list');
   });
-
-  it('keeps text links for the swarovski theme', () => {
-    expect(linkOnlyParagraph(`👉 **[Book now](${checkout})**`, false)).toBe(false);
-    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
-  });
 });
 
 // The server sends card facts for a verified checkout link (checkoutCards.ts).
@@ -228,10 +215,9 @@ describe('checkout cards in answers', () => {
   const context = (value: Partial<CheckoutCards> = {}): CheckoutCards => ({
     cards: [card()], language: 'de', venue: 'Burg Beispielstein', ...value,
   });
-  const element = (message: string, value: CheckoutCards, linkButtons = true, streaming = false) => (
+  const element = (message: string, value: CheckoutCards, streaming = false) => (
     <CheckoutCardsContext.Provider value={value}>
-      <ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" linkButtons={linkButtons}
-        streaming={streaming} />
+      <ChatMessage message={message} isSend={false} message_id="answer" host_url="http://localhost:3000" streaming={streaming} />
     </CheckoutCardsContext.Provider>
   );
   const describedBy = (link: HTMLElement) => (link.getAttribute('aria-describedby') || '')
@@ -324,28 +310,20 @@ describe('checkout cards in answers', () => {
   it('keeps the lead-in element while the link line streams in and turns into a card', () => {
     const leadIn = 'Sichere dir eure Plätze direkt hier:';
     const full = `${leadIn}  \n👉 **[Jetzt Tickets buchen](${cardUrl})**`;
-    const { rerender } = render(element(`${leadIn}  \n👉 **[Jetzt Tickets`, context(), true, true));
+    const { rerender } = render(element(`${leadIn}  \n👉 **[Jetzt Tickets`, context(), true));
     const paragraph = document.querySelector('.markdown-body > p')!;
     expect(document.querySelectorAll('.markdown-body > p')).toHaveLength(1);
 
     // The link is complete: the lead-in stays, the link line is a link button.
-    rerender(element(full, context(), true, true));
+    rerender(element(full, context(), true));
     expect(document.querySelector('.markdown-body > p')).toBe(paragraph);
     expect(paragraph).toHaveTextContent(leadIn);
     expect(screen.getByRole('link', { name: 'Jetzt Tickets buchen' }).closest('p')).toHaveClass('cl-link-only');
 
     // The answer is complete: the link line is the card.
-    rerender(element(full, context(), true, false));
+    rerender(element(full, context(), false));
     expect(document.querySelector('.markdown-body > p')).toBe(paragraph);
     expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
-  });
-
-  it('keeps the text link of the swarovski theme', () => {
-    render(element(answer, context(), false));
-
-    expect(document.querySelector('.cl-checkout-card')).toBeNull();
-    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
-    expect(screen.getByRole('link')).toHaveAccessibleName('Jetzt Tickets sichern');
   });
 
   it('keeps a checkout link in a list item or a sentence as before', () => {
@@ -359,16 +337,16 @@ describe('checkout cards in answers', () => {
   });
 
   it('shows the card of the last paragraph only when the answer has stopped streaming', () => {
-    const { rerender } = render(element(answer, context(), true, true));
+    const { rerender } = render(element(answer, context(), true));
     expect(document.querySelector('.cl-checkout-card')).toBeNull();
     expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' }).closest('p')).toHaveClass('cl-link-only');
 
-    rerender(element(answer, context(), true, false));
+    rerender(element(answer, context(), false));
     expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
   });
 
   it('shows the card while the answer streams when a later block follows the paragraph', () => {
-    render(element(`${answer}\n\nViel Spaß!`, context(), true, true));
+    render(element(`${answer}\n\nViel Spaß!`, context(), true));
 
     expect(screen.getByRole('link', { name: 'Tickets buchen' })).toHaveClass('cl-checkout-card-button');
   });
@@ -377,16 +355,16 @@ describe('checkout cards in answers', () => {
     // An old server sends no card. The link-only paragraph gets more text:
     // only its class changes, as on main.
     const link = `**[Jetzt Tickets sichern](${cardUrl})**`;
-    const { rerender } = render(element(link, context({ cards: [] }), true, true));
+    const { rerender } = render(element(link, context({ cards: [] }), true));
     const anchor = screen.getByRole('link', { name: 'Jetzt Tickets sichern' });
     expect(anchor.closest('p')).toHaveClass('cl-link-only');
 
-    rerender(element(`${link} für 2 Personen`, context({ cards: [] }), true, true));
+    rerender(element(`${link} für 2 Personen`, context({ cards: [] }), true));
     expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' })).toBe(anchor);
     expect(anchor.closest('p')).not.toHaveClass('cl-link-only');
 
     // With a card, the growing paragraph never becomes a card while it streams.
-    rerender(element(`${link} für 2 Personen, Samstag`, context(), true, true));
+    rerender(element(`${link} für 2 Personen, Samstag`, context(), true));
     expect(screen.getByRole('link', { name: 'Jetzt Tickets sichern' })).toBe(anchor);
     expect(document.querySelector('.cl-checkout-card')).toBeNull();
   });
@@ -402,25 +380,6 @@ describe('checkout cards in answers', () => {
 
     rerender(element(`${answer}\n\nBis bald!`, context({ cards: [card({}, null)], language: 'it' })));
     expect(screen.getByRole('link', { name: 'Prenota i biglietti' })).toBe(button);
-  });
-});
-
-describe('text links only (linkButtons false, the swarovski theme)', () => {
-  it('marks no paragraph or list item, also for a bold link and a loose list', () => {
-    render(
-      <ChatMessage
-        message={'[See all prices](https://example.com/prices)\n\n- [Directions](https://example.com/map)\n- [FAQ](https://example.com/faq)\n\n'
-          + '- [Gift shop](https://example.com/gifts)\n\n- [Café](https://example.com/cafe)\n\n[**Book now**](https://example.com/book)'}
-        isSend={false}
-        message_id="answer"
-        host_url="http://localhost:3000"
-        linkButtons={false}
-      />
-    );
-
-    expect(document.querySelectorAll('.markdown-body a')).toHaveLength(6);
-    expect(document.querySelectorAll('.cl-link-only')).toHaveLength(0);
-    expect(document.querySelectorAll('.cl-link-list')).toHaveLength(0);
   });
 });
 

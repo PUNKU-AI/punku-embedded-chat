@@ -247,8 +247,7 @@ function splitLinkLines(paragraph: HastNode, source: string): { above: HastNode;
  * paragraph of its own (a rehype plugin), so it becomes a checkout card or a
  * filled link button as a link alone in its paragraph does. The lines above
  * stay one paragraph. Checkout links on several last lines split one by one.
- * A link inside a sentence stays inline. The swarovski theme, with text
- * links only, does not use this plugin.
+ * A link inside a sentence stays inline.
  */
 function splitCheckoutLinkLines() {
   return (tree: HastNode, file: { value?: unknown }) => {
@@ -285,8 +284,7 @@ function markTopLevelParagraphs() {
   };
 }
 
-const REHYPE_PLUGINS = [markTopLevelParagraphs];
-const LINK_BUTTON_PLUGINS = [splitCheckoutLinkLines, markTopLevelParagraphs];
+const REHYPE_PLUGINS = [splitCheckoutLinkLines, markTopLevelParagraphs];
 
 const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
 
@@ -322,7 +320,6 @@ export default function ChatMessage({
   retryLabel = "Try again",
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
-  linkButtons = true,
   streaming = false,
 }: ChatMessageType & {
   api_key?: string;
@@ -343,8 +340,6 @@ export default function ChatMessage({
   /** Names of the feedback buttons for screen readers, in the chat language. */
   helpfulLabel?: string;
   notHelpfulLabel?: string;
-  /** false: a link on its own line stays a text link (the swarovski theme). */
-  linkButtons?: boolean;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -352,10 +347,10 @@ export default function ChatMessage({
 
   // Keep the opener mounted so checkout can capture and restore its focus.
   // A link that stands alone in a paragraph or list item is an action: it
-  // renders as a button (see .cl-link-only in the widget stylesheet), unless
-  // linkButtons is false. A checkout link also does in the agent's bold
-  // format, next to emoji (isCheckoutLinkOnly). A checkout link alone in a
-  // complete top-level paragraph is a checkout card when the server sent one
+  // renders as a button (see .cl-link-only in the widget stylesheet). A
+  // checkout link also does in the agent's bold format, next to emoji
+  // (isCheckoutLinkOnly). A checkout link alone in a complete top-level
+  // paragraph is a checkout card when the server sent one
   // for it (AnswerParagraph). The cards, the language and the streaming state
   // come from contexts, so these components never change. A new card, or the
   // end of the stream, can swap a link button for a card (see AnswerParagraph).
@@ -365,7 +360,7 @@ export default function ChatMessage({
         {children}
       </BookingkitCheckoutLink>
     ),
-    p: ({ node, children, ...props }) => linkButtons && markOf(node, TOP_LEVEL) ? (
+    p: ({ node, children, ...props }) => markOf(node, TOP_LEVEL) ? (
       <AnswerParagraph
         {...props}
         href={checkoutLinkOnly(node)}
@@ -377,24 +372,24 @@ export default function ChatMessage({
         {children}
       </AnswerParagraph>
     ) : (
-      <p {...props} className={linkButtons && isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
+      <p {...props} className={isLinkOnly(node) ? "cl-link-only" : undefined}>{children}</p>
     ),
     // react-markdown 8 passes ordered, checked, index and depth to lists and
     // list items; they are not DOM attributes.
     li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={withClass(className, linkButtons && isLinkOnlyListItem(node) && "cl-link-only")}>
+      <li {...props} className={withClass(className, isLinkOnlyListItem(node) && "cl-link-only")}>
         {children}
       </li>
     ),
     // A list of only link buttons drops its bullets (.cl-link-list). In a
     // mixed list, the buttons keep the bullets and the indent of the others.
     ul: ({ node, children, ordered, depth, className, ...props }) => (
-      <ul {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ul>
+      <ul {...props} className={withClass(className, isLinkList(node) && "cl-link-list")}>{children}</ul>
     ),
     ol: ({ node, children, ordered, depth, className, ...props }) => (
-      <ol {...props} className={withClass(className, linkButtons && isLinkList(node) && "cl-link-list")}>{children}</ol>
+      <ol {...props} className={withClass(className, isLinkList(node) && "cl-link-list")}>{children}</ol>
     ),
-  }), [onCheckout, linkButtons]);
+  }), [onCheckout]);
 
   // Initialize feedback state from the message's feedback property
   const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(
@@ -511,7 +506,7 @@ export default function ChatMessage({
               <Markdown
                 className={"markdown-body prose flex flex-col word-break-break-word"}
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={linkButtons ? LINK_BUTTON_PLUGINS : REHYPE_PLUGINS}
+                rehypePlugins={REHYPE_PLUGINS}
                 components={markdownComponents}
               >
                 {parsedMessage}

@@ -3273,13 +3273,17 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 /* ---------- Swarovski: the look of the swarovski-widget branch ----------
-   Links are text links in the branch blue and in the weight of the answer
-   (300; bold where the answer makes them bold). Links on their own line stay
-   text links too (ChatWindow linkButtons). The light underline stays: the
-   blue is below 3:1 against the answer text (WCAG 1.4.1). Focus is dark, in
-   the colour of the header, instead of blue. The guard knows the link
-   colour (controlColors.ts THEME_COLORS.swarovski): change both together. */
+   Links in a sentence are text links in the branch blue and in the weight of
+   the answer (300; bold where the answer makes them bold). The light
+   underline stays: the blue is below 3:1 against the answer text (WCAG
+   1.4.1). Link buttons and the checkout card button are black with white
+   text, in the colour of the header (17:1); outlined link buttons in a list
+   take the link blue, as in the other themes. Focus is dark instead of blue.
+   The guard knows the link and accent colours (controlColors.ts
+   THEME_COLORS.swarovski): change both together. */
 .cl-window.theme-swarovski {
+  --cl-accent: #1a1a1a;
+  --cl-accent-hover: #333333;
   --cl-link: #0969da;
   --cl-ring: rgba(26, 26, 26, 0.14);
 }

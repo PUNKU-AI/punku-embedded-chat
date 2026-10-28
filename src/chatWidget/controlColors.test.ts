@@ -501,12 +501,26 @@ describe('link buttons in the site colours', () => {
       .toBe('#003a5d');
   });
 
-  it('keeps the theme colours of the swarovski theme, which shows text links', () => {
-    const { colors } = guardControlColors({
+  it('keeps the black buttons of the swarovski theme, not the site colours', () => {
+    const { colors, pairs } = guardControlColors({
       theme: 'swarovski', link_color: '#075985', send_button_style: { backgroundColor: '#2a3849' }, user_message_color: '#003a5d',
     });
     expect(colors.linkButtonFill).toBeUndefined();
     expect(colors.cardButtonFill).toBeUndefined();
+    expect(pairs.find((pair) => pair.control === 'filled link button')!.foreground).toBe(THEME_COLORS.swarovski.accent);
+  });
+
+  it('keeps the black buttons of the swarovski theme on its live answer colours', () => {
+    const { colors, pairs } = guardControlColors({
+      theme: 'swarovski', bot_message_color: 'rgba(255, 228, 149, 0.4)',
+      send_button_style: { backgroundColor: '#FFFFFF' }, send_icon_style: { stroke: '#000000' },
+    });
+    expect(colors.linkButtonFill).toBeUndefined();
+    expect(colors.cardButtonFill).toBeUndefined();
+    expect(colors.linkButtonLabel).toBeUndefined();
+    const checked = pairs.filter((pair) => /filled link button|checkout card button/.test(pair.control));
+    expect(checked.length).toBeGreaterThan(0);
+    expect(checked.filter((pair) => pair.ratio < pair.minimum)).toEqual([]);
   });
 
   it('keeps one site colour for the link button and the card button', () => {
