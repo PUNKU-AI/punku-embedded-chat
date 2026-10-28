@@ -23,9 +23,10 @@ const workflows = [ci, release, checks];
 const playwrightConfig = readText('playwright.config.ts');
 const playwrightProjects = [...playwrightConfig.matchAll(/\{ name: '([^']+)'/g)].map((match) => match[1]);
 const rebuild = /npm\s+run\s+build(?::(?:release|react|bundle|browser-tests))?(?:\s|$)|build-widget-bundle\.cjs|react-scripts\s+build|\bwebpack\b/;
+const { BUNDLE_PATH, FILES, FORWARDER_PATH, MIN_BUNDLE_BYTES, recordBundleIdentity } = require('./release-bundle.cjs');
 const releaseFiles = [
-  'dist/build/static/js/bundle.min.js',
-  'dist/build/static/js/bundle.min.js.LICENSE.txt',
+  'dist/build/static/js/widget.min.js',
+  'dist/build/static/js/widget.min.js.LICENSE.txt',
   'output/playwright/bundle-manifest.json',
 ];
 
@@ -110,21 +111,22 @@ test('the jsDelivr purge runs last, after the CloudFront invalidation, and never
   assert.equal(purgeStep.env.MAJOR, '${{ steps.v.outputs.major }}');
   assert.doesNotMatch(purgeStep.run, /\$\{\{|\baws\s/);
   const prefix = 'https://purge.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat';
-  const file = 'dist/build/static/js/bundle.min.js';
-  const expected = [`${prefix}@v1/${file}`, `${prefix}/${file}`, `${prefix}@latest/${file}`];
+  // Each alias serves the forwarder (bundle.min.js) and the widget it falls back to (widget.min.js).
+  const expected = ['@v1', '', '@latest'].flatMap((ref) => [FORWARDER_PATH, BUNDLE_PATH].map((file) => `${prefix}${ref}/${file}`));
   const purged = runPurgeStep(`echo '{"status":"finished"}' > purge-response.json; printf 200`);
   assert.equal(purged.status, 0);
   assert.deepEqual(purged.urls, expected);
-  assert.equal(purged.stdout.match(/"status":"finished"/g).length, 3, 'Each response must reach the log');
+  assert.equal(purged.stdout.match(/"status":"finished"/g).length, 6, 'Each response must reach the log');
   assert.doesNotMatch(purged.stdout, /::warning::/);
   const refused = runPurgeStep('printf 403');
   assert.equal(refused.status, 0);
   assert.deepEqual(refused.urls, expected, 'A refused purge must not stop the other aliases');
-  assert.match(refused.stdout, /::warning::jsDelivr purge of '@v1' answered HTTP 403/);
+  assert.match(refused.stdout, /::warning::jsDelivr purge of '@v1' bundle\.min\.js answered HTTP 403/);
+  assert.match(refused.stdout, /::warning::jsDelivr purge of '@v1' widget\.min\.js answered HTTP 403/);
   const offline = runPurgeStep('printf 000; exit 28');
   assert.equal(offline.status, 0);
   assert.deepEqual(offline.urls, expected);
-  assert.match(offline.stdout, /::warning::jsDelivr purge of 'no version' answered HTTP 000/);
+  assert.match(offline.stdout, /::warning::jsDelivr purge of 'no version' widget\.min\.js answered HTTP 000/);
 });
 
 test('CI and releases call the same widget checks', () => {
@@ -167,7 +169,94 @@ test('publisher verifies downloaded bytes before credentials and every upload', 
   assertOrdered(publish.steps, [download, guard, credentials, uploads[0]]);
   for (const upload of uploads) assertOrdered(publish.steps, [guard, credentials, upload]);
   for (const step of publish.steps.filter((candidate) => /aws\s+s3\s+cp/.test(candidate.run || ''))) {
-    assert.match(step.run, /aws\s+s3\s+cp\s+dist\/build\/static\/js\/bundle\.min\.js\s/);
+    assert.match(step.run, /aws\s+s3\s+cp\s+dist\/build\/static\/js\/widget\.min\.js\s/);
+  }
+});
+
+// The S3 copies must be the tested widget. The committed bundle.min.js is the
+// jsDelivr forwarder: uploaded to cdn.punku.ai, it would load itself.
+const uploadSteps = publish.steps.filter((step) => /aws\s+s3\s+cp\s+dist\//.test(step.run || ''));
+const forwarder = fs.readFileSync(path.join(repoRoot, FORWARDER_PATH));
+const widget = Buffer.from(`/*! Synthetic widget */customElements.define("punku-chat",class{});/* ${'x'.repeat(MIN_BUNDLE_BYTES)} */`);
+
+function git(dir, args) {
+  return spawnSync('git', ['-c', 'user.name=Widget Release Tests', '-c', 'user.email=widget-release-tests@example.invalid',
+    '-c', 'commit.gpgsign=false', '-c', `core.hooksPath=${path.join(dir, '.git', 'no-hooks')}`, ...args], { cwd: dir, encoding: 'utf8' });
+}
+
+// A release checkout with a recorded widget, and a fake aws that stores uploads in a folder.
+// AWS_UPLOAD=short stores only the first 4096 bytes, to model a broken upload.
+function publishFixture(t) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-upload-')));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const files = { [BUNDLE_PATH]: widget, [FILES[1]]: Buffer.from('Synthetic license.\n'), [FORWARDER_PATH]: forwarder,
+    'scripts/release-bundle.cjs': fs.readFileSync(path.join(__dirname, 'release-bundle.cjs')) };
+  for (const [name, bytes] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), bytes);
+  }
+  git(dir, ['init', '--quiet']);
+  git(dir, ['add', '--', ...Object.keys(files)]);
+  git(dir, ['commit', '--quiet', '-m', 'Synthetic release']);
+  recordBundleIdentity(dir);
+  fs.mkdirSync(path.join(dir, 'bin'));
+  fs.writeFileSync(path.join(dir, 'bin', 'aws'), `#!/bin/bash
+# aws s3 cp <from> <to> [options]
+echo "$3 -> $4" >> "$AWS_LOG"
+case "$4" in
+  s3://*) mkdir -p "$(dirname "$S3/\${4#s3://}")"
+    if [ "$AWS_UPLOAD" = short ]; then head -c 4096 "$3" > "$S3/\${4#s3://}"; else cp "$3" "$S3/\${4#s3://}"; fi ;;
+  *) cp "$S3/\${3#s3://}" "$4" ;;
+esac
+`, { mode: 0o755 });
+  return dir;
+}
+
+function runUploadStep(dir, step, env = {}) {
+  const script = step.run.replaceAll('${{ steps.v.outputs.tag }}', 'v1.0.99').replaceAll('${{ steps.v.outputs.major }}', 'v1');
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-c', script], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { PATH: `${path.join(dir, 'bin')}:${process.env.PATH}`, AWS_LOG: path.join(dir, 'aws.log'), S3: path.join(dir, 's3'),
+      BUCKET: 'primary', BUCKET_BACKUP: 'backup', ...env },
+  });
+  const log = fs.existsSync(path.join(dir, 'aws.log')) ? fs.readFileSync(path.join(dir, 'aws.log'), 'utf8').trim().split('\n') : [];
+  fs.rmSync(path.join(dir, 'aws.log'), { force: true });
+  return { status: result.status, stderr: result.stderr, log };
+}
+
+test('the publisher uploads the widget, never the forwarder, and reads every object back', (t) => {
+  assert.equal(uploadSteps.length, 2, 'One pinned and one floating upload');
+  const keys = ['chat/v1.0.99/bundle.min.js', 'chat/v1/bundle.min.js'];
+  for (const step of publish.steps) {
+    assert.doesNotMatch(step.run || '', new RegExp(`aws\\s+s3\\s+cp\\s+${FORWARDER_PATH.replaceAll('.', '\\.')}`), 'The forwarder must never reach S3');
+  }
+  const dir = publishFixture(t);
+  uploadSteps.forEach((step, index) => {
+    const run = runUploadStep(dir, step);
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(run.log, ['primary', 'backup'].flatMap((bucket) => [
+      `${BUNDLE_PATH} -> s3://${bucket}/${keys[index]}`, `s3://${bucket}/${keys[index]} -> uploaded-bundle.js`]));
+    for (const bucket of ['primary', 'backup']) assert.deepEqual(fs.readFileSync(path.join(dir, 's3', bucket, keys[index])), widget);
+    assert.equal(fs.existsSync(path.join(dir, 'uploaded-bundle.js')), false);
+  });
+  assert.equal(runUploadStep(dir, uploadSteps[0], { BUCKET_BACKUP: '' }).log.length, 2, 'The failover bucket is optional');
+});
+
+test('a forwarder or a short file on S3 fails the release before the next upload', (t) => {
+  const dir = publishFixture(t);
+  for (const step of uploadSteps) {
+    // The source path changed to the forwarder.
+    const swapped = { ...step, run: step.run.replace(`cp ${BUNDLE_PATH}`, `cp ${FORWARDER_PATH}`) };
+    const forwarded = runUploadStep(dir, swapped);
+    assert.notEqual(forwarded.status, 0);
+    assert.match(forwarded.stderr, /forwarder, not the widget/);
+    assert.equal(forwarded.log.length, 2, 'The failover bucket must not get the file');
+    // An upload that stores a short file.
+    const short = runUploadStep(dir, step, { AWS_UPLOAD: 'short' });
+    assert.notEqual(short.status, 0);
+    assert.match(short.stderr, /4096 bytes/);
+    assert.equal(short.log.length, 2);
   }
 });
 
@@ -225,7 +314,7 @@ test('every browser profile tests the downloaded bundle in its own job', () => {
   assert.equal(download.with.name, builtArtifact.with.name);
   assert.equal(download.with.path, '.');
   assert.match(bytes.run, /^node scripts\/release-bundle\.cjs verify$/m);
-  assert.match(bytes.run, /"\$BUNDLE_SHA {2}dist\/build\/static\/js\/bundle\.min\.js" \| sha256sum --check --strict/);
+  assert.match(bytes.run, /"\$BUNDLE_SHA {2}dist\/build\/static\/js\/widget\.min\.js" \| sha256sum --check --strict/);
   assert.equal(bytes.env.BUNDLE_SHA, '${{ needs.build.outputs.bundle_sha }}');
   assert.equal(run.run.trim(),
     'xvfb-run --auto-servernum npm run test:browser -- --project=${{ matrix.project }} --max-failures=2 --reporter=line,blob');

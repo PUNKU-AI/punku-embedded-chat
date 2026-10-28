@@ -15,7 +15,7 @@ on:
         type: boolean
         required: true
       check_committed_bundle:
-        description: Require the committed CDN fallback bytes to match the build.
+        description: Require the committed jsDelivr copy of the widget (widget.min.js) to match the build.
         type: boolean
         default: false
       bundle_artifact_name:
@@ -87,8 +87,8 @@ jobs:
         with:
           name: widget-built-bundle
           path: |
-            dist/build/static/js/bundle.min.js
-            dist/build/static/js/bundle.min.js.LICENSE.txt
+            dist/build/static/js/widget.min.js
+            dist/build/static/js/widget.min.js.LICENSE.txt
             output/playwright/bundle-manifest.json
           if-no-files-found: error
           retention-days: 14
@@ -133,7 +133,7 @@ jobs:
           BUNDLE_SHA: ${{ needs.build.outputs.bundle_sha }}
         run: |
           node scripts/release-bundle.cjs verify
-          echo "$BUNDLE_SHA  dist/build/static/js/bundle.min.js" | sha256sum --check --strict
+          echo "$BUNDLE_SHA  dist/build/static/js/widget.min.js" | sha256sum --check --strict
       - name: Test exact bundle in one profile
         env:
           PLAYWRIGHT_BLOB_OUTPUT_DIR: output/playwright/blob-report
@@ -207,8 +207,8 @@ jobs:
         with:
           name: ${{ inputs.bundle_artifact_name }}
           path: |
-            dist/build/static/js/bundle.min.js
-            dist/build/static/js/bundle.min.js.LICENSE.txt
+            dist/build/static/js/widget.min.js
+            dist/build/static/js/widget.min.js.LICENSE.txt
             output/playwright/bundle-manifest.json
           if-no-files-found: error
           retention-days: 14

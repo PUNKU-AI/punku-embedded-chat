@@ -5,6 +5,11 @@ name: Publish widget bundle to CDN (S3 + CloudFront)
 # third-party CDN (jsDelivr) again. Triggered on version tags — the existing
 # release ritual: `git tag v1.0.7 && git push --tags`.
 #
+# The build writes the widget to dist/build/static/js/widget.min.js. S3 gets
+# that file under the name bundle.min.js. The committed bundle.min.js is a
+# forwarder for old jsDelivr embeds and must never reach S3: the publisher
+# reads every uploaded object back and checks it.
+#
 # INACTIVE until the AWS resources + repo variables exist: the job is guarded on
 # the CDN_DEPLOY_ROLE_ARN repo *variable*, so tagging before setup is a no-op
 # (no red/failed runs). See SELF_HOSTING.md for the one-time setup.
@@ -135,24 +140,33 @@ jobs:
       - name: Upload header icons -> chat/icons/lucide/ (primary + failover origin)
         run: scripts/upload-lucide-icons.sh
 
+      # Each upload is read back: the object must be the tested widget, never
+      # the forwarder and never a short file. A failed check stops the release
+      # before the next upload.
       - name: Upload pinned (immutable) copy -> chat/<tag>/bundle.min.js (primary + failover origin)
         run: |
           for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
             echo "uploading pinned copy to s3://$B"
-            aws s3 cp dist/build/static/js/bundle.min.js \
+            aws s3 cp dist/build/static/js/widget.min.js \
               "s3://$B/chat/${{ steps.v.outputs.tag }}/bundle.min.js" \
               --content-type "application/javascript; charset=utf-8" \
               --cache-control "public, max-age=31536000, immutable"
+            aws s3 cp "s3://$B/chat/${{ steps.v.outputs.tag }}/bundle.min.js" uploaded-bundle.js
+            node scripts/release-bundle.cjs verify-uploaded uploaded-bundle.js
+            rm uploaded-bundle.js
           done
 
       - name: Upload floating major copy -> chat/<major>/bundle.min.js (primary + failover origin)
         run: |
           for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
             echo "uploading floating copy to s3://$B"
-            aws s3 cp dist/build/static/js/bundle.min.js \
+            aws s3 cp dist/build/static/js/widget.min.js \
               "s3://$B/chat/${{ steps.v.outputs.major }}/bundle.min.js" \
               --content-type "application/javascript; charset=utf-8" \
               --cache-control "public, max-age=300, s-maxage=300"
+            aws s3 cp "s3://$B/chat/${{ steps.v.outputs.major }}/bundle.min.js" uploaded-bundle.js
+            node scripts/release-bundle.cjs verify-uploaded uploaded-bundle.js
+            rm uploaded-bundle.js
           done
 
       - name: Invalidate floating path on CloudFront
@@ -165,21 +179,24 @@ jobs:
       # jsDelivr keeps an alias up to 7 days. The purge makes the new tag
       # reach those sites sooner. The bundle is already on cdn.punku.ai here,
       # so a failed purge only logs a warning and never fails the release.
+      # On jsDelivr, bundle.min.js is the forwarder and widget.min.js is the
+      # widget that the forwarder loads when cdn.punku.ai fails.
       - name: Purge jsDelivr aliases (best effort)
         id: jsdelivr-purge
         continue-on-error: true
         env:
           MAJOR: ${{ steps.v.outputs.major }}
         run: |
-          FILE=dist/build/static/js/bundle.min.js
           for REF in "@$MAJOR" "" "@latest"; do
-            URL="https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}${REF}/${FILE}"
-            echo "Purge $URL"
-            CODE=$(curl -sS --max-time 30 -o purge-response.json -w '%{http_code}' "$URL") || CODE=000
-            cat purge-response.json 2>/dev/null || true
-            echo
-            if [ "$CODE" != "200" ]; then
-              echo "::warning::jsDelivr purge of '${REF:-no version}' answered HTTP $CODE"
-            fi
-            rm -f purge-response.json
+            for FILE in dist/build/static/js/bundle.min.js dist/build/static/js/widget.min.js; do
+              URL="https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}${REF}/${FILE}"
+              echo "Purge $URL"
+              CODE=$(curl -sS --max-time 30 -o purge-response.json -w '%{http_code}' "$URL") || CODE=000
+              cat purge-response.json 2>/dev/null || true
+              echo
+              if [ "$CODE" != "200" ]; then
+                echo "::warning::jsDelivr purge of '${REF:-no version}' ${FILE##*/} answered HTTP $CODE"
+              fi
+              rm -f purge-response.json
+            done
           done

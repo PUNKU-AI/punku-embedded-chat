@@ -86,9 +86,12 @@
       chat.setAttribute('flow_id', params.get('flow_id') || 'your-flow-id');
       if (params.get('api_key')) chat.setAttribute('api_key', params.get('api_key'));
 
-      // ----- load the locally built widget bundle -----
+      // ----- load the locally built widget, or the jsDelivr forwarder with ?bundle=forwarder -----
+      // Only these two files: a script URL taken from the address would run any code on this page.
       var bundleScript = document.createElement('script');
-      bundleScript.src = params.get('bundle') || '/dist/build/static/js/bundle.min.js';
+      bundleScript.src = params.get('bundle') === 'forwarder'
+        ? '/dist/build/static/js/bundle.min.js'
+        : '/dist/build/static/js/widget.min.js';
       bundleScript.async = true;
       document.body.appendChild(bundleScript);
     })();

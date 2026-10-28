@@ -18,7 +18,8 @@ npm run build:release
 npm start
 ```
 
-The build writes `dist/build/static/js/bundle.min.js` and its license file.
+The build writes the widget to `dist/build/static/js/widget.min.js` and its license file.
+No build writes `dist/build/static/js/bundle.min.js`. That file is a small forwarder for old jsDelivr embeds (see [SELF_HOSTING.md](./SELF_HOSTING.md#jsdelivr-forwarder-old-embeds)).
 Webpack builds the widget directly. Babel handles TypeScript and JSX.
 Jest runs with two workers. The release build uses one worker and a 2 GB memory limit.
 Check for other test jobs before running these commands on a shared machine.
@@ -221,11 +222,15 @@ The card follows the theme. On your own answer colour (`bot_message_color`), the
 On the card, your answer text keeps at least 4.5:1, or its own contrast on the answer when that is lower. Where the theme card or the lighter shade would not give that, the card takes a lighter shade of the answer colour, or the answer colour itself.
 The button takes the colour of the link buttons. Where that colour does not reach 3:1 on the card, the card button gets a readable colour of its own.
 
+Load the widget from `https://cdn.punku.ai/chat/v1/bundle.min.js`. It gets every `v1` release.
+Older embeds load `https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js`, with or without `@v1`.
+That file forwards to the `cdn.punku.ai` URL, so these embeds keep working. Use the `cdn.punku.ai` URL for new embeds.
+
 ### on simple HTML
 ```html
 <html lang="en">
 <head>
-<script src="https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js"></script>
+<script src="https://cdn.punku.ai/chat/v1/bundle.min.js" async></script>
 </head>
 <body>
 <punku-chat
@@ -240,7 +245,7 @@ The button takes the colour of the link buttons. Where that colour does not reac
 ### on React
  Import the js bundle in the index.html of your react project
 ```html
-<script src="https://cdn.jsdelivr.net/gh/PUNKU-AI/punku-embedded-chat/dist/build/static/js/bundle.min.js"></script>
+<script src="https://cdn.punku.ai/chat/v1/bundle.min.js" async></script>
 ```
 Encapsulate your custom element in a react component
 ```html
