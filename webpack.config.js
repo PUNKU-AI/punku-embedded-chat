@@ -12,7 +12,7 @@ module.exports = (_env, argv = {}) => {
     devtool: production ? false : 'source-map',
     output: {
       path: path.resolve(__dirname, 'dist'),
-      filename: 'build/static/js/bundle.min.js',
+      filename: 'build/static/js/widget.min.js',
       publicPath: '/',
     },
     resolve: { extensions: ['.tsx', '.ts', '.js'] },

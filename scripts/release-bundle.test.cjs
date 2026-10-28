@@ -6,10 +6,18 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { BUNDLE_PATH, FILES, MANIFEST_PATH, recordBundleIdentity, verifyBundleIdentity, verifyCommittedBundle } = require('./release-bundle.cjs');
+const {
+  BUNDLE_PATH, FILES, FORWARDER_PATH, MANIFEST_PATH, MIN_BUNDLE_BYTES,
+  assertFullBundle, recordBundleIdentity, verifyBundleIdentity, verifyCommittedBundle, verifyUploadedBundle,
+} = require('./release-bundle.cjs');
 
+// Large enough to pass as the widget, and it defines <punku-chat> like the real build.
+const syntheticWidget = (label = 'v1') => Buffer.from('/*! Synthetic widget */\n'
+  + `(()=>{customElements.define("punku-chat",class extends HTMLElement{});globalThis.fixture="${label}";})();\n`
+  + `/* ${'x'.repeat(MIN_BUNDLE_BYTES)} */\n`);
+const FORWARDER = fs.readFileSync(path.resolve(__dirname, '..', FORWARDER_PATH));
 const RELEASE_BYTES = {
-  [BUNDLE_PATH]: Buffer.from('/*! Synthetic widget */\n(()=>{globalThis.fixture="v1";})();\n'),
+  [BUNDLE_PATH]: syntheticWidget(),
   [`${BUNDLE_PATH}.LICENSE.txt`]: Buffer.from('Synthetic fixture license. Copyright © 2026.\n'),
 };
 
@@ -123,4 +131,48 @@ test('rejects freshly recorded release bytes that differ from the committed file
     assert.deepEqual(verifyBundleIdentity(repoRoot), manifest);
     assert.throws(() => verifyCommittedBundle(repoRoot), /committed release bundle is stale/);
   }
+});
+
+test('the release files are the widget build, never the committed forwarder', () => {
+  assert.equal(BUNDLE_PATH, 'dist/build/static/js/widget.min.js');
+  assert.equal(FORWARDER_PATH, 'dist/build/static/js/bundle.min.js');
+  assert.ok(!FILES.includes(FORWARDER_PATH));
+  assert.deepEqual(FILES, [BUNDLE_PATH, `${BUNDLE_PATH}.LICENSE.txt`]);
+});
+
+test('a CDN copy must be the full widget', () => {
+  assert.doesNotThrow(() => assertFullBundle(syntheticWidget()));
+  assert.throws(() => assertFullBundle(FORWARDER), /forwarder, not the widget/);
+  // The forwarder with padding is still the forwarder.
+  assert.throws(() => assertFullBundle(Buffer.concat([FORWARDER, Buffer.alloc(MIN_BUNDLE_BYTES, 32)])), /forwarder/);
+  assert.throws(() => assertFullBundle(syntheticWidget().subarray(0, MIN_BUNDLE_BYTES - 1)), /bytes\. The widget has at least/);
+  assert.throws(() => assertFullBundle(Buffer.alloc(MIN_BUNDLE_BYTES * 2, 32)), /does not define <punku-chat>/);
+  assert.throws(() => assertFullBundle(Buffer.alloc(0)), /0 bytes/);
+});
+
+test('rejects a committed forwarder in place of the widget, also when the build matches it', (t) => {
+  const repoRoot = fixture(t);
+  fs.writeFileSync(path.join(repoRoot, BUNDLE_PATH), FORWARDER);
+  git(repoRoot, ['add', '--', BUNDLE_PATH]);
+  git(repoRoot, ['commit', '--quiet', '-m', 'Commit the forwarder as the widget']);
+  recordBundleIdentity(repoRoot);
+  assert.doesNotThrow(() => verifyBundleIdentity(repoRoot));
+  assert.throws(() => verifyCommittedBundle(repoRoot), /forwarder, not the widget/);
+});
+
+test('accepts an uploaded copy only when it is the tested widget', (t) => {
+  const repoRoot = fixture(t);
+  recordBundleIdentity(repoRoot);
+  const copy = path.join(repoRoot, 'uploaded-bundle.js');
+  fs.writeFileSync(copy, RELEASE_BYTES[BUNDLE_PATH]);
+  assert.equal(verifyUploadedBundle(copy, repoRoot).files[BUNDLE_PATH].sha256,
+    createHash('sha256').update(RELEASE_BYTES[BUNDLE_PATH]).digest('hex'));
+  fs.writeFileSync(copy, FORWARDER);
+  assert.throws(() => verifyUploadedBundle(copy, repoRoot), /forwarder, not the widget/);
+  fs.writeFileSync(copy, RELEASE_BYTES[BUNDLE_PATH].subarray(0, 4096));
+  assert.throws(() => verifyUploadedBundle(copy, repoRoot), /4096 bytes/);
+  fs.writeFileSync(copy, syntheticWidget('another build'));
+  assert.throws(() => verifyUploadedBundle(copy, repoRoot), /not the tested widget/);
+  fs.unlinkSync(copy);
+  assert.throws(() => verifyUploadedBundle(copy, repoRoot), { code: 'ENOENT' });
 });

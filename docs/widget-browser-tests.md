@@ -1,7 +1,9 @@
 # Widget browser tests
 
-These tests load `dist/build/static/js/bundle.min.js`, built from the current source.
+These tests load `dist/build/static/js/widget.min.js`, built from the current source.
 Each browser profile checks that the fixture serves that exact file.
+`jsdelivr-forwarder.spec.ts` also loads the committed forwarder `dist/build/static/js/bundle.min.js`.
+It checks that the forwarder loads the widget once from `cdn.punku.ai`, falls back once to `widget.min.js` on jsDelivr, and does nothing when the widget is already defined.
 They keep the widget shadow root closed.
 Test instrumentation records the returned root without changing its mode.
 Playwright then sends real mouse, keyboard, and touch input.

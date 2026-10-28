@@ -17,7 +17,7 @@ const greenLogo = readFileSync(path.resolve(__dirname, '../assets/icons/tressbru
 const localFiles = new Map([
   ['/fixture.html', { contentType: 'text/html', body: readFileSync(path.resolve(__dirname, 'fixture.html')) }],
   ['/nitro-fixture.js', { contentType: 'text/javascript', body: readFileSync(path.resolve(__dirname, 'nitro-fixture.js')) }],
-  ['/bundle.js', { contentType: 'text/javascript', body: readFileSync(path.resolve(__dirname, '../dist/build/static/js/bundle.min.js')) }],
+  ['/bundle.js', { contentType: 'text/javascript', body: readFileSync(path.resolve(__dirname, '../dist/build/static/js/widget.min.js')) }],
 ]);
 const genericSvg = '<svg xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
 type Failure = 'HTTP' | 'malformed' | 'image';

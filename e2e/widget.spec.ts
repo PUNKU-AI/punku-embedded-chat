@@ -21,7 +21,7 @@ test.afterEach(({ page }) => {
 });
 
 test('fixture serves the exact release bundle', async ({ request }) => {
-  const filename = path.resolve(__dirname, '../dist/build/static/js/bundle.min.js');
+  const filename = path.resolve(__dirname, '../dist/build/static/js/widget.min.js');
   const response = await request.get('/bundle.js');
   expect(response.ok()).toBe(true);
   const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
