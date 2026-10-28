@@ -27,7 +27,7 @@
     "test:visual-contract": "node --test --test-concurrency=1 scripts/visual-audit-ci.test.mjs",
     "test:release-contract": "node --test --test-concurrency=1 scripts/release-*.test.cjs",
     "test:dev-server": "node --test --test-concurrency=1 scripts/dev-server.test.cjs",
-    "audit:dependencies": "npm audit --audit-level=low"
+    "audit:dependencies": "node scripts/release-audit.cjs"
   },
   "eslintConfig": {
     "extends": [

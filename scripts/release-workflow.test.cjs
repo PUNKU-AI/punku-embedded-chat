@@ -188,7 +188,14 @@ test('the build job audits, checks types, builds once, and saves the built bundl
   assert.equal(identity.run.trim(), 'node scripts/release-bundle.cjs outputs >> "$GITHUB_OUTPUT"');
   for (const step of [checkout, audit, types, bundle, contracts, identity, artifact]) assert.equal(step.if, undefined);
   const packageJson = JSON.parse(readText('package.json'));
-  assert.equal(packageJson.scripts['audit:dependencies'], 'npm audit --audit-level=low');
+  // npm audit at level low, with a short list of accepted advisories (release-audit.cjs).
+  // Each one names its package, a reason and the last day it is accepted.
+  assert.equal(packageJson.scripts['audit:dependencies'], 'node scripts/release-audit.cjs');
+  for (const rule of require('./release-audit.cjs').ACCEPTED) {
+    assert.match(rule.id, /^GHSA(-[0-9a-z]{4}){3}$/);
+    assert.ok(rule.package && rule.reason.length > 40);
+    assert.match(rule.until, /^\d{4}-\d{2}-\d{2}$/);
+  }
   assert.equal(artifact.with['if-no-files-found'], 'error');
   assert.deepEqual(paths(artifact.with.path), releaseFiles);
   assert.deepEqual(build.outputs, {
