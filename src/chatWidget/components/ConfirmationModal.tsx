@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { AlertCircle, X } from 'lucide-react';
+import { revealInScrollContainer } from '../utils';
+import { containScrollEvents } from '../scrollContainment';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -9,6 +11,8 @@ interface ConfirmationModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
+  /** The name of the close button (X) for screen readers, in the chat language. */
+  closeLabel?: string;
   buttonColor?: string;
   buttonTextColor?: string;
 }
@@ -21,36 +25,104 @@ export default function ConfirmationModal({
   message,
   confirmText = "Yes",
   cancelText = "Cancel",
+  closeLabel = "Close",
   buttonColor,
   buttonTextColor
 }: ConfirmationModalProps) {
+  const id = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * The dialog asks before it deletes the conversation: the focus goes to
+   * Cancel, the safe answer. A layout effect, so the focus is in the dialog
+   * before the browser moves it off the now inert window (ChatWindow).
+   * preventScroll: a plain focus() can pan the host page on phones (#69).
+   * In a short window only the dialog scrolls to show the button.
+   */
+  useLayoutEffect(() => {
+    const cancelButton = cancelButtonRef.current;
+    if (!isOpen || !cancelButton) return;
+    cancelButton.focus({ preventScroll: true });
+    revealInScrollContainer(cancelButton);
+  }, [isOpen]);
+
+  // A dialog that scrolls keeps the wheel from host smooth-scroll libraries,
+  // as the message list does (scrollContainment.ts).
+  useEffect(() => (isOpen ? containScrollEvents(dialogRef.current) : undefined), [isOpen]);
+
   if (!isOpen) return null;
 
+  /*
+   * aria-modal: Tab and Shift+Tab go round the dialog's buttons and never
+   * leave it. The dialog moves the focus itself: Safari's Tab skips buttons
+   * unless the visitor turned that on, and would leave the dialog.
+   */
+  const keepFocusInside = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    if (buttons.length === 0) return;
+    const focused = (event.currentTarget.getRootNode() as Document | ShadowRoot).activeElement;
+    const index = buttons.indexOf(focused as HTMLButtonElement);
+    const next = event.shiftKey
+      ? (index <= 0 ? buttons.length - 1 : index - 1)
+      : (index + 1) % buttons.length;
+    event.preventDefault();
+    buttons[next].focus({ preventScroll: true });
+    // preventScroll also stops the dialog's own scroll in a short window.
+    revealInScrollContainer(buttons[next]);
+  };
+
   return (
-    <div className="cl-modal-overlay">
-      <div className="cl-modal">
+    // A press on the dimmed backdrop keeps the focus in the dialog.
+    <div
+      className="cl-modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) event.preventDefault();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="cl-modal"
+        role="alertdialog"
+        aria-modal="true"
+        // A press on the dialog's text focuses the dialog, so Tab stays inside.
+        tabIndex={-1}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-message`}
+        onKeyDown={keepFocusInside}
+      >
         <div className="cl-modal-header">
           <div className="cl-modal-title">
-            <AlertCircle size={20} color="#f59e0b" />
-            <span>{title}</span>
+            <AlertCircle size={20} color="#f59e0b" aria-hidden="true" />
+            <span id={`${id}-title`}>{title}</span>
           </div>
-          <button onClick={onCancel} className="cl-modal-close">
-            <X size={18} />
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cl-modal-close"
+            aria-label={closeLabel}
+            title={closeLabel}
+          >
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         <div className="cl-modal-body">
-          <p>{message}</p>
+          <p id={`${id}-message`}>{message}</p>
         </div>
 
         <div className="cl-modal-footer">
           <button
+            ref={cancelButtonRef}
+            type="button"
             onClick={onCancel}
             className="cl-modal-btn cl-modal-btn-cancel"
           >
             {cancelText}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             className="cl-modal-btn cl-modal-btn-confirm"
             style={{
@@ -81,6 +153,8 @@ export default function ConfirmationModal({
           height: 100%;
         }
 
+        /* In a short window (a zoomed page, a small screen), the dialog
+           scrolls: the buttons stay reachable and the focus stays visible. */
         .cl-modal {
           background: white;
           border-radius: 8px;
@@ -88,7 +162,14 @@ export default function ConfirmationModal({
           max-width: 400px;
           width: 90%;
           max-height: 90%;
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+
+        /* Only a press focuses the dialog itself; Tab never stops on it. */
+        .cl-modal:focus {
+          outline: none;
         }
 
         .cl-modal-header {

@@ -46,6 +46,31 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
+// A device whose main pointer is a finger. There focus() on a text field opens
+// the on-screen keyboard.
+const isTouchScreen = () =>
+  typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+
+const NO_TEXT_INPUTS = new Set(["button", "submit", "reset", "checkbox", "radio", "range", "color", "file", "image", "hidden"]);
+
+// A field that takes text, and so opens the on-screen keyboard with the focus.
+const takesText = (element: HTMLElement) =>
+  element.isContentEditable ||
+  element instanceof HTMLTextAreaElement ||
+  (element instanceof HTMLInputElement && !NO_TEXT_INPUTS.has(element.type));
+
+/*
+ * The page control that opened the chat, when the focus can go back to it: it
+ * is still on the page and on the screen (the focus does not scroll the page,
+ * see #69), and it opens no on-screen keyboard on a touch screen.
+ */
+const openerToRefocus = (opener: HTMLElement | null | undefined) => {
+  if (!opener?.isConnected) return null;
+  const box = opener.getBoundingClientRect();
+  if (box.bottom < 0 || box.right < 0 || box.top > window.innerHeight || box.left > window.innerWidth) return null;
+  return isTouchScreen() && takesText(opener) ? null : opener;
+};
+
 /*
  * The visitor sees a plain sentence in the chat's language, never technical
  * text such as "HTTP error! status: 500, body: …" or a flow's own error text
@@ -150,6 +175,8 @@ export default function ChatWindow({
   ai_notice_text,
   show_ai_notice = true,
   checkout_card_venue,
+  dismissDialogRef,
+  openerRef,
 }: {
   api_key?: string;
   output_type: string,
@@ -231,6 +258,13 @@ export default function ChatWindow({
   show_ai_notice?: boolean;
   /** The second line of each checkout card, for example the name of the venue. */
   checkout_card_venue?: string;
+  /**
+   * ChatWindow puts a function here while its dialog is open. It closes the
+   * dialog and returns true: Escape then closes the dialog, not the chat.
+   */
+  dismissDialogRef?: React.MutableRefObject<(() => boolean) | null>;
+  /** The host page control that opened the chat, if any: it gets the focus back. */
+  openerRef?: React.RefObject<HTMLElement | null>;
 }) {
   const [value, setValue] = useState<string>("");
   // Use translations based on language prop
@@ -321,10 +355,29 @@ export default function ChatWindow({
   // region that appears together with its text is often not read, and messages
   // restored from the session must not be read again on each page load.
   const [statusAnnouncement, setStatusAnnouncement] = useState("");
+  // While the new-conversation dialog is open, the window is inert, and screen
+  // readers miss what its status region says. The newest text waits until the
+  // dialog closes (see the dialog below).
+  const dialogOpenRef = useRef(false);
+  const heldAnnouncement = useRef<string | null>(null);
+  const announce = useCallback((text: string) => {
+    if (dialogOpenRef.current) heldAnnouncement.current = text;
+    else setStatusAnnouncement(text);
+  }, []);
   // Set when a send starts, before React renders sendingMessage: two
   // activations in one task (Enter twice, Try again twice) send only once.
   const sendingRef = useRef(false);
+  // The log does not announce changes: the status region tells that a new
+  // conversation starts. Not in a chat that closes. A send that found the
+  // session expired keeps its own status too.
+  useEffect(() => {
+    if (!isRefreshingSession || !open) return;
+    announce(sendingRef.current ? `${t.sessionRefreshing} ${t.typing}` : t.sessionRefreshing);
+  }, [announce, isRefreshingSession, open, t.sessionRefreshing, t.typing]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const newSessionButtonRef = useRef<HTMLButtonElement>(null);
+  // Where the focus goes when the dialog closes, set by the visitor's answer.
+  const focusAfterDialog = useRef<HTMLElement | null>(null);
   const handledProgrammaticMessageIds = useRef<Set<number>>(new Set());
   // The cards that the answers show, with their place in the Markdown
   // (AnswerParagraph). A complete answer waits here for the render that
@@ -392,7 +445,7 @@ export default function ChatWindow({
     }
     sendingRef.current = true;
     setSendingMessage(true);
-    setStatusAnnouncement(t.typing);
+    announce(t.typing);
 
     if (!enable_streaming) {
       sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
@@ -458,7 +511,7 @@ export default function ChatWindow({
           }
           sendingRef.current = false;
           setSendingMessage(false);
-          setStatusAnnouncement(markdownToPlainText(answers.join("\n\n")));
+          announce(markdownToPlainText(answers.join("\n\n")));
         })
         .catch((err) => {
           const errorText = getRequestErrorMessage(err, t);
@@ -467,7 +520,7 @@ export default function ChatWindow({
             isSend: false,
             error: true,
           });
-          setStatusAnnouncement(errorText);
+          announce(errorText);
           notifyClientError(err, "send-message", {
             inputType: input_type,
             outputType: output_type,
@@ -512,7 +565,7 @@ export default function ChatWindow({
           isSend: false,
           error: true,
         };
-        setStatusAnnouncement(errorMessage.message);
+        announce(errorMessage.message);
 
         if (currentMessageId) {
           updateLastMessage({
@@ -654,6 +707,7 @@ export default function ChatWindow({
   }, [
     additional_headers,
     addMessage,
+    announce,
     api_key,
     enable_streaming,
     flowId,
@@ -676,8 +730,17 @@ export default function ChatWindow({
     // leading or trailing whitespace, as chat apps do.
     if (sendUserMessage(value.trim())) {
       setValue("");
+      return true;
     }
+    return false;
   }
+
+  // The send button is disabled while the answer is on its way.
+  const handleSendButton = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const button = event.currentTarget;
+    const hadFocus = (button.getRootNode() as Document | ShadowRoot).activeElement === button;
+    if (handleClick() && hadFocus) keepFocusInChat();
+  };
 
   // Suggested questions under the welcome message: up to four, never empty.
   const suggestionList = Array.isArray(suggestions)
@@ -709,9 +772,9 @@ export default function ChatWindow({
     const answer = pendingAnswer.id ? messages.find((message) => message.message_id === pendingAnswer.id) : undefined;
     if (answer && (answer.streaming || answer.message !== pendingAnswer.markdown)) return;
     const cards = pendingAnswer.id ? cardSpeech.get(pendingAnswer.id) : [];
-    setStatusAnnouncement(markdownToPlainText(speakCheckoutCards(pendingAnswer.markdown, cards)));
+    announce(markdownToPlainText(speakCheckoutCards(pendingAnswer.markdown, cards)));
     setPendingAnswer(null);
-  }, [pendingAnswer, messages, cardSpeech]);
+  }, [announce, pendingAnswer, messages, cardSpeech]);
 
   // The newest answer keeps its feedback buttons visible; older ones show
   // them on hover, on focus or after a vote.
@@ -738,6 +801,29 @@ export default function ChatWindow({
         inputRef.current?.focus({ preventScroll: true });
       }
     : undefined;
+
+  /*
+   * A control that removes or disables itself (a suggestion, the jump button,
+   * the send button) must not drop the keyboard focus to the page: the visitor
+   * writes on in the input. Not on a touch screen: there focus() on the input
+   * would open the on-screen keyboard over the answer, and a screen reader
+   * keeps its place by itself. preventScroll: see #69.
+   */
+  const keepFocusInChat = () => {
+    if (!isTouchScreen()) inputRef.current?.focus({ preventScroll: true });
+  };
+
+  // The newest message takes the focus for this once. Its tabindex goes with
+  // the focus, so a message never becomes a tab stop.
+  const focusNewestMessage = () => {
+    const rows = Array.from(messagesContainer.current?.querySelectorAll<HTMLElement>(".cl-chat-message") ?? [])
+      .filter((row) => row.querySelector(".cl-user_message, .cl-bot_message:not(.cl-typing), .cl-error_message"));
+    const newest = rows[rows.length - 1];
+    if (!newest) return;
+    newest.tabIndex = -1;
+    newest.focus({ preventScroll: true });
+    newest.addEventListener("blur", () => newest.removeAttribute("tabindex"), { once: true });
+  };
 
   useEffect(() => {
     if (!programmaticMessage) return;
@@ -850,6 +936,10 @@ export default function ChatWindow({
     followNewest.current = true;
     setShowJumpToLatest(false);
     el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    // The button hides itself. On a touch screen the newest message takes the
+    // focus: a screen reader reads on from the message the visitor jumped to.
+    if (isTouchScreen()) focusNewestMessage();
+    else keepFocusInChat();
   };
 
   /*
@@ -906,9 +996,7 @@ export default function ChatWindow({
         if (focusOnHostPage) return;
         const chatFocus = root.activeElement;
         if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
-        const touchScreen =
-          typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-        if (touchScreen) return;
+        if (isTouchScreen()) return;
       }
       input.focus({ preventScroll: true });
     }, 100);
@@ -917,8 +1005,11 @@ export default function ChatWindow({
 
   /*
    * When the chat closes from inside (the close button, Escape), the focus
-   * goes back to the launcher, so keyboard and screen-reader users keep their
-   * place. A click on the host page keeps the focus where the visitor put it.
+   * goes back to the control that opened it, so keyboard and screen-reader
+   * users keep their place: a host page button that opened the chat (the
+   * widget API), else the launcher. A hidden control takes no focus, so the
+   * next one gets it. A click on the host page keeps the focus where the
+   * visitor put it.
    */
   const wasOpenForFocus = useRef(open);
   useEffect(() => {
@@ -926,14 +1017,20 @@ export default function ChatWindow({
     wasOpenForFocus.current = open;
     if (!closed) return;
     const chatWindow = chatWindowRef.current;
-    const trigger = triggerRef?.current;
-    if (!chatWindow || !trigger) return;
+    if (!chatWindow) return;
     const root = chatWindow.getRootNode() as Document | ShadowRoot;
     const focused = root.activeElement;
-    if (focused && chatWindow.contains(focused)) {
-      trigger.focus({ preventScroll: true });
+    if (!focused || !chatWindow.contains(focused)) return;
+    // An opener off the screen still beats a hidden launcher (chat_trigger_style
+    // display: none): a focus that stays in the closing window is lost.
+    const opener = openerRef?.current;
+    const lastResort = opener?.isConnected && !(isTouchScreen() && takesText(opener)) ? opener : null;
+    for (const target of [openerToRefocus(opener), triggerRef?.current, lastResort]) {
+      if (!target) continue;
+      target.focus({ preventScroll: true });
+      if (!chatWindow.contains(root.activeElement)) break;
     }
-  }, [open, triggerRef]);
+  }, [open, triggerRef, openerRef]);
 
   /*
    * The composer grows with the text and takes that height from the message
@@ -1042,6 +1139,11 @@ export default function ChatWindow({
   };
 
   const handleConfirmNewSession = () => {
+    // The focus goes back to the header. When the messages change, the focus
+    // effect above moves it on to the input on a desktop.
+    focusAfterDialog.current = newSessionButtonRef.current;
+    // A text held while the dialog was open belongs to the deleted conversation.
+    heldAnnouncement.current = null;
     setShowConfirmModal(false);
     if (onStartNewSession) {
       onStartNewSession();
@@ -1050,9 +1152,52 @@ export default function ChatWindow({
     }
   };
 
-  const handleCancelNewSession = () => {
+  // Cancel, the close button (X) and Escape.
+  const handleCancelNewSession = useCallback(() => {
+    focusAfterDialog.current = newSessionButtonRef.current;
     setShowConfirmModal(false);
-  };
+  }, []);
+
+  /*
+   * The dialog gives the focus back to "New conversation" when the visitor
+   * answers it. A layout effect: the window is no longer inert then, and an
+   * inert button takes no focus. A chat that closes drops its dialog without
+   * this: the launcher takes the focus then (see above).
+   */
+  useLayoutEffect(() => {
+    dialogOpenRef.current = showConfirmModal;
+    if (showConfirmModal) return;
+    const target = focusAfterDialog.current;
+    focusAfterDialog.current = null;
+    target?.focus({ preventScroll: true });
+    // The status region now says what it held back. A change that comes with
+    // the focus move is often not read: say it a moment later.
+    const held = heldAnnouncement.current;
+    heldAnnouncement.current = null;
+    if (held === null) return;
+    setStatusAnnouncement("");
+    const timer = setTimeout(() => setStatusAnnouncement(held), 150);
+    return () => clearTimeout(timer);
+  }, [showConfirmModal]);
+
+  // A chat that closes never opens again behind an old dialog.
+  useEffect(() => {
+    if (open) return;
+    heldAnnouncement.current = null;
+    setShowConfirmModal(false);
+  }, [open]);
+
+  // Escape closes the dialog first, not the whole chat (ChatWidget).
+  useLayoutEffect(() => {
+    if (!dismissDialogRef || !showConfirmModal) return;
+    dismissDialogRef.current = () => {
+      handleCancelNewSession();
+      return true;
+    };
+    return () => {
+      dismissDialogRef.current = null;
+    };
+  }, [dismissDialogRef, handleCancelNewSession, showConfirmModal]);
 
 
   return (
@@ -1391,6 +1536,10 @@ export default function ChatWindow({
         } as React.CSSProperties}
         ref={ref}
         className={`cl-window ${theme ? `theme-${theme}` : ""} ${(button_color || background_color || bot_message_color || user_message_color || bot_message_style || user_message_style) ? "custom-theme" : ""}${guarded.cardSurface ? ` cl-card-${guarded.cardSurface}` : ""}`}
+        // The dialog is modal: while it is open, the conversation, the header
+        // and the input take no focus, clicks or typing. The installed React
+        // types predate the attribute; React 18 renders it.
+        {...(showConfirmModal ? ({ inert: "" } as Record<string, string>) : {})}
       >
         {/* One row: the avatar, the title with the status under it, and the actions. */}
         <div
@@ -1438,6 +1587,7 @@ export default function ChatWindow({
             <div className="cl-header-actions">
               {onStartNewSession && (
                 <button
+                  ref={newSessionButtonRef}
                   type="button"
                   onClick={handleNewSession}
                   className="cl-new-session-btn cl-header-btn"
@@ -1480,8 +1630,8 @@ export default function ChatWindow({
           {isRefreshingSession && (
             <div className="cl-session-refresh-message">
               <div className="cl-refresh-content">
-                <div className="cl-refresh-spinner"></div>
-                <span>Session refreshing...</span>
+                <div className="cl-refresh-spinner" aria-hidden="true"></div>
+                <span>{t.sessionRefreshing}</span>
               </div>
             </div>
           )}
@@ -1503,6 +1653,7 @@ export default function ChatWindow({
               user_message_style={undefined}
               error_message_style={error_message_style}
               message_id="welcome-message"
+              senderLabel={t.assistantSaid}
               feedback={undefined}
               api_key={api_key}
               additional_headers={additional_headers}
@@ -1532,7 +1683,10 @@ export default function ChatWindow({
                   type="button"
                   className="cl-suggestion"
                   disabled={sendingMessage}
-                  onClick={() => sendUserMessage(suggestion)}
+                  // The chips go when the conversation starts.
+                  onClick={() => {
+                    if (sendUserMessage(suggestion)) keepFocusInChat();
+                  }}
                 >
                   {suggestion}
                 </button>
@@ -1579,6 +1733,7 @@ export default function ChatWindow({
                 retryLabel={t.retry}
                 helpfulLabel={t.helpful}
                 notHelpfulLabel={t.notHelpful}
+                senderLabel={message.isSend ? t.youSaid : message.error ? undefined : t.assistantSaid}
               />
             ))}
           </CardSpeechContext.Provider>
@@ -1666,7 +1821,7 @@ export default function ChatWindow({
               }}
               // Nothing to send: an empty field, or an answer still on its way.
               disabled={sendingMessage || !value.trim()}
-              onClick={handleClick}
+              onClick={handleSendButton}
             >
               <SendIcon
                 aria-hidden="true"
@@ -1703,6 +1858,7 @@ export default function ChatWindow({
           message={t.newSessionConfirm}
           confirmText={t.confirmButton}
           cancelText={t.cancelButton}
+          closeLabel={t.closeDialog}
           // The swarovski theme keeps the branch's red (#ef4444). Else a
           // site text colour without button_color gets a red it reads on.
           buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}

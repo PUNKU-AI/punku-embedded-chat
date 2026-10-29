@@ -40,7 +40,9 @@ jest.mock('./chatWindow', () => {
     programmaticMessage,
     onProgrammaticMessageHandled,
     hostUrl,
-    mobile_chat_window_style
+    mobile_chat_window_style,
+    dismissDialogRef,
+    openerRef
   }: {
     open: boolean;
     messages: any[];
@@ -54,6 +56,8 @@ jest.mock('./chatWindow', () => {
     onProgrammaticMessageHandled?: (id: number) => void;
     hostUrl?: string;
     mobile_chat_window_style?: React.CSSProperties;
+    dismissDialogRef?: React.MutableRefObject<(() => boolean) | null>;
+    openerRef?: React.RefObject<HTMLElement | null>;
   }) {
     mockReact.useEffect(() => {
       if (!open || !programmaticMessage) return;
@@ -61,6 +65,22 @@ jest.mock('./chatWindow', () => {
       addMessage({ message: programmaticMessage.message, isSend: true });
       onProgrammaticMessageHandled?.(programmaticMessage.id);
     }, [addMessage, onProgrammaticMessageHandled, open, programmaticMessage]);
+
+    // The tests read the opener that the widget hands over.
+    (globalThis as any).mockOpenerRef = openerRef;
+
+    // A dialog in the window, as the new-conversation dialog: Escape closes it first.
+    const [dialogOpen, setDialogOpen] = mockReact.useState(false);
+    mockReact.useLayoutEffect(() => {
+      if (!dismissDialogRef || !dialogOpen) return undefined;
+      dismissDialogRef.current = () => {
+        setDialogOpen(false);
+        return true;
+      };
+      return () => {
+        dismissDialogRef.current = null;
+      };
+    }, [dismissDialogRef, dialogOpen]);
 
     if (!open) return null;
     return (
@@ -83,6 +103,11 @@ jest.mock('./chatWindow', () => {
             Close
           </button>
         )}
+        <button data-testid="open-dialog" onClick={() => setDialogOpen(true)}>
+          Open dialog
+        </button>
+        {dialogOpen && <div data-testid="window-dialog" />}
+        <span data-testid="opener">{openerRef?.current?.textContent ?? ''}</span>
       </div>
     );
   };
@@ -302,6 +327,36 @@ describe('ChatWidget', () => {
       expect(screen.getByText('Need assistance?')).toBeInTheDocument();
     });
 
+    it('should show the default hint text in the chat language', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} default_language="de" />);
+
+      expect(screen.getByText('Hallo, ich bin Ihr KI-Assistent. Wie kann ich Ihnen helfen?')).toBeInTheDocument();
+      expect(screen.queryByText(defaultClosedHintText)).not.toBeInTheDocument();
+    });
+
+    it('should keep the default hint, in the new language, when the page language changes', async () => {
+      document.documentElement.setAttribute('lang', 'en');
+      try {
+        render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} />);
+        expect(screen.getByText(defaultClosedHintText)).toBeVisible();
+
+        act(() => {
+          document.documentElement.setAttribute('lang', 'de');
+        });
+
+        // The same hint in the new language, not a new hint that was shown before.
+        await waitFor(() => expect(screen.getByText('Hallo, ich bin Ihr KI-Assistent. Wie kann ich Ihnen helfen?')).toBeVisible());
+      } finally {
+        document.documentElement.removeAttribute('lang');
+      }
+    });
+
+    it('should show no hint for an empty hint text', () => {
+      render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text="" />);
+
+      expect(document.querySelector('.cl-closed-widget-hint')).not.toBeInTheDocument();
+    });
+
     it('should support multiline closed widget hint text', () => {
       const hintText = "Hi, I am your AI assistant.\nHow can I help you?";
       render(<ChatWidget {...defaultProps} show_closed_widget_hint={true} closed_widget_hint_text={hintText} />);
@@ -480,6 +535,86 @@ describe('ChatWidget', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
 
       expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should close an open dialog in the window first, then the chat, on Escape', () => {
+      render(<ChatWidget {...defaultProps} start_open={true} />);
+      fireEvent.click(screen.getByTestId('open-dialog'));
+      expect(screen.getByTestId('window-dialog')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(screen.queryByTestId('window-dialog')).not.toBeInTheDocument();
+      expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+    });
+
+    it('should give the window the host page control that opened the chat, for the focus on close', () => {
+      const pageButton = document.createElement('button');
+      pageButton.textContent = 'Ask our assistant';
+      document.body.appendChild(pageButton);
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        pageButton.focus();
+
+        act(() => {
+          (window as any)['punku-chat-widget_api'].open();
+        });
+        expect(screen.getByTestId('opener').textContent).toBe('Ask our assistant');
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+        // The launcher opens it now: it takes the focus back itself.
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+        expect(screen.getByTestId('opener').textContent).toBe('');
+      } finally {
+        pageButton.remove();
+      }
+    });
+
+    it('should take the control inside a page component as the opener', () => {
+      const component = document.createElement('div');
+      const inner = document.createElement('button');
+      inner.textContent = 'Chat';
+      component.attachShadow({ mode: 'open' }).append(inner);
+      document.body.appendChild(component);
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        inner.focus();
+        expect(document.activeElement).toBe(component);
+
+        act(() => {
+          (window as any)['punku-chat-widget_api'].open();
+        });
+
+        expect((globalThis as any).mockOpenerRef.current).toBe(inner);
+      } finally {
+        component.remove();
+      }
+    });
+
+    it('should forget the page opener when the launcher closes the chat', () => {
+      const pageButton = document.createElement('button');
+      pageButton.textContent = 'Ask our assistant';
+      document.body.appendChild(pageButton);
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        pageButton.focus();
+        act(() => {
+          (window as any)['punku-chat-widget_api'].open();
+        });
+        expect((globalThis as any).mockOpenerRef.current).toBe(pageButton);
+
+        // The visitor used the launcher: the focus goes back to it, not to the page.
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+
+        expect(screen.queryByTestId('chat-window')).not.toBeInTheDocument();
+        expect((globalThis as any).mockOpenerRef.current).toBeNull();
+      } finally {
+        pageButton.remove();
+      }
     });
 
     it('should hide closed widget hint when widget is open', () => {

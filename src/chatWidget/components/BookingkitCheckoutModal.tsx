@@ -175,7 +175,8 @@ export default function BookingkitCheckoutModal({
       aria-label={title}
       aria-modal="true"
     >
-      <header className="cl-bk-checkout-header">
+      {/* A div: a header outside main or a section is a page banner landmark. */}
+      <div className="cl-bk-checkout-header">
         <h2>{title}</h2>
         <a ref={externalLinkRef} href={url} target="_blank" rel="noopener noreferrer">
           {externalLabel}
@@ -183,7 +184,7 @@ export default function BookingkitCheckoutModal({
         <button ref={closeButtonRef} type="button" aria-label={closeLabel} title={closeLabel}>
           <X size={20} aria-hidden="true" />
         </button>
-      </header>
+      </div>
       <iframe
         ref={iframeRef}
         src={url}
