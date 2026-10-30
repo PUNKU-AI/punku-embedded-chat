@@ -177,12 +177,16 @@ async function launcherState(page: Page) {
   return page.evaluate(() => {
     const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
     const trigger = root.querySelector<HTMLButtonElement>('.cl-trigger')!;
-    // A script focus, as the keyboard would move it: an inert trigger takes none.
-    trigger.focus({ preventScroll: true });
-    const takesFocus = root.activeElement === trigger;
-    trigger.blur();
-    return { inert: trigger.closest('[inert]') !== null, takesFocus };
+    // Tab skips a button with tabindex -1. No part of the launcher is inert,
+    // so a tap reaches it as soon as the dialog has gone.
+    return { inTabOrder: trigger.tabIndex >= 0, inert: trigger.closest('[inert]') !== null };
   });
+}
+
+// Whether the chat is open: the launcher's aria-expanded.
+async function launcherExpanded(page: Page) {
+  return page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+    .querySelector('.cl-trigger')!.getAttribute('aria-expanded'));
 }
 
 // Where the keyboard focus is: a page element's id, or the class of the widget part.
@@ -210,19 +214,37 @@ test('the launcher takes no keyboard focus while a consent dialog covers it', as
   await injectHostElements(page, cookieDialogWithAnswer);
   await loadWidget(page, { show_closed_widget_hint: 'false' });
 
-  await expect.poll(() => launcherState(page)).toEqual({ inert: true, takesFocus: false });
+  await expect.poll(() => launcherState(page)).toEqual({ inTabOrder: false, inert: false });
   if (tab) {
     await tabFromHeading(page);
     await expect.poll(() => keyboardFocus(page)).toBe('consent-accept');
   }
 
-  // The visitor answers the dialog: within a second, the launcher takes the focus again.
+  // The visitor answers the dialog. The next Tab reaches the launcher at
+  // once: the widget looks at the page before the focus moves.
   await page.click('#consent-accept');
-  await expect.poll(() => launcherState(page)).toEqual({ inert: false, takesFocus: true });
   if (tab) {
     await tabFromHeading(page);
     await expect.poll(() => keyboardFocus(page)).toBe('cl-trigger');
   }
+  await expect.poll(() => launcherState(page)).toEqual({ inTabOrder: true, inert: false });
+});
+
+test('a tap right after a consent dialog goes away opens the chat', async ({ page, hasTouch }) => {
+  await injectHostElements(page, cookieDialogWithAnswer);
+  await loadWidget(page, { show_closed_widget_hint: 'false' });
+  const trigger = center(await settledBox(page, '.cl-trigger'));
+  await expect.poll(() => launcherState(page)).toEqual({ inTabOrder: false, inert: false });
+  expect(await topmostAt(page, trigger)).toBe('consent-layer');
+
+  // The dialog goes, and the visitor taps the launcher at once: before the
+  // widget's next check of the page.
+  await page.evaluate(() => document.getElementById('consent-layer')!.remove());
+  expect(await topmostAt(page, trigger)).toBe('punku-chat');
+  if (hasTouch) await page.touchscreen.tap(trigger.x, trigger.y);
+  else await page.mouse.click(trigger.x, trigger.y);
+
+  await expect.poll(() => launcherExpanded(page)).toBe('true');
 });
 
 test('the launcher keeps the keyboard focus beside a consent bar that leaves it visible', async ({ page }) => {
@@ -233,7 +255,7 @@ test('the launcher keeps the keyboard focus beside a consent bar that leaves it 
   await loadWidget(page, { show_closed_widget_hint: 'false' });
 
   await expect.poll(() => widgetZIndex(page)).toBe('999996');
-  expect(await launcherState(page)).toEqual({ inert: false, takesFocus: true });
+  expect(await launcherState(page)).toEqual({ inTabOrder: true, inert: false });
 });
 
 // An accessibility button at the highest z-index, added after the widget

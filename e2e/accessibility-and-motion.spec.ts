@@ -144,6 +144,75 @@ test.describe('focus on open only after a visitor action (WCAG 3.2.1)', () => {
 
     await waitForInputFocus(page, { fromWidget: true });
   });
+
+  // A page notice built like the chat notice of a live page (#clean-consent). Its
+  // Accept fades the notice out, removes it, and opens the chat 200 ms later
+  // (closeConsentPopup on the live page). The click was the visitor's.
+  const chatNotice = `
+    <div id="clean-consent"><div style="position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,0.6)">
+      <div style="position:absolute;left:16px;right:16px;bottom:16px;padding:16px;background:#fff">Privacy notice
+        <button id="notice-accept" type="button" data-action="agree">Accept</button></div></div></div>
+    <script>
+      document.getElementById('notice-accept').addEventListener('click', (event) => {
+        event.preventDefault();
+        const notice = document.getElementById('clean-consent');
+        notice.style.transition = 'opacity 0.2s ease';
+        notice.style.opacity = '0';
+        setTimeout(() => {
+          notice.remove();
+          window['browser-fixture_api'].open();
+        }, 200);
+      });
+    </script>`;
+
+  function chatInputValue(page: Page) {
+    return page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+      .querySelector<HTMLTextAreaElement>('.cl-input-element')!.value);
+  }
+
+  test('a page notice that opens the chat 200 ms after the visitor accepts moves the focus to the input', async ({ page, hasTouch }) => {
+    await extendHostPage(page, chatNotice);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+    if (hasTouch) await page.locator('#notice-accept').tap();
+    else await page.locator('#notice-accept').click();
+
+    await waitForInputFocus(page, { fromWidget: true });
+    await page.keyboard.type('Hi');
+    expect(await chatInputValue(page)).toBe('Hi');
+  });
+
+  test('Enter on the notice also counts, and Escape then gives the focus to the launcher', async ({ page, hasTouch }) => {
+    test.skip(hasTouch, 'A keyboard test');
+    await extendHostPage(page, chatNotice);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+    // Focus is setup only. The visitor presses Enter.
+    await page.focus('#notice-accept');
+    await page.keyboard.press('Enter');
+
+    await waitForInputFocus(page, { fromWidget: true });
+    // The notice left the page with its button: the launcher takes the focus.
+    await page.keyboard.press('Escape');
+    await expect.poll(() => state(page)).toMatchObject({ triggerExpanded: 'false', focus: expect.stringContaining('cl-trigger') });
+  });
+
+  test('a page timer after a click on a control that stays leaves the focus on the page', async ({ page, hasTouch }) => {
+    await extendHostPage(page, `
+      <button id="opening-hours" type="button">Opening hours</button>
+      <script>
+        document.getElementById('opening-hours').addEventListener('click', () => {
+          setTimeout(() => window['browser-fixture_api'].open(), 300);
+        });
+      </script>`);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+    if (hasTouch) await page.locator('#opening-hours').tap();
+    else await page.locator('#opening-hours').click();
+    await expect.poll(() => state(page)).toMatchObject({ triggerExpanded: 'true' });
+    await waitPastFocusTimer(page);
+
+    expect(await pageFocus(page)).not.toContain('cl-input-element');
+  });
 });
 
 test('the open window fades and rises on every screen, and only that animates', async ({ page }) => {

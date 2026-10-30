@@ -18,10 +18,12 @@
  * aside#usercentrics-cmp-ui. A floating WhatsApp button or a greeting bubble
  * is none of these: the widget stays above it.
  *
- * While such a dialog covers the whole trigger, the trigger takes no focus:
- * Tab would reach a launcher that the visitor cannot see (WCAG 2.4.11).
+ * While such a dialog covers the whole trigger, the trigger leaves the tab
+ * order: Tab would reach a launcher that the visitor cannot see (WCAG
+ * 2.4.11). A tap still reaches the trigger as soon as the dialog has gone.
  */
 import { RefObject, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 const BLOCKING_DIALOGS = '[aria-modal="true"], [role="alertdialog"]';
 const CONSENT_WORDS = ["cookie", "consent", "privacy", "datenschutz", "gdpr", "dsgvo"];
@@ -33,7 +35,10 @@ const CONSENT_NAMED = CONSENT_WORDS
     .map((name) => `[id*="${name}"], [class*="${name}"]`).join(", "))
   .join(", ");
 
-/** How often the widget looks for a dialog: consent tools add theirs after the page loads. */
+/**
+ * How often the widget looks for a dialog: consent tools add theirs after the
+ * page loads. It also looks before each Tab (usePageDialogs).
+ */
 export const PAGE_DIALOG_CHECK_MS = 1000;
 
 /** A computed value that is set and not the initial value (jsdom leaves many empty). */
@@ -197,8 +202,9 @@ export function belowBlockingDialog(zIndex: number, dialogZIndex: number | null)
 }
 
 /**
- * The visible blocking dialogs, checked once a second: their lowest layer
- * z-index, and whether one covers the whole box of `watched` (the trigger).
+ * The visible blocking dialogs, checked once a second and before each Tab:
+ * their lowest layer z-index, and whether one covers the whole box of
+ * `watched` (the trigger).
  */
 export function usePageDialogs(watched: RefObject<Element | null>): PageDialogs {
   // The first check runs in the first render: a window that starts open must
@@ -210,9 +216,20 @@ export function usePageDialogs(watched: RefObject<Element | null>): PageDialogs 
       const next = readPageDialogs(watched.current);
       setDialogs((previous) => (previous.zIndex === next.zIndex && previous.covers === next.covers ? previous : next));
     };
+    // The browser moves the focus after the listeners of the Tab keydown.
+    // Look at the page first and render at once, so the trigger joins or
+    // leaves the tab order before the focus moves, also between two checks.
+    // A held Tab repeats: its first press did the check.
+    const checkBeforeTab = (event: KeyboardEvent) => {
+      if (event.key === "Tab" && !event.repeat) flushSync(update);
+    };
     update();
     const timer = window.setInterval(update, PAGE_DIALOG_CHECK_MS);
-    return () => window.clearInterval(timer);
+    window.addEventListener("keydown", checkBeforeTab, true);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("keydown", checkBeforeTab, true);
+    };
   }, [watched]);
   return dialogs;
 }
