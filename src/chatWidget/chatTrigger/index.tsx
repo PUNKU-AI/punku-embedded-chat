@@ -11,6 +11,7 @@ export default function ChatTrigger({
     openLabel = "Open chat",
     closeLabel = "Close chat",
     lang,
+    tabIndex,
 }: {
     style?: React.CSSProperties,
     open: boolean,
@@ -26,6 +27,11 @@ export default function ChatTrigger({
     closeLabel?: string,
     /** The language of the two names, the chat language (WCAG 3.1.2). */
     lang?: string,
+    /**
+     * -1 while a page dialog or the open window covers the button: Tab skips
+     * it (WCAG 2.4.11), and a tap still reaches it when it shows again.
+     */
+    tabIndex?: number,
 }) {
     const customStyles = {
         ...style,
@@ -40,6 +46,7 @@ export default function ChatTrigger({
     return (
         <button ref={triggerRef} style={customStyles}
             type="button"
+            tabIndex={tabIndex}
             aria-label={open ? closeLabel : openLabel}
             aria-expanded={open}
             lang={lang}

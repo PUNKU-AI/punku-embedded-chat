@@ -8,6 +8,7 @@ import {
   safeAreaInset,
   trackVisualViewport,
   visualViewportInset,
+  ZOOMED_ATTRIBUTE,
 } from "../utils";
 import { useAnchorMetrics } from "../anchoredChatWindow";
 import { getScaledFrameVisualViewport, ScaledPage, screenRules, viewportLength } from "../scaledPage";
@@ -18,6 +19,7 @@ import ChatMessage from "./chatMessage";
 import ChatInput from "./chatInput";
 import LucideCdnIcon from "./lucideCdnIcon";
 import { containScrollEvents, keepTouchScrollInside } from "../scrollContainment";
+import { takesText } from "../visitorAction";
 import { guardControlColors, guardDialogConfirm } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
@@ -51,13 +53,23 @@ const DEFAULT_INPUT_TEXT_STYLE: React.CSSProperties = {
 const isTouchScreen = () =>
   typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
 
-const NO_TEXT_INPUTS = new Set(["button", "submit", "reset", "checkbox", "radio", "range", "color", "file", "image", "hidden"]);
-
-// A field that takes text, and so opens the on-screen keyboard with the focus.
-const takesText = (element: HTMLElement) =>
-  element.isContentEditable ||
-  element instanceof HTMLTextAreaElement ||
-  (element instanceof HTMLInputElement && !NO_TEXT_INPUTS.has(element.type));
+/*
+ * True when a page element is on top at the centre of a widget part. The
+ * window stays below a consent dialog of the page (pageDialogs.ts): the focus
+ * would then be on a field that the visitor cannot see (WCAG 2.4.11). A part
+ * outside the screen has no hit, and does not count as covered.
+ */
+const coveredByPage = (element: HTMLElement) => {
+  if (typeof document.elementFromPoint !== "function") return false;
+  const box = element.getBoundingClientRect();
+  const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  if (!hit) return false;
+  // The closed shadow root names its host as the hit.
+  const root = element.getRootNode();
+  const host = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot ? root.host : null;
+  const widget = element.closest(".cl-widget-root") ?? element.closest(".cl-chat-window") ?? element;
+  return hit !== host && !widget.contains(hit);
+};
 
 /*
  * The page control that opened the chat, when the focus can go back to it: it
@@ -178,6 +190,7 @@ export default function ChatWindow({
   dismissDialogRef,
   openerRef,
   openedByVisitorRef,
+  coversTrigger = false,
 }: {
   api_key?: string;
   output_type: string,
@@ -272,8 +285,17 @@ export default function ChatWindow({
    * open is the visitor's.
    */
   openedByVisitorRef?: React.RefObject<boolean>;
+  /**
+   * True while this window covers the whole trigger (ChatWidget, windowCover.ts).
+   * The trigger then leaves the tab order, so the header shows its close
+   * button on every screen, also without show_close_button_on_desktop.
+   */
+  coversTrigger?: boolean;
 }) {
   const [value, setValue] = useState<string>("");
+  // The header close button keeps showing while it has the focus: hiding it
+  // would drop the focus to the page (coversTrigger can change while it has it).
+  const [closeFocused, setCloseFocused] = useState(false);
   // Use translations based on language prop
   const t = translations[language] || translations.en;
   const ref = useRef<HTMLDivElement>(null);
@@ -307,7 +329,14 @@ export default function ChatWindow({
   const inScaledFrame = Boolean(scaledPage);
   useLayoutEffect(() => {
     const chatWindow = chatWindowRef.current;
-    if (!open || !chatWindow || inScaledFrame) return;
+    if (!open || !chatWindow) return;
+    if (inScaledFrame) {
+      // The frame is the visible area. A zoom or the keyboard from before the
+      // page turned into a frame (a rotation) must not keep their layouts.
+      chatWindow.removeAttribute(ZOOMED_ATTRIBUTE);
+      chatWindow.removeAttribute(KEYBOARD_ATTRIBUTE);
+      return;
+    }
     return trackVisualViewport(chatWindow);
   }, [open, inScaledFrame]);
   // Viewport units measure the small page on a scaled page. See viewportLength.
@@ -1016,6 +1045,8 @@ export default function ChatWindow({
         if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
         if (isTouchScreen()) return;
       }
+      // A page dialog over the input: the visitor answers it first.
+      if (coveredByPage(input)) return;
       input.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
@@ -1026,8 +1057,9 @@ export default function ChatWindow({
    * goes back to the control that opened it, so keyboard and screen-reader
    * users keep their place: a host page button that opened the chat (the
    * widget API), else the launcher. A hidden control takes no focus, so the
-   * next one gets it. A click on the host page keeps the focus where the
-   * visitor put it.
+   * next one gets it. A launcher out of the tab order lies under a page
+   * dialog (pageDialogs.ts): it gets no focus either (WCAG 2.4.11). A click
+   * on the host page keeps the focus where the visitor put it.
    */
   const wasOpenForFocus = useRef(open);
   useEffect(() => {
@@ -1043,7 +1075,8 @@ export default function ChatWindow({
     // display: none): a focus that stays in the closing window is lost.
     const opener = openerRef?.current;
     const lastResort = opener?.isConnected && !(isTouchScreen() && takesText(opener)) ? opener : null;
-    for (const target of [openerToRefocus(opener), triggerRef?.current, lastResort]) {
+    const launcher = triggerRef?.current && triggerRef.current.tabIndex >= 0 ? triggerRef.current : null;
+    for (const target of [openerToRefocus(opener), launcher, lastResort]) {
       if (!target) continue;
       target.focus({ preventScroll: true });
       if (!chatWindow.contains(root.activeElement)) break;
@@ -1387,12 +1420,21 @@ export default function ChatWindow({
            * for the trigger left the window about 90 px, and the input was not
            * on the screen. The window fills the visible height, as while the
            * on-screen keyboard is open, and covers the trigger: its header has
-           * a close button. It still clears the home indicator. The keyboard
+           * a close button, and the trigger leaves the tab order
+           * (windowCover.ts). It still clears the home indicator. The keyboard
            * layout keeps its own rule. !important: the window sets
            * --cl-top-offset inline (top_offset).
+           *
+           * Not while the page is zoomed in on a touch screen: the window then
+           * stays on the layout viewport (trackVisualViewport), and the whole
+           * height would go below the visible area. A rotation can leave a page
+           * zoomed in (Chrome on Android, a page wider than the portrait
+           * screen): the close X, the send button and the launcher went off the
+           * screen. The window keeps the gaps of the phone layout there, as
+           * before. A desktop pinch keeps this rule.
            */
           ${screenRules({ maxWidth: 640, maxHeight: 420 }, `
-            .cl-chat-window:not([${KEYBOARD_ATTRIBUTE}]) {
+            .cl-chat-window:not([${KEYBOARD_ATTRIBUTE}]):not([${ZOOMED_ATTRIBUTE}]) {
               --cl-top-offset: 0px !important;
               --cl-trigger-room: ${safeAreaInset("bottom")};
             }
@@ -1638,7 +1680,7 @@ export default function ChatWindow({
                   <RefreshCw size={17} color={headerIconColor} aria-hidden="true" />
                 </button>
               )}
-              {/* Close button for phones and tablets; desktop shows it only with show_close_button_on_desktop */}
+              {/* Close button for phones and tablets. A desktop shows it with show_close_button_on_desktop, and while the window covers the trigger. */}
               {onClose && (
                 <button
                   type="button"
@@ -1647,7 +1689,9 @@ export default function ChatWindow({
                   title={t.closeChat}
                   aria-label={t.closeChat}
                   lang={language}
-                  style={{ display: show_close_button_on_desktop ? 'flex' : 'none' }}
+                  onFocus={() => setCloseFocused(true)}
+                  onBlur={() => setCloseFocused(false)}
+                  style={{ display: show_close_button_on_desktop || coversTrigger || closeFocused ? 'flex' : 'none' }}
                 >
                   <X size={20} color={headerIconColor} aria-hidden="true" />
                 </button>

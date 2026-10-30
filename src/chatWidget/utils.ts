@@ -228,9 +228,19 @@ export function getPageScale(viewport: VisualViewport | null | undefined = windo
 	return (viewport.width * viewport.scale) / layoutWidth;
 }
 
+/*
+ * True while the page is zoomed in: the visitor pinch-zoomed in, or a
+ * rotation left the page zoomed in. Chrome on Android keeps the zoom of a
+ * page that was wider than the portrait screen: a 371 px page on a 320 px
+ * phone then shows 490 x 276 px of the 568 x 320 px layout viewport.
+ */
+function isZoomedIn(viewport: VisualViewport | null) {
+	return !!viewport && viewport.scale > getPageScale(viewport) * PINCH_ZOOM_SCALE;
+}
+
 function readVisualViewport(): VisualViewportBox | null {
 	const viewport = observedViewport;
-	if (!viewport || viewport.scale > getPageScale(viewport) * PINCH_ZOOM_SCALE) return null;
+	if (!viewport || isZoomedIn(viewport)) return null;
 	const { offsetLeft, offsetTop, width, height } = viewport;
 	return { offsetLeft, offsetTop, width, height };
 }
@@ -289,12 +299,32 @@ export function isKeyboardOpen(box: VisualViewportBox | null, layout = getLayout
 export const KEYBOARD_ATTRIBUTE = 'data-cl-keyboard';
 
 /*
+ * Set on the tracked element while the page is zoomed in on a touch screen,
+ * where a rotation can leave a page zoomed in. A desktop pinch (a trackpad)
+ * keeps the layout of the browser zoom, such as the short layout at 400 %:
+ * the element then zooms with the page.
+ */
+export const ZOOMED_ATTRIBUTE = 'data-cl-zoomed';
+
+// A device whose main pointer is a finger.
+const isTouchScreen = () =>
+	typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
+// Set or remove a boolean attribute. Write only changes.
+function markElement(element: HTMLElement, attribute: string, on: boolean) {
+	if (element.hasAttribute(attribute) === on) return;
+	if (on) element.setAttribute(attribute, '');
+	else element.removeAttribute(attribute);
+}
+
+/*
  * Copy the visual viewport box to CSS variables on `element`, now and after
  * each change. When the visitor pinch-zooms in, remove the variables: the
  * element then stays on the layout viewport, and the visitor can pan over it.
- * While the on-screen keyboard is open, set KEYBOARD_ATTRIBUTE. The same
- * event sets both, so the styles that use them change in the same frame.
- * Returns a function that stops the updates. The last box stays.
+ * While the page is zoomed in on a touch screen, set ZOOMED_ATTRIBUTE. While
+ * the on-screen keyboard is open, set KEYBOARD_ATTRIBUTE. The same event sets
+ * all of them, so the styles that use them change in the same frame. Returns
+ * a function that stops the updates. The last box stays.
  */
 export function trackVisualViewport(element: HTMLElement) {
 	return subscribeVisualViewport((box) => {
@@ -305,11 +335,8 @@ export function trackVisualViewport(element: HTMLElement) {
 			if (value) element.style.setProperty(property, value);
 			else element.style.removeProperty(property);
 		}
-		const keyboard = isKeyboardOpen(box);
-		if (element.hasAttribute(KEYBOARD_ATTRIBUTE) !== keyboard) {
-			if (keyboard) element.setAttribute(KEYBOARD_ATTRIBUTE, '');
-			else element.removeAttribute(KEYBOARD_ATTRIBUTE);
-		}
+		markElement(element, ZOOMED_ATTRIBUTE, !box && isZoomedIn(observedViewport) && isTouchScreen());
+		markElement(element, KEYBOARD_ATTRIBUTE, isKeyboardOpen(box));
 	});
 }
 
