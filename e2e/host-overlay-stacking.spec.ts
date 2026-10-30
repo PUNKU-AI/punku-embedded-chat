@@ -163,6 +163,79 @@ for (const { tool, layer, html } of consentDialogs) {
   });
 }
 
+// WCAG 2.4.11: the keyboard must not reach a launcher that a consent dialog
+// hides. While the dialog covers the whole trigger, the trigger takes no
+// focus. The CookieScript dialog covers the lower 70 % of the screen.
+const cookieDialogWithAnswer = `
+  <div id="consent-layer" role="dialog" aria-label="Cookie consent dialog"
+       style="position:fixed;left:0;right:0;bottom:0;height:70%;z-index:999997;background:#fff">
+    We use cookies.
+    <button id="consent-accept" type="button" onclick="document.getElementById('consent-layer').remove()">Accept</button>
+  </div>`;
+
+async function launcherState(page: Page) {
+  return page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    const trigger = root.querySelector<HTMLButtonElement>('.cl-trigger')!;
+    // A script focus, as the keyboard would move it: an inert trigger takes none.
+    trigger.focus({ preventScroll: true });
+    const takesFocus = root.activeElement === trigger;
+    trigger.blur();
+    return { inert: trigger.closest('[inert]') !== null, takesFocus };
+  });
+}
+
+// Where the keyboard focus is: a page element's id, or the class of the widget part.
+async function keyboardFocus(page: Page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    if (active?.localName !== 'punku-chat') return active?.id || active?.localName || null;
+    return window.__widgetRoots.get(active)!.activeElement?.classList[0] ?? 'punku-chat';
+  });
+}
+
+// Tab moves on from the page heading, which comes before the widget.
+async function tabFromHeading(page: Page) {
+  await page.evaluate(() => {
+    const heading = document.querySelector<HTMLElement>('main h1')!;
+    heading.tabIndex = -1;
+    heading.focus();
+  });
+  await page.keyboard.press('Tab');
+}
+
+test('the launcher takes no keyboard focus while a consent dialog covers it', async ({ page, browserName, hasTouch }) => {
+  // Safari's Tab skips buttons unless the visitor turns that on: WebKit checks the script focus only.
+  const tab = !hasTouch && browserName !== 'webkit';
+  await injectHostElements(page, cookieDialogWithAnswer);
+  await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+  await expect.poll(() => launcherState(page)).toEqual({ inert: true, takesFocus: false });
+  if (tab) {
+    await tabFromHeading(page);
+    await expect.poll(() => keyboardFocus(page)).toBe('consent-accept');
+  }
+
+  // The visitor answers the dialog: within a second, the launcher takes the focus again.
+  await page.click('#consent-accept');
+  await expect.poll(() => launcherState(page)).toEqual({ inert: false, takesFocus: true });
+  if (tab) {
+    await tabFromHeading(page);
+    await expect.poll(() => keyboardFocus(page)).toBe('cl-trigger');
+  }
+});
+
+test('the launcher keeps the keyboard focus beside a consent bar that leaves it visible', async ({ page }) => {
+  // A cookie bar at the top of the screen.
+  await injectHostElements(page, `
+    <div role="dialog" aria-label="Cookie consent dialog"
+         style="position:fixed;left:0;right:0;top:0;height:120px;z-index:999997;background:#fff">We use cookies.</div>`);
+  await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+  await expect.poll(() => widgetZIndex(page)).toBe('999996');
+  expect(await launcherState(page)).toEqual({ inert: false, takesFocus: true });
+});
+
 // An accessibility button at the highest z-index, added after the widget
 // (Eyeable on Swarovski). No z-index can cover it, so the open window goes to
 // the browser's top layer.

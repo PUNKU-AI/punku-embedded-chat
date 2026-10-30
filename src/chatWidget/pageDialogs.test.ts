@@ -1,4 +1,4 @@
-import { belowBlockingDialog, blockingDialogZIndex, pageLayerZIndex } from './pageDialogs';
+import { belowBlockingDialog, blockingDialogZIndex, pageLayerZIndex, readPageDialogs } from './pageDialogs';
 
 // jsdom has no layout: give an element a box on the screen (a 1024 x 768 window).
 function place(element: Element, left = 20, top = 40, width = 280, height = 300) {
@@ -147,6 +147,58 @@ describe('blockingDialogZIndex', () => {
     addToPage('<div id="d" role="dialog" style="position:fixed;z-index:99999999">Chat with us on WhatsApp.</div>');
     place(byId('d'));
     expect(blockingDialogZIndex()).toBeNull();
+  });
+});
+
+describe('readPageDialogs: a dialog over the trigger (WCAG 2.4.11)', () => {
+  // The trigger in the bottom-right corner of the 1024 x 768 window.
+  const addTrigger = (box: [number, number, number, number] = [952, 700, 48, 48]) => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    place(trigger, ...box);
+    return trigger;
+  };
+
+  it('finds a cookie bar over the whole trigger', () => {
+    addToPage('<div id="d" role="dialog" aria-label="Cookie consent dialog" style="position:fixed;bottom:0;z-index:999997">We use cookies.</div>');
+    place(byId('d'), 0, 568, 1024, 200);
+    expect(readPageDialogs(addTrigger())).toEqual({ zIndex: 999997, covers: true });
+  });
+
+  it('finds a banner above the widget layer, such as Cookiebot', () => {
+    addToPage('<div id="d" role="dialog" aria-modal="true" style="position:fixed;bottom:0;z-index:2147483631">We use cookies.</div>');
+    place(byId('d'), 0, 468, 1024, 300);
+    expect(readPageDialogs(addTrigger()).covers).toBe(true);
+  });
+
+  it('finds a consent backdrop over the whole screen (Contao privacy opt-in)', () => {
+    addToPage('<div id="d" class="privacy_overlay" style="position:fixed;z-index:10000000"></div>');
+    place(byId('d'), 0, 0, 1024, 768);
+    expect(readPageDialogs(addTrigger()).covers).toBe(true);
+  });
+
+  it('does not count a dialog that covers only a part of the trigger or another place', () => {
+    addToPage('<div id="a" role="dialog" aria-label="Cookie consent dialog" style="position:fixed;bottom:0;z-index:999997"></div>'
+      + '<div id="b" role="alertdialog" aria-modal="true" style="position:fixed;z-index:999999"></div>');
+    // A slim bar over the lower half of the trigger, and a dialog in the middle of the screen.
+    place(byId('a'), 0, 724, 1024, 44);
+    place(byId('b'), 362, 234, 300, 300);
+    expect(readPageDialogs(addTrigger())).toEqual({ zIndex: 999997, covers: false });
+  });
+
+  it('does not count a hidden dialog, a dialog in no layer, or the widget\'s own dialog', () => {
+    addToPage('<div id="a" role="dialog" aria-label="Cookie consent dialog" style="position:fixed;z-index:999997;visibility:hidden"></div>'
+      + '<div id="b" role="alertdialog" aria-modal="true">Static dialog</div>'
+      + '<div class="cl-widget-root" style="position:fixed;z-index:2147483000"><dialog id="c" aria-modal="true" open>Checkout</dialog></div>');
+    for (const id of ['a', 'b', 'c']) place(byId(id), 0, 0, 1024, 768);
+    expect(readPageDialogs(addTrigger())).toEqual({ zIndex: null, covers: false });
+  });
+
+  it('does not count a trigger without a box, such as a trigger that the site hides', () => {
+    addToPage('<div id="d" class="privacy_overlay" style="position:fixed;z-index:10000000"></div>');
+    place(byId('d'), 0, 0, 1024, 768);
+    expect(readPageDialogs(addTrigger([0, 0, 0, 0])).covers).toBe(false);
+    expect(readPageDialogs(null).covers).toBe(false);
   });
 });
 

@@ -65,8 +65,9 @@ async function openChat(page: Page, props: Record<string, string> = {}) {
     start_open: 'true', width: '360', height: '520', enable_client_error_reporting: 'false', ...props,
   });
   await page.bringToFront();
-  // The chat focuses the field shortly after opening. Wait for that, so the
-  // keyboard input goes to the field on every desktop and phone profile.
+  // A chat that opens with the page leaves the focus on the page. Focus the
+  // field as the visitor's click would, so the keyboard input goes to the
+  // field on every desktop and phone profile.
   await expect.poll(() => page.evaluate(() => {
     const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
     const field = root.querySelector<HTMLTextAreaElement>('.cl-input-element');

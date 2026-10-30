@@ -137,7 +137,9 @@ const VISIBLE_HEIGHT = "var(--cl-visual-viewport-height, 100%)";
 // visible area and keeps 80 px above its bottom for the trigger, plus the
 // safe area of the home indicator. While the on-screen keyboard is open, the
 // chat window styles set --cl-trigger-room to 0: the window then ends at the
-// keyboard and covers the trigger. Its header has a close button.
+// keyboard and covers the trigger. Its header has a close button. A short
+// screen (640 x 420 px or less, such as a desktop at 400 % zoom) also sets
+// --cl-top-offset to 0, and keeps only the home indicator as trigger room.
 const DEFAULT_TOP_GAP = "var(--cl-top-offset, 0px)";
 const DEFAULT_BOTTOM_GAP = `var(--cl-trigger-room, ${safeAreaGap("bottom", "80px")})`;
 

@@ -284,6 +284,8 @@ const en = {
   // Screen readers read who wrote each message before it.
   youSaid: "You:",
   assistantSaid: "Assistant:",
+  // The heading of the footnotes under an answer, read by screen readers only.
+  footnotes: "Footnotes",
 };
 
 export type Translation = typeof en;
@@ -338,6 +340,7 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Hallo, ich bin Ihr KI-Assistent. Wie kann ich Ihnen helfen?",
     youSaid: "Sie:",
     assistantSaid: "Assistent:",
+    footnotes: "Fußnoten",
   },
   it: {
     welcomeMessage: "Ciao! Come posso aiutarti oggi?",
@@ -385,6 +388,7 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Ciao, sono il tuo assistente IA. Come posso aiutarti?",
     youSaid: "Tu:",
     assistantSaid: "Assistente:",
+    footnotes: "Note",
   },
   es: {
     welcomeMessage: "¡Hola! ¿En qué puedo ayudarte hoy?",
@@ -432,6 +436,7 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Hola, soy tu asistente de IA. ¿En qué puedo ayudarte?",
     youSaid: "Tú:",
     assistantSaid: "Asistente:",
+    footnotes: "Notas al pie",
   },
   // European Portuguese, as on the Portuguese customer page (pt-PT).
   pt: {
@@ -480,6 +485,7 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Olá, sou o seu assistente de IA. Como posso ajudar?",
     youSaid: "A sua mensagem:",
     assistantSaid: "Assistente:",
+    footnotes: "Notas de rodapé",
   },
   fr: {
     welcomeMessage: "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
@@ -527,6 +533,7 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Bonjour, je suis votre assistant IA. Comment puis-je vous aider ?",
     youSaid: "Vous :",
     assistantSaid: "Assistant :",
+    footnotes: "Notes de bas de page",
   },
   pl: {
     welcomeMessage: "Dzień dobry! W czym mogę dziś pomóc?",
@@ -576,5 +583,6 @@ export const translations: Record<Language, Translation> = {
     closedHint: "Dzień dobry, jestem Twoim asystentem AI. W czym mogę pomóc?",
     youSaid: "Ty:",
     assistantSaid: "Asystent:",
+    footnotes: "Przypisy",
   },
 };

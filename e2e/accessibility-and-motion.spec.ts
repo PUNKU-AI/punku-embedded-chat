@@ -1,10 +1,11 @@
 import { expect, Page, test } from '@playwright/test';
-import { loadWidget } from './widget-helpers';
+import { extendHostPage, loadWidget, waitForInputFocus, waitForSettledBoxes } from './widget-helpers';
 
 // Accessibility and motion. The launcher says what it does and whether the
 // chat is open. The closed window leaves the tab order. Escape returns the
-// focus to the launcher. The message list is a named log. Reduced motion
-// turns the open fade and the message fade off.
+// focus to the launcher. Only a visitor action moves the focus into the chat.
+// The message list is a named log. Reduced motion turns the open fade and the
+// message fade off.
 
 const pageErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -70,11 +71,79 @@ test('the closed window is hidden from the tab order and screen readers', async 
 test('Escape closes the chat and returns the focus to the launcher', async ({ page, hasTouch }) => {
   test.skip(hasTouch, 'Keyboard input runs on the three desktop engines.');
   await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
-  await expect.poll(async () => (await state(page)).focus).toContain('cl-input-element');
+  // The visitor clicks into the chat that opened with the page.
+  await waitForInputFocus(page);
 
   await page.keyboard.press('Escape');
   await expect.poll(async () => (await state(page)).focus).toContain('cl-trigger');
   await expect.poll(async () => (await state(page)).windowVisibility).toBe('hidden');
+});
+
+test.describe('focus on open only after a visitor action (WCAG 3.2.1)', () => {
+  // Where the page has the focus: an element id, or the widget part's class.
+  function pageFocus(page: Page) {
+    return page.evaluate(() => {
+      const active = document.activeElement;
+      if (active?.localName !== 'punku-chat') return active?.id || active?.localName || null;
+      return window.__widgetRoots.get(active)!.activeElement?.className ?? 'punku-chat';
+    });
+  }
+
+  // The window focuses its input 100 ms after a visitor opens it. Wait well past that.
+  async function waitPastFocusTimer(page: Page) {
+    await waitForSettledBoxes(page, ['.cl-chat-window']);
+    await page.waitForTimeout(400);
+  }
+
+  test('a chat that opens with the page leaves the focus on the page', async ({ page }) => {
+    await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false' });
+    await waitPastFocusTimer(page);
+
+    expect(await pageFocus(page)).toBe('body');
+  });
+
+  test('a chat that a page timer opens leaves the visitor typing in the page', async ({ page }) => {
+    // A synthetic answer in the backend's line-delimited JSON format.
+    await page.route('**/api/v1/run/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: [
+        JSON.stringify({ event: 'add_message', data: { sender: 'Machine', text: 'We open at 9.', id: 'synthetic-reply' } }),
+        JSON.stringify({ event: 'end', data: { result: { session_id: 'synthetic-session' } } }),
+        '',
+      ].join('\n'),
+    }));
+    await extendHostPage(page, '<input id="search" aria-label="Search the museum">');
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+    await page.focus('#search');
+    await page.keyboard.type('Tick');
+
+    // A timer opens the chat with a question, as api.open("…") does. The answer arrives.
+    await page.evaluate(() => new Promise<void>((resolve) => setTimeout(() => {
+      (window as unknown as Record<string, { open: (message?: string) => void }>)['browser-fixture_api'].open('Opening hours?');
+      resolve();
+    }, 50)));
+    await expect.poll(() => page.evaluate(() => {
+      const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+      return Array.from(root.querySelectorAll('.cl-bot_message')).some((bubble) => bubble.textContent?.includes('We open at 9.'));
+    })).toBe(true);
+    await waitPastFocusTimer(page);
+    await page.keyboard.type('ets');
+
+    expect(await pageFocus(page)).toBe('search');
+    expect(await page.inputValue('#search')).toBe('Tickets');
+  });
+
+  test('the launcher moves the focus to the input', async ({ page }) => {
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+    // Focus is setup only. The keyboard opens the chat.
+    await page.evaluate(() => {
+      window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLButtonElement>('.cl-trigger')!.focus();
+    });
+    await page.keyboard.press('Enter');
+
+    await waitForInputFocus(page, { fromWidget: true });
+  });
 });
 
 test('the open window fades and rises on every screen, and only that animates', async ({ page }) => {

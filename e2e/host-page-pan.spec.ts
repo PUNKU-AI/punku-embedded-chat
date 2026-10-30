@@ -68,7 +68,7 @@ async function openWidePage(page: Page, answers: string[], props: Record<string,
   await loadWidget(page, { start_open: 'true', show_closed_widget_hint: 'false', ...props });
   const view = await hostView(page);
   expect(view.documentWidth).toBeGreaterThan(view.viewportWidth);
-  // The window opens and focuses its input 100 ms later.
+  // The visitor clicks into the chat that opened with the page.
   await waitForInputFocus(page);
 }
 

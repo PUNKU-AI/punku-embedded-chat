@@ -38,8 +38,9 @@ async function mockReply(page: Page, text: string) {
 async function openComposer(page: Page, props: Record<string, string> = {}) {
   await loadWidget(page, { start_open: 'true', width: '360', height: '520', ...props });
   await page.bringToFront();
-  // The chat focuses the composer shortly after opening. Wait for that, so
-  // the keyboard input goes to the field on every desktop and phone profile.
+  // A chat that opens with the page leaves the focus on the page. Focus the
+  // field as the visitor's click would, so the keyboard input goes to the
+  // field on every desktop and phone profile.
   await expect.poll(() => page.evaluate(() => {
     const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
     const field = root.querySelector<HTMLTextAreaElement>('.cl-input-element');

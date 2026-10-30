@@ -130,9 +130,8 @@ test('a keyboard vote keeps the focus ring on the feedback button', async ({ pag
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'saved' })
   ));
   await expect.poll(async () => (await listState(page)).feedbackOpacity.length).toBe(2);
-  // The chat focuses its input on opening (a keyboard focus). Move on to the
-  // newest answer's "Helpful" button, then vote with the keyboard.
-  await page.waitForTimeout(300);
+  // A chat that opens with the page takes no focus. Move the keyboard focus
+  // to the newest answer's "Helpful" button, then vote with the keyboard.
   await page.evaluate(() => {
     const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
     const buttons = root.querySelectorAll<HTMLButtonElement>('.cl-message-stack .feedback-button.thumbs-up');
