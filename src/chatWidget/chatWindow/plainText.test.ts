@@ -35,6 +35,18 @@ describe('markdownToPlainText', () => {
       .toBe('Opening hours\nNote\nMonday: closed\nTuesday: 10:00\n1. First step');
   });
 
+  it('reads a task list without its check marks', () => {
+    expect(markdownToPlainText('- [ ] Towel\n- [x] Ticket\n1. [X] Booked'))
+      .toBe('Towel\nTicket\n1. Booked');
+  });
+
+  it('leaves out a link that shows only an image without alt text', () => {
+    expect(markdownToPlainText('Floor plan: [![](https://example.com/plan.png)](https://example.com/plan)'))
+      .toBe('Floor plan:');
+    expect(markdownToPlainText('[![Floor plan](https://example.com/plan.png)](https://example.com/plan)'))
+      .toBe('Floor plan');
+  });
+
   it('reads a table row by row', () => {
     expect(markdownToPlainText('| Day | Hours |\n| --- | :---: |\n| Monday | closed |'))
       .toBe('Day, Hours\n\nMonday, closed');

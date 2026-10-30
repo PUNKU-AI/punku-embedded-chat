@@ -12,8 +12,10 @@ export function markdownToPlainText(markdown: string): string {
     // Link reference definitions ([name]: url) show nothing on screen. A
     // footnote definition ([^1]: text) shows, so it stays.
     .replace(/^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*\S+.*$/gm, "")
-    // Images: the alt text. Links: the link text.
+    // Images: the alt text. Links: the link text. A link that shows only an
+    // image without alt text has no text: leave it out (its button has a name).
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[\]\([^)]*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     // Reference links: [text][name] and [text][] read as their text.
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
@@ -21,6 +23,8 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")
     .replace(/^[ \t]{0,3}>[ \t]?/gm, "")
     .replace(/^[ \t]*[-*+][ \t]+/gm, "")
+    // Task list marks ([ ] and [x]), after a bullet or a number.
+    .replace(/^([ \t]*(?:\d+[.)][ \t]+)?)\[[ xX]\][ \t]+/gm, "$1")
     .replace(/^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$/gm, "")
     .replace(/^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/gm, "")
     // Table rows: cells separated by commas.
