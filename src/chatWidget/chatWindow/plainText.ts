@@ -49,7 +49,7 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim()
     // The escaped characters, back as plain characters. A loop, not a regex:
-    // the minifier writes a  range as raw characters, and a page that
+    // the minifier writes a private-use range as raw characters, and a page that
     // reads the bundle in another encoding could then not parse it.
     .split("")
     .map((char) => {
