@@ -38,6 +38,12 @@ describe('markdownToPlainText', () => {
   it('reads a task list without its check marks', () => {
     expect(markdownToPlainText('- [ ] Towel\n- [x] Ticket\n1. [X] Booked'))
       .toBe('Towel\nTicket\n1. Booked');
+    expect(markdownToPlainText('  * [ ] Nested\n> - [x] Quoted')).toBe('Nested\nQuoted');
+  });
+
+  it('keeps check marks on a line that is not a list item, as the screen shows them', () => {
+    expect(markdownToPlainText('Legende:\n[x] = inklusive\n[ ] = gegen Aufpreis'))
+      .toBe('Legende:\n[x] = inklusive\n[ ] = gegen Aufpreis');
   });
 
   it('leaves out a link that shows only an image without alt text', () => {
@@ -45,6 +51,22 @@ describe('markdownToPlainText', () => {
       .toBe('Floor plan:');
     expect(markdownToPlainText('[![Floor plan](https://example.com/plan.png)](https://example.com/plan)'))
       .toBe('Floor plan');
+  });
+
+  it('keeps the next lines when an image-only link is not closed', () => {
+    expect(markdownToPlainText('Plan: [![](https://example.com/plan.png)](https://example.com/plan\n\nMore (see below).'))
+      .toBe('Plan: [](https://example.com/plan\n\nMore (see below).');
+  });
+
+  it('reads escaped characters without the backslash, but keeps it in code', () => {
+    expect(markdownToPlainText('Price: 10 € \\* plus tax\n1\\. Step\n\\[no link\\]'))
+      .toBe('Price: 10 € * plus tax\n1. Step\n[no link]');
+    expect(markdownToPlainText('Fri - Sun\\*\n\n*\\*Also on public holidays.*'))
+      .toBe('Fri - Sun*\n\n*Also on public holidays.');
+    expect(markdownToPlainText('| Day | Price \\| discount |\n| --- | --- |\n| Mon | 10 \\| 8 |'))
+      .toBe('Day, Price | discount\n\nMon, 10 | 8');
+    expect(markdownToPlainText('[Page](https://example.com/a\\)b) next')).toBe('Page next');
+    expect(markdownToPlainText('Path: `C:\\*.txt`\n```\na\\_b\n```')).toBe('Path: C:\\*.txt\na\\_b');
   });
 
   it('reads a table row by row', () => {
