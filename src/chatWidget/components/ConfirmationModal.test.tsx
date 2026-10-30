@@ -31,6 +31,12 @@ describe('ConfirmationModal', () => {
       expect(screen.queryByText('Test Title')).not.toBeInTheDocument();
       expect(screen.queryByText('Test message content')).not.toBeInTheDocument();
     });
+
+    it('should say the language of its texts, the chat language (WCAG 3.1.2)', () => {
+      render(<ConfirmationModal {...defaultProps} title="Neues Gespräch beginnen" lang="de" />);
+
+      expect(screen.getByRole('alertdialog', { name: 'Neues Gespräch beginnen' })).toHaveAttribute('lang', 'de');
+    });
   });
 
   describe('Content', () => {

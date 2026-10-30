@@ -17,8 +17,11 @@
  * Usercentrics draws its banner in the shadow root of
  * aside#usercentrics-cmp-ui. A floating WhatsApp button or a greeting bubble
  * is none of these: the widget stays above it.
+ *
+ * While such a dialog covers the whole trigger, the trigger takes no focus:
+ * Tab would reach a launcher that the visitor cannot see (WCAG 2.4.11).
  */
-import { useEffect, useState } from "react";
+import { RefObject, useEffect, useState } from "react";
 
 const BLOCKING_DIALOGS = '[aria-modal="true"], [role="alertdialog"]';
 const CONSENT_WORDS = ["cookie", "consent", "privacy", "datenschutz", "gdpr", "dsgvo"];
@@ -139,20 +142,53 @@ function blockingElements(): Element[] {
 }
 
 /**
- * The lowest layer z-index of the visible blocking dialogs on the page, or
- * null. The widget must stay below each of them: the Contao opt-in has its
- * backdrop at 10000000 and its box at 20000000.
+ * The visible blocking dialogs on the page with a layer z-index. The widget
+ * stays below each of them, so each one paints over the widget where they
+ * meet.
  */
-export function blockingDialogZIndex(): number | null {
-  let lowest: number | null = null;
+function visibleBlockingDialogs(): Array<{ dialog: Element; zIndex: number }> {
+  const dialogs: Array<{ dialog: Element; zIndex: number }> = [];
   for (const dialog of blockingElements()) {
     // The widget's own dialogs (the checkout) stack inside the widget root.
     // The closed shadow root hides them, but not in a page without it.
     if (dialog.closest(".cl-widget-root") || !isShown(dialog)) continue;
     const zIndex = pageLayerZIndex(dialog);
-    if (zIndex !== null && (lowest === null || zIndex < lowest)) lowest = zIndex;
+    if (zIndex !== null) dialogs.push({ dialog, zIndex });
   }
-  return lowest;
+  return dialogs;
+}
+
+/** True when the box of `cover` holds the whole box of `element` (half a pixel for rounding). */
+function coversBox(cover: Element, element: Element): boolean {
+  const box = element.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return false;
+  const outer = cover.getBoundingClientRect();
+  return outer.left <= box.left + 0.5 && outer.top <= box.top + 0.5 &&
+    outer.right >= box.right - 0.5 && outer.bottom >= box.bottom - 0.5;
+}
+
+export type PageDialogs = {
+  /**
+   * The lowest layer z-index of the visible blocking dialogs, or null. The
+   * widget must stay below each of them: the Contao opt-in has its backdrop
+   * at 10000000 and its box at 20000000.
+   */
+  zIndex: number | null;
+  /** True when one of them covers the whole box of the element that the caller watches. */
+  covers: boolean;
+};
+
+/** The visible blocking dialogs of the page, and whether one covers `watched` (the trigger). */
+export function readPageDialogs(watched?: Element | null): PageDialogs {
+  const dialogs = visibleBlockingDialogs();
+  let zIndex: number | null = null;
+  for (const dialog of dialogs) if (zIndex === null || dialog.zIndex < zIndex) zIndex = dialog.zIndex;
+  return { zIndex, covers: !!watched && dialogs.some(({ dialog }) => coversBox(dialog, watched)) };
+}
+
+/** The lowest layer z-index of the visible blocking dialogs on the page, or null. */
+export function blockingDialogZIndex(): number | null {
+  return readPageDialogs().zIndex;
 }
 
 /** The widget's z-index: just below a blocking dialog that it would cover. */
@@ -160,16 +196,23 @@ export function belowBlockingDialog(zIndex: number, dialogZIndex: number | null)
   return dialogZIndex !== null && dialogZIndex <= zIndex ? Math.max(dialogZIndex - 1, 0) : zIndex;
 }
 
-/** The layer z-index of a visible blocking dialog, checked once a second. */
-export function useBlockingDialogZIndex(): number | null {
+/**
+ * The visible blocking dialogs, checked once a second: their lowest layer
+ * z-index, and whether one covers the whole box of `watched` (the trigger).
+ */
+export function usePageDialogs(watched: RefObject<Element | null>): PageDialogs {
   // The first check runs in the first render: a window that starts open must
   // not show above a dialog that is already there, not even for one frame.
-  const [zIndex, setZIndex] = useState<number | null>(blockingDialogZIndex);
+  // The watched element has no box before the first commit.
+  const [dialogs, setDialogs] = useState<PageDialogs>(() => readPageDialogs());
   useEffect(() => {
-    const update = () => setZIndex(blockingDialogZIndex());
+    const update = () => {
+      const next = readPageDialogs(watched.current);
+      setDialogs((previous) => (previous.zIndex === next.zIndex && previous.covers === next.covers ? previous : next));
+    };
     update();
     const timer = window.setInterval(update, PAGE_DIALOG_CHECK_MS);
     return () => window.clearInterval(timer);
-  }, []);
-  return zIndex;
+  }, [watched]);
+  return dialogs;
 }

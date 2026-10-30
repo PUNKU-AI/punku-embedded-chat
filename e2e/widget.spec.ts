@@ -1,5 +1,5 @@
 import { test, expect, Page, TestInfo } from '@playwright/test';
-import { activate, assertDestination, assertHintVisible, elementState, loadWidget } from './widget-helpers';
+import { activate, assertDestination, assertHintVisible, elementState, loadWidget, waitForSettledBoxes } from './widget-helpers';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -174,12 +174,10 @@ test(`${key} opens the Nitro-intercepted link`, async ({ page, context, hasTouch
   await loadWidget(page, { start_open: 'true', nitro: 'true' });
   await page.bringToFront();
   await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(true);
-  // The chat schedules initial input focus. Wait for it before taking focus.
-  await expect.poll(() => page.evaluate(() => {
-    const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)!.activeElement?.classList.contains('cl-input-element');
-  })).toBe(true);
-  // Focus is setup only. The keyboard generates a trusted activation event.
+  // A chat that opens with the page schedules no input focus that could take
+  // the focus from the link. Focus is setup only. The keyboard generates a
+  // trusted activation event.
+  await waitForSettledBoxes(page, ['.cl-chat-window']);
   await page.evaluate(() => {
     const host = document.querySelector('punku-chat')!;
     window.__widgetRoots.get(host)!.querySelector<HTMLAnchorElement>('.markdown-body a')!.focus();

@@ -94,7 +94,7 @@ type HastNode = {
   type: string;
   tagName?: string;
   value?: string;
-  properties?: { href?: unknown; alt?: unknown };
+  properties?: { [property: string]: unknown };
   children?: HastNode[];
   data?: Record<string, unknown>;
   position?: { start: Point; end: Point };
@@ -342,7 +342,33 @@ function markTopLevelParagraphs() {
   };
 }
 
-const REHYPE_PLUGINS = [splitCheckoutLinkLines, markTopLevelParagraphs];
+/**
+ * Footnotes stay plain text (a rehype plugin). Their links would send the
+ * host page to ids that the closed shadow root hides, and each answer repeats
+ * the ids. The numbers in the text stay, with their brackets from the
+ * markdown stylesheet ([data-footnote-ref]). The back links go, and so do the
+ * ids in the footnote list.
+ */
+function plainFootnotes() {
+  const visit = (node: HastNode, inFootnotes: boolean) => {
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type !== "element") return [child];
+      const { id, ...properties } = child.properties || {};
+      if (isElement(child, "a") && properties.dataFootnoteBackref) return [];
+      if (isElement(child, "a") && properties.dataFootnoteRef) {
+        return [{ ...child, tagName: "span", properties: { dataFootnoteRef: true } }];
+      }
+      const footnotes = inFootnotes || properties.dataFootnotes === true;
+      if (footnotes && id !== undefined) child.properties = properties;
+      visit(child, footnotes);
+      return [child];
+    });
+  };
+  return (tree: HastNode) => visit(tree, false);
+}
+
+const REHYPE_PLUGINS = [plainFootnotes, splitCheckoutLinkLines, markTopLevelParagraphs];
 
 const markOf = (node: unknown, mark: string) => (node as HastNode | undefined)?.data?.[mark] === true;
 
@@ -378,7 +404,9 @@ export default function ChatMessage({
   retryLabel = "Try again",
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
+  footnotesLabel = "Footnotes",
   senderLabel,
+  language,
   streaming = false,
 }: ChatMessageType & {
   api_key?: string;
@@ -399,8 +427,16 @@ export default function ChatMessage({
   /** Names of the feedback buttons for screen readers, in the chat language. */
   helpfulLabel?: string;
   notHelpfulLabel?: string;
+  /** The heading of an answer's footnotes, for screen readers only. */
+  footnotesLabel?: string;
   /** Who wrote the message, read before it by screen readers ("You:", "Assistant:"). */
   senderLabel?: string;
+  /**
+   * The chat language. The labels above come from the translations, so the
+   * buttons and the footnote heading say it (lang, WCAG 3.1.2). The message
+   * itself can be in any language.
+   */
+  language?: string;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -465,6 +501,14 @@ export default function ChatMessage({
       <ol {...props} className={withClass(className, isLinkList(node) && "cl-link-list")}>{children}</ol>
     ),
   }), [onCheckout]);
+
+  // The footnotes of an answer get a heading for screen readers in the chat
+  // language (plainFootnotes keeps their numbers as text).
+  const footnoteOptions = useMemo(() => ({
+    footnoteLabel: footnotesLabel,
+    footnoteLabelTagName: "h3",
+    footnoteLabelProperties: { className: ["cl-sr-only"], lang: language },
+  }), [footnotesLabel, language]);
 
   // Initialize feedback state from the message's feedback property
   const [selectedFeedback, setSelectedFeedback] = useState<'thumbsUp' | 'thumbsDown' | null>(
@@ -564,7 +608,7 @@ export default function ChatMessage({
           <CircleAlert className="cl-error-icon" size={18} aria-hidden="true" />
           <span className="cl-error-text">{parsedMessage}</span>
           {onRetry && (
-            <button type="button" className="cl-retry-btn" onClick={onRetry}>
+            <button type="button" className="cl-retry-btn" onClick={onRetry} lang={language}>
               {retryLabel}
             </button>
           )}
@@ -583,6 +627,7 @@ export default function ChatMessage({
               <Markdown
                 className={"markdown-body prose flex flex-col word-break-break-word"}
                 remarkPlugins={[remarkGfm]}
+                remarkRehypeOptions={footnoteOptions}
                 rehypePlugins={REHYPE_PLUGINS}
                 components={markdownComponents}
               >
@@ -602,6 +647,7 @@ export default function ChatMessage({
                   aria-label={helpfulLabel}
                   aria-pressed={selectedFeedback === 'thumbsUp'}
                   title={helpfulLabel}
+                  lang={language}
                 >
                   <ThumbsUp size={16} aria-hidden="true" />
                 </button>
@@ -612,6 +658,7 @@ export default function ChatMessage({
                   aria-label={notHelpfulLabel}
                   aria-pressed={selectedFeedback === 'thumbsDown'}
                   title={notHelpfulLabel}
+                  lang={language}
                 >
                   <ThumbsDown size={16} aria-hidden="true" />
                 </button>

@@ -36,10 +36,14 @@ jest.mock('./chatMessage', () => {
     streaming,
     message_id,
     senderLabel,
+    footnotesLabel,
+    language,
   }: {
     message: string;
     message_id?: string;
     senderLabel?: string;
+    footnotesLabel?: string;
+    language?: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
@@ -67,6 +71,8 @@ jest.mock('./chatMessage', () => {
         data-checkout-language={checkout.language}
         data-checkout-venue={checkout.venue}
         data-sender-label={senderLabel ?? ''}
+        data-footnotes-label={footnotesLabel ?? ''}
+        data-language={language ?? ''}
       >
         <span className={isSend ? 'cl-user_message' : 'cl-bot_message'} />
         {message}
@@ -89,6 +95,7 @@ jest.mock('../components/ConfirmationModal', () => {
     onCancel,
     title,
     closeLabel,
+    lang,
     buttonColor,
     buttonTextColor
   }: {
@@ -97,6 +104,7 @@ jest.mock('../components/ConfirmationModal', () => {
     onCancel: () => void;
     title: string;
     closeLabel?: string;
+    lang?: string;
     buttonColor?: string;
     buttonTextColor?: string;
   }) {
@@ -107,6 +115,7 @@ jest.mock('../components/ConfirmationModal', () => {
         data-button-color={buttonColor ?? ''}
         data-button-text-color={buttonTextColor ?? ''}
         data-close-label={closeLabel ?? ''}
+        data-lang={lang ?? ''}
       >
         <span>{title}</span>
         <button onClick={onConfirm}>Confirm</button>
@@ -426,6 +435,16 @@ describe('ChatWindow', () => {
       expect(screen.getByText('Test Chat')).toBeInTheDocument();
     });
 
+    it('should show the title of the chat language without window_title, as a heading', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} language="pl" />);
+      // Screen-reader users can jump to the open chat by its heading.
+      expect(screen.getByRole('heading', { level: 2, name: 'Czat' })).toHaveClass('cl-header-title');
+
+      rerender(<ChatWindow {...defaultProps} language="pl" window_title="Muzeum" />);
+      expect(screen.getByRole('heading', { level: 2, name: 'Muzeum' })).toBeInTheDocument();
+      expect(screen.queryByText('Czat')).not.toBeInTheDocument();
+    });
+
     it('should render input field', () => {
       render(<ChatWindow {...defaultProps} />);
 
@@ -581,6 +600,8 @@ describe('ChatWindow', () => {
       expect(scrollTo).not.toHaveBeenCalled();
 
       const jump = screen.getByRole('button', { name: 'Jump to the newest message' });
+      // Its name comes from the translations: it says its language (WCAG 3.1.2).
+      expect(jump).toHaveAttribute('lang', 'en');
       jump.focus();
       fireEvent.click(jump);
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
@@ -2336,6 +2357,83 @@ describe('ChatWindow', () => {
       expect(screen.getByRole('textbox')).toHaveFocus();
     });
 
+    describe('a chat that opens without a visitor action (WCAG 3.2.1)', () => {
+      // start_open, or api.open() from a timer (ChatWidget).
+      const byPage = { current: false };
+
+      it('should leave the focus in a host page field, also when a message follows the opening', () => {
+        const chat = (open: boolean, messages: ChatMessageType[]) => (
+          <>
+            <input aria-label="Host search" />
+            <ChatWindow {...defaultProps} open={open} messages={messages} openedByVisitorRef={byPage} />
+          </>
+        );
+        const { rerender } = render(chat(false, []));
+        const hostField = screen.getByRole('textbox', { name: 'Host search' });
+        hostField.focus();
+
+        rerender(chat(true, []));
+        act(() => {
+          jest.advanceTimersByTime(50);
+        });
+        // api.open("…") sends a message right after the opening.
+        rerender(chat(true, [{ message: 'Opening hours?', isSend: true }]));
+        runFocusTimer();
+
+        expect(hostField).toHaveFocus();
+      });
+
+      it('should take no focus from the page until the visitor works in the chat', () => {
+        const chat = (messages: ChatMessageType[]) => (
+          <ChatWindow {...defaultProps} messages={messages} openedByVisitorRef={byPage} />
+        );
+        const { rerender } = render(chat([]));
+        runFocusTimer();
+        expect(document.body).toHaveFocus();
+
+        // An answer to a message that the page sent: the focus stays on the page.
+        rerender(chat([{ message: 'Opening hours?', isSend: true }, { message: '9 to 18', isSend: false }]));
+        runFocusTimer();
+        expect(document.body).toHaveFocus();
+
+        // The visitor clicks into the chat. The focus drops to the page, and
+        // the next answer brings it back to the input, as for an open by the visitor.
+        const input = screen.getByRole('textbox');
+        act(() => input.focus());
+        act(() => input.blur());
+        rerender(chat([
+          { message: 'Opening hours?', isSend: true },
+          { message: '9 to 18', isSend: false },
+          { message: 'On Sunday?', isSend: true },
+          { message: 'Also 9 to 18', isSend: false },
+        ]));
+        runFocusTimer();
+        expect(input).toHaveFocus();
+      });
+
+      it('should focus the input when the visitor opens the chat the next time', () => {
+        const visitor = { current: false };
+        const chat = (open: boolean) => (
+          <>
+            <button>Ask our assistant</button>
+            <ChatWindow {...defaultProps} open={open} openedByVisitorRef={visitor} />
+          </>
+        );
+        const { rerender } = render(chat(true));
+        runFocusTimer();
+        expect(document.body).toHaveFocus();
+
+        rerender(chat(false));
+        screen.getByRole('button', { name: 'Ask our assistant' }).focus();
+        // The page button calls api.open() in the handler of the visitor's click.
+        visitor.current = true;
+        rerender(chat(true));
+        runFocusTimer();
+
+        expect(screen.getByRole('textbox')).toHaveFocus();
+      });
+    });
+
     it('should tell screen readers who wrote each message', () => {
       render(
         <ChatWindow
@@ -3015,6 +3113,45 @@ describe('ChatWindow', () => {
     });
   });
 
+  describe('Language of the built-in names (WCAG 3.1.2)', () => {
+    // The chat language can differ from the page language (default_language).
+
+    it('should mark the controls whose names come from the translations', () => {
+      render(<ChatWindow {...defaultProps} language="pl" onStartNewSession={jest.fn()} onClose={jest.fn()} />);
+
+      expect(screen.getByRole('button', { name: 'Nowa rozmowa' })).toHaveAttribute('lang', 'pl');
+      expect(document.querySelector('.cl-close-btn')).toHaveAttribute('lang', 'pl');
+      expect(screen.getByRole('button', { name: 'Wyślij wiadomość' })).toHaveAttribute('lang', 'pl');
+    });
+
+    it('should mark the notice of a new conversation and the new-conversation dialog', () => {
+      render(<ChatWindow {...defaultProps} language="de" isRefreshingSession={true} onStartNewSession={jest.fn()} />);
+      const notice = document.querySelector('.cl-session-refresh-message');
+      expect(notice).toHaveTextContent('Neues Gespräch wird gestartet…');
+      expect(notice).toHaveAttribute('lang', 'de');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Neues Gespräch' }));
+      expect(screen.getByTestId('confirmation-modal')).toHaveAttribute('data-lang', 'de');
+    });
+
+    it('should give the messages the chat language for their buttons and footnotes', () => {
+      render(<ChatWindow {...defaultProps} language="it" messages={[{ message: 'Orari?', isSend: true }, { message: 'Dalle 9.', isSend: false }]} />);
+
+      for (const message of screen.getAllByTestId(/-message$/)) {
+        expect(message).toHaveAttribute('data-language', 'it');
+        expect(message).toHaveAttribute('data-footnotes-label', 'Note');
+      }
+    });
+
+    it('should never mark the window, the messages or the input, whose texts can be in any language', () => {
+      render(<ChatWindow {...defaultProps} language="pl" messages={[{ message: 'Hello', isSend: true }]} />);
+
+      for (const selector of ['.cl-chat-window', '.cl-window', '.cl-messages_container', '.cl-chat-message', '.cl-input-element']) {
+        expect(document.querySelector(selector)).not.toHaveAttribute('lang');
+      }
+    });
+  });
+
   describe('Header, composer and AI notice', () => {
     it('should label the header actions in the chat language', () => {
       const { rerender } = render(
@@ -3493,6 +3630,28 @@ describe('ChatWindow', () => {
       render(<ChatWindow {...defaultProps} />);
       const phone = renderedStyles().slice(renderedStyles().indexOf('@media (max-width: 640px) {'));
       expect(rule(phone, '.cl-chat-window[data-cl-keyboard]')).toContain('--cl-trigger-room: 0px;');
+    });
+
+    it('gives a short phone screen the whole visible height, as a desktop at 400 % zoom (WCAG 1.4.10)', () => {
+      render(<ChatWindow {...defaultProps} />);
+      const styles = renderedStyles();
+      const shortQuery = '@media (max-width: 640px) and (max-height: 420px) {';
+      expect(styles).toContain(shortQuery);
+
+      // No top offset and no room for the trigger. The keyboard layout keeps its own rule.
+      const short = rule(styles.slice(styles.indexOf(shortQuery)), '.cl-chat-window:not([data-cl-keyboard])');
+      expect(short).toContain('--cl-top-offset: 0px !important;');
+      expect(short).toContain('--cl-trigger-room: var(--cl-safe-area-bottom, 0px);');
+    });
+
+    it('uses the short phone rule on a scaled page only when the frame is that small', () => {
+      const { unmount } = render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.21875, width: 390, height: 843 }} />);
+      expect(renderedStyles()).not.toContain(':not([data-cl-keyboard])');
+      unmount();
+
+      // A 568 x 320 phone in landscape.
+      render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.775, width: 568, height: 320 }} />);
+      expect(rule(renderedStyles(), '.cl-chat-window:not([data-cl-keyboard])')).toContain('--cl-top-offset: 0px !important;');
     });
 
     it('hides the header on a short landscape screen while the keyboard is open', () => {

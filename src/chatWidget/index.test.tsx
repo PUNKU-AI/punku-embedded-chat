@@ -7,16 +7,19 @@ jest.mock('./chatTrigger', () => {
   return function MockChatTrigger({
     open,
     setOpen,
-    triggerRef
+    triggerRef,
+    lang
   }: {
     open: boolean;
     setOpen: (open: boolean) => void;
     triggerRef: React.RefObject<HTMLButtonElement>;
+    lang?: string;
   }) {
     return (
       <button
         ref={triggerRef}
         data-testid="chat-trigger"
+        lang={lang}
         onClick={() => setOpen(!open)}
       >
         {open ? 'Close' : 'Open'}
@@ -42,7 +45,8 @@ jest.mock('./chatWindow', () => {
     hostUrl,
     mobile_chat_window_style,
     dismissDialogRef,
-    openerRef
+    openerRef,
+    openedByVisitorRef
   }: {
     open: boolean;
     messages: any[];
@@ -58,6 +62,7 @@ jest.mock('./chatWindow', () => {
     mobile_chat_window_style?: React.CSSProperties;
     dismissDialogRef?: React.MutableRefObject<(() => boolean) | null>;
     openerRef?: React.RefObject<HTMLElement | null>;
+    openedByVisitorRef?: React.RefObject<boolean>;
   }) {
     mockReact.useEffect(() => {
       if (!open || !programmaticMessage) return;
@@ -66,8 +71,9 @@ jest.mock('./chatWindow', () => {
       onProgrammaticMessageHandled?.(programmaticMessage.id);
     }, [addMessage, onProgrammaticMessageHandled, open, programmaticMessage]);
 
-    // The tests read the opener that the widget hands over.
+    // The tests read the opener that the widget hands over, and whether a visitor opened it.
     (globalThis as any).mockOpenerRef = openerRef;
+    (globalThis as any).mockOpenedByVisitorRef = openedByVisitorRef;
 
     // A dialog in the window, as the new-conversation dialog: Escape closes it first.
     const [dialogOpen, setDialogOpen] = mockReact.useState(false);
@@ -146,6 +152,7 @@ jest.mock('./utils', () => ({
 import ChatWidget, { DEFAULT_Z_INDEX, getVisibleCornerShift, MAX_Z_INDEX, readCornerOffsets } from './index';
 import { safeAreaGap } from './utils';
 import { PAGE_DIALOG_CHECK_MS } from './pageDialogs';
+import { noteVisitorInput } from './visitorAction';
 import { THEME_COLORS } from './controlColors';
 import { SessionStorage } from '../utils/sessionStorage';
 
@@ -215,6 +222,13 @@ describe('ChatWidget', () => {
       expect(styleElement?.textContent).toContain(':host');
       expect(styleElement?.textContent).toContain('font-size: 16px');
       expect(styleElement?.textContent).toContain('.cl-widget-root');
+    });
+
+    it('should keep the window title, an h2, free of the browser heading margins', () => {
+      const { container } = render(<ChatWidget {...defaultProps} />);
+
+      const css = container.querySelector('style')?.textContent ?? '';
+      expect(css).toMatch(/\.cl-window \.cl-header-title \{\s*margin: 0;/);
     });
 
     it('should always show feedback buttons on a device with a touch screen, also next to a trackpad', () => {
@@ -615,6 +629,82 @@ describe('ChatWidget', () => {
       } finally {
         pageButton.remove();
       }
+    });
+
+    describe('focus on open only after a visitor action (WCAG 3.2.1)', () => {
+      const openedByVisitor = () => (globalThis as any).mockOpenedByVisitorRef?.current;
+      const api = () => (window as any)['punku-chat-widget_api'];
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('should not count start_open as a visitor action', () => {
+        render(<ChatWidget {...defaultProps} start_open={true} />);
+
+        expect(openedByVisitor()).toBe(false);
+      });
+
+      it('should count the launcher as a visitor action', () => {
+        render(<ChatWidget {...defaultProps} />);
+
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+
+        expect(openedByVisitor()).toBe(true);
+      });
+
+      it('should count api.open() only while the page handles a click or key press of the visitor', () => {
+        jest.useFakeTimers();
+        render(<ChatWidget {...defaultProps} />);
+
+        // A timer opens the chat.
+        act(() => api().open());
+        expect(openedByVisitor()).toBe(false);
+        act(() => api().close());
+
+        // A page button opens it in the handler of the visitor's click. jsdom
+        // cannot dispatch a trusted event, so the test notes the event itself.
+        act(() => {
+          noteVisitorInput({ isTrusted: true, type: 'click' } as Event);
+          api().open();
+        });
+        expect(openedByVisitor()).toBe(true);
+        act(() => api().close());
+
+        // The mark ends with the task of the event: a timer that runs later is no visitor action.
+        act(() => {
+          jest.runOnlyPendingTimers();
+          api().open();
+        });
+        expect(openedByVisitor()).toBe(false);
+      });
+
+      it('should not count a click that a script dispatches', () => {
+        const pageButton = document.createElement('button');
+        pageButton.addEventListener('click', () => api().open());
+        document.body.appendChild(pageButton);
+        try {
+          render(<ChatWidget {...defaultProps} />);
+
+          act(() => {
+            fireEvent.click(pageButton);
+          });
+
+          expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+          expect(openedByVisitor()).toBe(false);
+        } finally {
+          pageButton.remove();
+        }
+      });
+    });
+
+    it('should say the language of the launcher name, but not of the widget root or the hint (WCAG 3.1.2)', () => {
+      render(<ChatWidget {...defaultProps} default_language="pl" show_closed_widget_hint={true} />);
+
+      expect(screen.getByTestId('chat-trigger')).toHaveAttribute('lang', 'pl');
+      expect(document.querySelector('.cl-widget-root')).not.toHaveAttribute('lang');
+      // The hint can be the site's own text, in any language.
+      expect(document.querySelector('.cl-closed-widget-hint')).not.toHaveAttribute('lang');
     });
 
     it('should hide closed widget hint when widget is open', () => {
@@ -1159,6 +1249,53 @@ describe('ChatWidget', () => {
       } finally {
         jest.useRealTimers();
         layer.remove();
+      }
+    });
+
+    // A cookie bar of the page (CookieScript) at 999997. The trigger is 400-448 px.
+    const addCookieBar = (top: number, height: number) => {
+      const bar = document.createElement('div');
+      bar.setAttribute('role', 'dialog');
+      bar.setAttribute('aria-label', 'Cookie consent dialog');
+      bar.style.cssText = 'position: fixed; z-index: 999997;';
+      bar.getBoundingClientRect = () => ({
+        x: 0, y: top, left: 0, top, width: 1024, height, right: 1024, bottom: top + height, toJSON: () => ({}),
+      }) as DOMRect;
+      document.body.appendChild(bar);
+      return bar;
+    };
+
+    it('should take the launcher out of the tab order while a page dialog covers it (WCAG 2.4.11)', () => {
+      const bar = addCookieBar(368, 400);
+      jest.useFakeTimers();
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        // The anchor holds the trigger and the hint.
+        const anchor = screen.getByTestId('chat-trigger').parentElement!;
+        expect(anchor).toHaveAttribute('inert');
+
+        // The visitor answers the dialog: Tab reaches the launcher again.
+        act(() => {
+          bar.remove();
+          jest.advanceTimersByTime(PAGE_DIALOG_CHECK_MS);
+        });
+        expect(anchor).not.toHaveAttribute('inert');
+      } finally {
+        jest.useRealTimers();
+        bar.remove();
+      }
+    });
+
+    it('should keep the launcher in the tab order when a page dialog covers only a part of it or none', () => {
+      const partly = addCookieBar(420, 348);
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        const anchor = screen.getByTestId('chat-trigger').parentElement!;
+        // The widget still goes below the dialog, but the visitor sees the launcher.
+        expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe('999996');
+        expect(anchor).not.toHaveAttribute('inert');
+      } finally {
+        partly.remove();
       }
     });
 

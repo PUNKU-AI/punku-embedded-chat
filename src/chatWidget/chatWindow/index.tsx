@@ -123,7 +123,7 @@ export default function ChatWindow({
   online_message,
   branding,
   offline_message,
-  window_title = "Chat",
+  window_title,
   placeholder,
   input_style,
   input_container_style,
@@ -177,6 +177,7 @@ export default function ChatWindow({
   checkout_card_venue,
   dismissDialogRef,
   openerRef,
+  openedByVisitorRef,
 }: {
   api_key?: string;
   output_type: string,
@@ -265,6 +266,12 @@ export default function ChatWindow({
   dismissDialogRef?: React.MutableRefObject<(() => boolean) | null>;
   /** The host page control that opened the chat, if any: it gets the focus back. */
   openerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * False when the chat opened without a visitor action (start_open, a
+   * timer): the window then leaves the focus on the page. Without it, every
+   * open is the visitor's.
+   */
+  openedByVisitorRef?: React.RefObject<boolean>;
 }) {
   const [value, setValue] = useState<string>("");
   // Use translations based on language prop
@@ -964,20 +971,31 @@ export default function ChatWindow({
    */
 
   /*
-   * When the chat opens, the visitor wants to type: focus the input. After an
-   * answer, never take focus from the host page, or from a link or button in
-   * the messages: the visitor works there. On a touch screen, keep the
-   * keyboard closed after an answer, so the visitor can read.
+   * When a visitor opens the chat, the visitor wants to type: focus the
+   * input. A chat that opens without a visitor action (start_open, a timer)
+   * leaves the focus on the page (WCAG 3.2.1), and takes none until the
+   * visitor works in it. After an answer, never take focus from the host
+   * page, or from a link or button in the messages: the visitor works there.
+   * On a touch screen, keep the keyboard closed after an answer, so the
+   * visitor can read.
    */
   const wasOpen = useRef(false);
   const focusOnOpen = useRef(false);
+  // A visitor opened the chat, or the focus has been in the window since it opened.
+  const visitorInChat = useRef(false);
   useEffect(() => {
     // A ref, not a local flag: a message change in the first 100 ms restarts
     // the timer, and the chat still focuses its input for the opening.
-    if (open && !wasOpen.current) focusOnOpen.current = true;
-    if (!open) focusOnOpen.current = false;
+    if (open && !wasOpen.current) {
+      focusOnOpen.current = openedByVisitorRef?.current ?? true;
+      visitorInChat.current = focusOnOpen.current;
+    }
+    if (!open) {
+      focusOnOpen.current = false;
+      visitorInChat.current = false;
+    }
     wasOpen.current = open;
-    if (!open || sendingMessage) return;
+    if (!open || sendingMessage || !visitorInChat.current) return;
     const focusTimer = setTimeout(() => {
       const input = inputRef.current;
       if (!input) return;
@@ -1001,7 +1019,7 @@ export default function ChatWindow({
       input.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
-  }, [messages, open, sendingMessage]);
+  }, [messages, open, sendingMessage, openedByVisitorRef]);
 
   /*
    * When the chat closes from inside (the close button, Escape), the focus
@@ -1049,7 +1067,7 @@ export default function ChatWindow({
     }
   }, []);
 
-  // Add theme-specific title modifications
+  // The site's title, else the chat language's (pl "Czat").
   const displayTitle = window_title || t.windowTitle;
 
   // The header icons follow the header colour rule: button_text_color applies
@@ -1207,6 +1225,10 @@ export default function ChatWindow({
         "cl-chat-window" +
         (open ? " cl-scale-100" : " cl-scale-0")
       }
+      // The visitor works in the chat: from now on it may move the focus to its input.
+      onFocus={() => {
+        if (open) visitorInChat.current = true;
+      }}
       style={{
         // The trigger's gap to the bottom edge, also over the home indicator.
         "--cl-bottom-offset": safeAreaGap("bottom", `${Number(bottom_offset) || 20}px`),
@@ -1356,6 +1378,23 @@ export default function ChatWindow({
             /* Show close button on mobile */
             .cl-close-btn {
               display: flex !important;
+            }
+          `, scaledPage)}
+
+          /*
+           * A short phone layout, such as a 1280 x 924 desktop window at 400 %
+           * zoom (320 x 231 CSS px, WCAG 1.4.10). The top offset and the room
+           * for the trigger left the window about 90 px, and the input was not
+           * on the screen. The window fills the visible height, as while the
+           * on-screen keyboard is open, and covers the trigger: its header has
+           * a close button. It still clears the home indicator. The keyboard
+           * layout keeps its own rule. !important: the window sets
+           * --cl-top-offset inline (top_offset).
+           */
+          ${screenRules({ maxWidth: 640, maxHeight: 420 }, `
+            .cl-chat-window:not([${KEYBOARD_ATTRIBUTE}]) {
+              --cl-top-offset: 0px !important;
+              --cl-trigger-room: ${safeAreaInset("bottom")};
             }
           `, scaledPage)}
 
@@ -1573,7 +1612,8 @@ export default function ChatWindow({
               </div>
             )}
             <div className="cl-header-titles">
-              <div className="cl-header-title">{displayTitle}</div>
+              {/* A heading: screen-reader users can jump to the open chat. */}
+              <h2 className="cl-header-title">{displayTitle}</h2>
               <div
                 className="cl-header-subtitle"
                 style={button_color ? {color: button_text_color || '#FFFFFF', ...(guarded.subtitleOpaque ? {opacity: 1} : {})} : undefined}
@@ -1593,6 +1633,7 @@ export default function ChatWindow({
                   className="cl-new-session-btn cl-header-btn"
                   title={t.newConversation}
                   aria-label={t.newConversation}
+                  lang={language}
                 >
                   <RefreshCw size={17} color={headerIconColor} aria-hidden="true" />
                 </button>
@@ -1605,6 +1646,7 @@ export default function ChatWindow({
                   className="cl-close-btn cl-header-btn"
                   title={t.closeChat}
                   aria-label={t.closeChat}
+                  lang={language}
                   style={{ display: show_close_button_on_desktop ? 'flex' : 'none' }}
                 >
                   <X size={20} color={headerIconColor} aria-hidden="true" />
@@ -1628,7 +1670,7 @@ export default function ChatWindow({
         >
           {/* Session refreshing loading message - show above everything */}
           {isRefreshingSession && (
-            <div className="cl-session-refresh-message">
+            <div className="cl-session-refresh-message" lang={language}>
               <div className="cl-refresh-content">
                 <div className="cl-refresh-spinner" aria-hidden="true"></div>
                 <span>{t.sessionRefreshing}</span>
@@ -1654,6 +1696,8 @@ export default function ChatWindow({
               error_message_style={error_message_style}
               message_id="welcome-message"
               senderLabel={t.assistantSaid}
+              footnotesLabel={t.footnotes}
+              language={language}
               feedback={undefined}
               api_key={api_key}
               additional_headers={additional_headers}
@@ -1733,7 +1777,9 @@ export default function ChatWindow({
                 retryLabel={t.retry}
                 helpfulLabel={t.helpful}
                 notHelpfulLabel={t.notHelpful}
+                footnotesLabel={t.footnotes}
                 senderLabel={message.isSend ? t.youSaid : message.error ? undefined : t.assistantSaid}
+                language={language}
               />
             ))}
           </CardSpeechContext.Provider>
@@ -1763,6 +1809,7 @@ export default function ChatWindow({
                 onClick={jumpToLatest}
                 aria-label={t.jumpToLatest}
                 title={t.jumpToLatest}
+                lang={language}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 5v14" />
@@ -1800,6 +1847,7 @@ export default function ChatWindow({
               className="cl-send-button"
               aria-label={t.send}
               title={t.send}
+              lang={language}
               style={{
                 // Base styles
                 borderRadius: '50%',
@@ -1859,6 +1907,7 @@ export default function ChatWindow({
           confirmText={t.confirmButton}
           cancelText={t.cancelButton}
           closeLabel={t.closeDialog}
+          lang={language}
           // The swarovski theme keeps the branch's red (#ef4444). Else a
           // site text colour without button_color gets a red it reads on.
           buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}

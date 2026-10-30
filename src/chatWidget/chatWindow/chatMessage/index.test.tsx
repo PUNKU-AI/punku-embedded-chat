@@ -83,10 +83,12 @@ describe('ChatMessage', () => {
 
     it('should show a retry button that calls the retry handler', () => {
       const onRetry = jest.fn();
-      render(<ChatMessage {...defaultProps} error={true} onRetry={onRetry} retryLabel="Erneut versuchen" />);
+      render(<ChatMessage {...defaultProps} error={true} onRetry={onRetry} retryLabel="Erneut versuchen" language="de" />);
 
       const retryButton = screen.getByRole('button', { name: 'Erneut versuchen' });
       expect(retryButton).toHaveAttribute('type', 'button');
+      // The label comes from the translations: the button says its language (WCAG 3.1.2).
+      expect(retryButton).toHaveAttribute('lang', 'de');
       fireEvent.click(retryButton);
       expect(onRetry).toHaveBeenCalledTimes(1);
     });
@@ -305,6 +307,7 @@ describe('ChatMessage', () => {
           message_id="test-message-id"
           helpfulLabel="Hilfreich"
           notHelpfulLabel="Nicht hilfreich"
+          language="de"
         />
       );
 
@@ -312,6 +315,11 @@ describe('ChatMessage', () => {
       const notHelpful = screen.getByRole('button', { name: 'Nicht hilfreich' });
       expect(helpful).toHaveAttribute('type', 'button');
       expect(helpful).toHaveAttribute('aria-pressed', 'false');
+      // The names come from the translations; the answer itself can be in any language.
+      expect(helpful).toHaveAttribute('lang', 'de');
+      expect(notHelpful).toHaveAttribute('lang', 'de');
+      expect(document.querySelector('.cl-chat-message')).not.toHaveAttribute('lang');
+      expect(document.querySelector('.cl-bot_message')).not.toHaveAttribute('lang');
 
       fireEvent.click(helpful);
       await waitFor(() => expect(helpful).toHaveAttribute('aria-pressed', 'true'));

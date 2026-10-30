@@ -261,7 +261,8 @@ test.describe('keyboard', () => {
 
     await page.focus('#ask-button');
     await page.keyboard.press('Enter');
-    await waitForInputFocus(page);
+    // The visitor's key press opened the chat: the widget moves the focus itself.
+    await waitForInputFocus(page, { fromWidget: true });
 
     await page.keyboard.press('Escape');
     await expect.poll(() => windowVisibility(page)).toBe('hidden');

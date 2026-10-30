@@ -13,6 +13,8 @@ interface ConfirmationModalProps {
   cancelText?: string;
   /** The name of the close button (X) for screen readers, in the chat language. */
   closeLabel?: string;
+  /** The chat language: the dialog's texts come from the translations (WCAG 3.1.2). */
+  lang?: string;
   buttonColor?: string;
   buttonTextColor?: string;
 }
@@ -26,6 +28,7 @@ export default function ConfirmationModal({
   confirmText = "Yes",
   cancelText = "Cancel",
   closeLabel = "Close",
+  lang,
   buttonColor,
   buttonTextColor
 }: ConfirmationModalProps) {
@@ -86,6 +89,7 @@ export default function ConfirmationModal({
         className="cl-modal"
         role="alertdialog"
         aria-modal="true"
+        lang={lang}
         // A press on the dialog's text focuses the dialog, so Tab stays inside.
         tabIndex={-1}
         aria-labelledby={`${id}-title`}

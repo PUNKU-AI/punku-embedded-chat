@@ -10,6 +10,7 @@ export default function ChatTrigger({
     triggerIcon,
     openLabel = "Open chat",
     closeLabel = "Close chat",
+    lang,
 }: {
     style?: React.CSSProperties,
     open: boolean,
@@ -23,6 +24,8 @@ export default function ChatTrigger({
     openLabel?: string,
     /** The button's name for screen readers while the chat is open. */
     closeLabel?: string,
+    /** The language of the two names, the chat language (WCAG 3.1.2). */
+    lang?: string,
 }) {
     const customStyles = {
         ...style,
@@ -39,6 +42,7 @@ export default function ChatTrigger({
             type="button"
             aria-label={open ? closeLabel : openLabel}
             aria-expanded={open}
+            lang={lang}
             onClick={() => { setOpen(!open) }}
             onMouseDown={(e) => {
                 e.preventDefault()

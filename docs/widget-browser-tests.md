@@ -85,6 +85,17 @@ Desktop checks use only the keyboard in the dialog. The focus starts on Cancel, 
 In a 455 x 217 px window (300 % zoom), the dialog scrolls to each button that gets the focus.
 A chat that a page button opened gives the focus back to that button on Escape.
 
+Zoom checks (`zoom-reflow.spec.ts`) use a 320 x 231 px window, a 1280 x 924 desktop at 400 % zoom.
+The keyboard opens the chat. The focused input must lie inside the open window, and the window must fill the visible height.
+At 320 x 400 px with the on-screen keyboard, the window keeps `top_offset` above it, as before.
+
+Focus checks (`accessibility-and-motion.spec.ts`) open the chat without a visitor action: with `start_open`, and from a page timer.
+The focus stays on the page, and a visitor who types in a page field keeps typing there. The launcher moves the focus to the input.
+
+While a consent dialog covers the whole launcher, the launcher takes no focus (`host-overlay-stacking.spec.ts`).
+In Chromium and Firefox, Tab goes past it to the dialog. After the dialog closes, the launcher takes the focus again.
+A consent bar that leaves the launcher visible keeps it in the tab order.
+
 Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
 Local servers record the actual HTTP headers and body on both origins.
 Tests verify same-origin cookies, blocked cross-origin cookies, and no copied XSRF headers on every profile.
@@ -121,7 +132,9 @@ Do not increase the worker count on a shared machine.
 Linux runs WebKit under Xvfb and keeps Chromium and Firefox headless.
 Chromium uses the full browser's new headless mode.
 Resize checks synchronize WebKit's virtual display, verify bounds, then save the settled screenshot.
-Keyboard checks wait for initial input focus before they focus a link.
+A chat that opens with the page (`start_open`) or from a script takes no focus.
+`waitForInputFocus` then focuses the input after 300 ms, as the visitor's click would.
+With `fromWidget`, it waits only for the widget's own focus after a visitor action.
 Local evidence stays under `output/playwright` and is ignored by Git.
 
 ## CI jobs

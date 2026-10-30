@@ -204,12 +204,26 @@ export async function waitForSettledBoxes(page: Page, selectors: string[]) {
   }, { intervals: [100] }).toBe(true);
 }
 
-export async function waitForInputFocus(page: Page) {
-  // The open window focuses its input 100 ms after opening or a new message.
-  await expect.poll(() => page.evaluate(() => {
+export async function waitForInputFocus(page: Page, { fromWidget = false } = {}) {
+  // The window focuses its input 100 ms after a visitor opens it (the launcher,
+  // or a page button that calls api.open), and after a new message while the
+  // visitor works in it. A window that opens without a visitor action
+  // (start_open, api.open from page.evaluate) leaves the focus on the page.
+  // After 300 ms the helper then focuses the input, as the visitor's click
+  // into it would; WebKit cannot click into the closed shadow root.
+  // fromWidget waits only for the widget's own focus.
+  const start = Date.now();
+  await expect.poll(() => page.evaluate((focusInput) => {
     const host = document.querySelector('punku-chat')!;
-    return window.__widgetRoots.get(host)?.activeElement?.classList.contains('cl-input-element');
-  })).toBe(true);
+    const root = window.__widgetRoots.get(host);
+    const input = root?.querySelector<HTMLTextAreaElement>('.cl-input-element');
+    const chatWindow = root?.querySelector('.cl-chat-window');
+    if (!root || !input || !chatWindow) return false;
+    if (focusInput && root.activeElement !== input && getComputedStyle(chatWindow).visibility === 'visible') {
+      input.focus({ preventScroll: true });
+    }
+    return root.activeElement === input;
+  }, !fromWidget && Date.now() - start > 300)).toBe(true);
 }
 
 export async function elementState(page: Page, selector: string) {

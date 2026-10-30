@@ -61,6 +61,12 @@ describe('ChatTrigger', () => {
       expect(screen.getByRole('button', { name: 'Chat öffnen' })).toBeInTheDocument();
     });
 
+    it('should say the language of its name, which can differ from the page (WCAG 3.1.2)', () => {
+      render(<ChatTrigger {...defaultProps} openLabel="Otwórz czat" closeLabel="Zamknij czat" lang="pl" />);
+
+      expect(screen.getByRole('button', { name: 'Otwórz czat' })).toHaveAttribute('lang', 'pl');
+    });
+
     it('should hide the icons from screen readers', () => {
       render(<ChatTrigger {...defaultProps} triggerIcon="https://example.com/icon.png" />);
 

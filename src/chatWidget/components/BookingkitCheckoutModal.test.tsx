@@ -76,7 +76,8 @@ describe("BookingkitCheckoutModal", () => {
 
   it("shows German controls", () => {
     render(<BookingkitCheckoutModal url={checkoutUrl} onClose={jest.fn()} language="de" />);
-    expect(screen.getByRole("dialog", { name: "Buchung" })).toBeInTheDocument();
+    // The dialog says the language of its texts, which can differ from the page (WCAG 3.1.2).
+    expect(screen.getByRole("dialog", { name: "Buchung" })).toHaveAttribute("lang", "de");
     expect(screen.getByRole("link", { name: "In neuem Tab öffnen" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Buchung schließen" })).toBeInTheDocument();
   });

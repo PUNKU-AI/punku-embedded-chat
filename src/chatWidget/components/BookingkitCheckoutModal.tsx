@@ -174,6 +174,8 @@ export default function BookingkitCheckoutModal({
       style={scaledStyle}
       aria-label={title}
       aria-modal="true"
+      // Its texts come from the translations; the checkout page keeps its own language.
+      lang={language}
     >
       {/* A div: a header outside main or a section is a page banner landmark. */}
       <div className="cl-bk-checkout-header">

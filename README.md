@@ -503,7 +503,7 @@ Use the widget API to customize your widget:
 - **start_open:**
   - Type: Boolean
   - Required: No
-  - Description: Indicates if the chat window should be open by default.
+  - Description: Indicates if the chat window should be open by default. The open window leaves the keyboard focus on the page until the visitor works in it.
 
 - **online_message:**
   - Type: String
@@ -630,7 +630,7 @@ Use the widget API to customize your widget:
 - **window_title:**
   - Type: String
   - Required: No
-  - Description: Title for the chat window, displayed in the header or title bar.
+  - Description: Title for the chat window, displayed in the header or title bar. Without it, the title is "Chat" in the chat's language ("Czat" in Polish).
 
 - **session_id:**
   - Type: String
@@ -741,7 +741,14 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 - In an answer, a link that shows only an image without alt text is named after the site it goes to. The checkboxes of a task list are named after their items. Code wraps inside the bubble. A table keeps whole words. A table wider than the bubble scrolls sideways, and then it takes the keyboard focus, so it scrolls with the arrow keys also in Safari.
 - The "New conversation" dialog is a modal alert dialog. It takes the focus on Cancel and keeps Tab inside. The chat behind it takes no focus or input. Escape closes the dialog first, and the next Escape closes the chat. The focus then returns to "New conversation". An answer that arrives while the dialog is open is read when the dialog closes.
 - When the chat closes with the close button or Escape, the keyboard focus returns to the control that opened it: a page button that opened it through the widget API, else the launcher. The launcher gets the focus instead when that control is off the screen, or when it is a text field on a touch screen, which would open the on-screen keyboard. When the launcher closes the chat, the launcher keeps the focus. A closed chat window is out of the tab order.
-- The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
+- When the visitor opens the chat, the chat focuses its input. The launcher is a visitor action. So is a page button that calls `open()` in the handler of the visitor's click, tap or key press.
+- A chat that opens without a visitor action leaves the focus on the page (WCAG 3.2.1). This applies to `start_open` and to `open()` from a timer. The chat takes no focus until the visitor works in it.
+- After an answer, the chat focuses the input again only on devices with a mouse or trackpad. It never takes the focus from the host page or from a link in the messages.
+- While a dialog of the page covers the whole launcher (see [Stacking order on the host page](#stacking-order-on-the-host-page)), the launcher takes no focus and no clicks (WCAG 2.4.11). Tab cannot reach a launcher that the visitor cannot see. Within a second after the dialog closes, the launcher works again.
+- Built-in names and texts say their language with `lang`, because the chat language can differ from the page language (WCAG 3.1.2). This applies to the launcher, the header buttons, the send button and the button back to the newest message. It also applies to Try again, the feedback buttons, both dialogs and the notice of a new conversation. Messages, the closed-widget hint and the input get no `lang`: their text can be in any language.
+- The window title is a heading (level 2), so screen-reader users can jump to the open chat. Without `window_title`, the title comes from the chat's language, for example "Czat" in Polish.
+- Footnotes in an answer show as plain text. A link to a footnote would lead nowhere, because the closed shadow root hides its target from the host page. The footnotes have a heading for screen readers only, "Footnotes" in the chat's language.
+- On a short phone screen (640 x 420 px or less), the window fills the visible height and covers the launcher (WCAG 1.4.10). An example is a 1280 x 924 desktop window at 400 % zoom (320 x 231 CSS px). The header keeps its close button, and the focused input stays on the screen. The layout for the on-screen keyboard does not change.
 - On a device with a mouse or trackpad, a suggestion, the button back to the newest message and the send button keep the keyboard focus in the chat when they go away or turn off: the focus goes to the input. On a touch screen, the input does not take the focus, so no on-screen keyboard opens. The button back to the newest message gives the focus to the newest message, so a screen reader reads on from there.
 - The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.
 
@@ -755,6 +762,8 @@ A dialog that the visitor must answer first stays above the widget. While the pa
 - a fixed backdrop over the whole screen with one of these words in its id or class, for example the Contao privacy opt-in (`privacy_overlay`).
 
 When the dialog closes, the widget returns to its own z-index within a second. A floating WhatsApp button or a greeting bubble is none of these, so the widget stays above it.
+
+While such a dialog covers the whole launcher, the launcher takes no keyboard focus and no clicks (WCAG 2.4.11).
 
 While the chat window is open, the widget puts it in the browser's top layer (a popover). There it is above every z-index of the page, also above an element at the highest value 2147483647, such as an accessibility button. This does not apply while a consent dialog is visible (see above) or on a scaled Wix page. Browsers without popovers (Safari before 17, Firefox before 125) keep the z-index.
 
