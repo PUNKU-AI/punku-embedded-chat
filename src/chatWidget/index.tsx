@@ -56,6 +56,19 @@ export const HOST_TOGGLE_SELECTOR = "[data-punku-chat-toggle], [data-punku-handl
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
 
+// The host page element that has the focus, or null: none, or the widget has it.
+// Inside a page component (an open shadow root), the control itself, not the component.
+const focusedPageElement = (widgetRoot: HTMLElement | null): HTMLElement | null => {
+  let focused = document.activeElement;
+  while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+  if (!(focused instanceof HTMLElement) || focused === document.body || focused === document.documentElement) {
+    return null;
+  }
+  const rootNode = widgetRoot?.getRootNode();
+  const host = typeof ShadowRoot !== "undefined" && rootNode instanceof ShadowRoot ? rootNode.host : null;
+  return focused === host || widgetRoot?.contains(focused) ? null : focused;
+};
+
 // CSS ignores a fractional z-index and an exponent such as 1e+21. The root
 // would then fall back to auto. A negative value paints the widget below the
 // page content, which can hide the trigger, so 0 is the minimum.
@@ -213,7 +226,7 @@ export default function ChatWidget({
   top_offset,
   left_offset,
   right_offset,
-  closed_widget_hint_text = "Hi, I am your AI assistant. How can I help you?",
+  closed_widget_hint_text: closedWidgetHintTextProp,
   show_closed_widget_hint = false,
   show_close_button_on_desktop = false,
   closed_widget_hint_auto_hide_ms,
@@ -344,7 +357,8 @@ export default function ChatWidget({
   const [showClosedWidgetHint, setShowClosedWidgetHint] = useState(false);
   const closedHintExposureRef = useRef<{
     flowId: string;
-    text: string;
+    // The site's own text; null for the default text, which follows the language.
+    text: string | null;
     autoHideMs: number | undefined;
     showOnce: boolean;
     expiresAt: number | null;
@@ -354,6 +368,10 @@ export default function ChatWidget({
 
   // default_language, else the page or browser language (utils.ts).
   const [currentLanguage, setCurrentLanguage] = useState<Language>(() => chooseLanguage(default_language, theme));
+  // Without a site text, the hint speaks the chat's language. An empty text
+  // turns the hint off.
+  const closed_widget_hint_text =
+    closedWidgetHintTextProp ?? (translations[currentLanguage] || translations.en).closedHint;
   // Follow a page that sets or changes <html lang> after the widget starts,
   // such as a language switch in a single-page app.
   useEffect(() => {
@@ -423,8 +441,10 @@ export default function ChatWidget({
       return;
     }
 
+    // A new site text is a new hint. The default text in a new page language is not.
+    const hintSource = closedWidgetHintTextProp ?? null;
     const previousExposure = closedHintExposureRef.current;
-    if (previousExposure && (previousExposure.flowId !== flow_id || previousExposure.text !== closed_widget_hint_text ||
+    if (previousExposure && (previousExposure.flowId !== flow_id || previousExposure.text !== hintSource ||
         previousExposure.autoHideMs !== closed_widget_hint_auto_hide_ms || previousExposure.showOnce !== closed_widget_hint_show_once)) {
       closedHintExposureRef.current = null;
     }
@@ -444,7 +464,7 @@ export default function ChatWidget({
         }
         exposure = {
           flowId: flow_id,
-          text: closed_widget_hint_text,
+          text: hintSource,
           autoHideMs: closed_widget_hint_auto_hide_ms,
           showOnce: closed_widget_hint_show_once,
           expiresAt: typeof closed_widget_hint_auto_hide_ms === "number" && closed_widget_hint_auto_hide_ms > 0
@@ -465,7 +485,7 @@ export default function ChatWidget({
       stopWatching();
       if (timeout !== undefined) clearTimeout(timeout);
     };
-  }, [open, closed_widget_hint_text, show_closed_widget_hint, closed_widget_hint_auto_hide_ms, closed_widget_hint_show_once, flow_id]);
+  }, [open, closed_widget_hint_text, closedWidgetHintTextProp, show_closed_widget_hint, closed_widget_hint_auto_hide_ms, closed_widget_hint_show_once, flow_id]);
 
   // Function to start a new session
   const startNewSession = useCallback(() => {
@@ -524,12 +544,26 @@ export default function ChatWidget({
     });
   }, []);
 
+  // The host page control that opened the chat: it gets the focus back when
+  // the chat closes from inside (ChatWindow). None for the launcher.
+  const openerRef = useRef<HTMLElement | null>(null);
+
   const openWidget = useCallback((userMessage?: string) => {
+    if (!openRef.current) openerRef.current = focusedPageElement(widgetRootRef.current);
     setOpenWithSessionValidation(true);
     queueProgrammaticMessage(userMessage);
   }, [queueProgrammaticMessage, setOpenWithSessionValidation]);
 
+  // A chat that the launcher opens or closes gives the focus back to the launcher.
+  const toggleFromLauncher = useCallback((isOpen: boolean) => {
+    openerRef.current = null;
+    setOpenWithSessionValidation(isOpen);
+  }, [setOpenWithSessionValidation]);
+
   const closeWidget = useCallback(() => setOpen(false), []);
+
+  // ChatWindow puts a function here while its dialog is open (Escape).
+  const dismissWindowDialogRef = useRef<(() => boolean) | null>(null);
 
   const setTriggerPosition = useCallback((position: unknown): boolean => {
     if (position === null || typeof position === "undefined") {
@@ -582,6 +616,8 @@ export default function ChatWidget({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // An open dialog in the window closes first; the next Escape closes the chat.
+        if (dismissWindowDialogRef.current?.()) return;
         closeWidget();
       }
     };
@@ -1614,6 +1650,8 @@ video {
   display: flex;
   width: 100%;
   padding: 3px 0;
+  /* Holds its screen-reader sender label (.cl-sr-only) inside the list. */
+  position: relative;
 }
 
 /* Messages from one sender sit close; a change of sender gets more room. */
@@ -2409,9 +2447,14 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 }
 
 .cl-window .cl-latest .feedback-container,
-.cl-window .feedback-container:has(.selected),
 .cl-window .cl-chat-message:hover .feedback-container,
 .cl-window .cl-chat-message:focus-within .feedback-container {
+  opacity: 1;
+}
+
+/* A rule of its own: a browser without :has() drops the whole rule, and
+   keyboard focus would then land on invisible buttons. */
+.cl-window .feedback-container:has(.selected) {
   opacity: 1;
 }
 
@@ -2772,6 +2815,10 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 .cl-window .cl-composer-field:focus-within {
   border-color: var(--cl-accent);
   box-shadow: 0 0 0 3px var(--cl-ring);
+  /* Invisible here. Forced colours (Windows High Contrast) remove the shadow
+     and paint this outline: the focus stays visible. */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 
 .cl-window .cl-composer-field .cl-input-element {
@@ -2963,6 +3010,22 @@ input::-ms-input-placeholder { /* Microsoft Edge */
 
 .cl-window .cl-bot_message .markdown-body li + li {
   margin-top: 2px;
+}
+
+/* A code line wider than the bubble wraps: the code needs no sideways
+   scroll. A table keeps whole words and scrolls; a table that scrolls takes
+   the keyboard focus (AnswerTable in chatMessage), as Safari does not reach
+   a scroll box with the keyboard by itself (WCAG 2.1.1). */
+.cl-window .cl-bot_message .markdown-body pre,
+.cl-window .cl-bot_message .markdown-body pre > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The answer text colour, as the focus ring of links in answers. */
+.cl-window .cl-bot_message .markdown-body table:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 /* Links in answers: the link colour and a light underline that firms up on
@@ -4843,7 +4906,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         <ChatTrigger
           style={chatTriggerStyleFromProps}
           open={open}
-          setOpen={setOpenWithSessionValidation}
+          setOpen={toggleFromLauncher}
           triggerRef={triggerRef}
           buttonColor={button_color}
           buttonTextColor={button_text_color}
@@ -4937,6 +5000,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           on_client_error={on_client_error}
           client_error_report_url={client_error_report_url}
           enable_client_error_reporting={enable_client_error_reporting}
+          dismissDialogRef={dismissWindowDialogRef}
+          openerRef={openerRef}
         />
       </div>
       <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} scaledPage={scaledPage} />

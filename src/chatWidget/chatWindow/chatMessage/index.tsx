@@ -3,7 +3,7 @@ import type { Components } from "react-markdown";
 import { ChatMessageType } from "../../../types/chatWidget";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, ThumbsUp, ThumbsDown } from "lucide-react";
-import { useState, useMemo } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { sendFeedback } from "../../../controllers";
 import { PunkuChatErrorPhase } from "../../clientErrors";
 import BookingkitCheckoutLink from "../../components/BookingkitCheckoutLink";
@@ -94,7 +94,7 @@ type HastNode = {
   type: string;
   tagName?: string;
   value?: string;
-  properties?: { href?: unknown };
+  properties?: { href?: unknown; alt?: unknown };
   children?: HastNode[];
   data?: Record<string, unknown>;
   position?: { start: Point; end: Point };
@@ -107,6 +107,64 @@ const meaningfulChildren = (node: unknown) =>
 
 const isElement = (node: HastNode | undefined, tagName: string) =>
   node?.type === "element" && node.tagName === tagName;
+
+/**
+ * The text that names an element for a screen reader: its text and the alt
+ * text of its images. A nested list belongs to its own items.
+ */
+export function nameText(node: unknown): string {
+  const hast = node as HastNode | undefined;
+  if (!hast) return "";
+  // react-markdown 8 shows inline HTML (raw) as its literal text.
+  if (hast.type === "text" || hast.type === "raw") return hast.value || "";
+  if (isElement(hast, "ul") || isElement(hast, "ol")) return "";
+  if (isElement(hast, "img")) return typeof hast.properties?.alt === "string" ? hast.properties.alt : "";
+  return (hast.children || []).map(nameText).join("").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A name for a link that shows only an image without alt text: the site it
+ * goes to. Else a screen reader reads only "link".
+ */
+export function linkDestination(href: string | undefined): string | undefined {
+  if (!href) return undefined;
+  try {
+    return new URL(href, document.baseURI).hostname || href;
+  } catch {
+    return href;
+  }
+}
+
+// The text of a task list item (- [ ] / - [x]): it names the item's checkbox.
+const TaskItemText = createContext("");
+
+function TaskCheckbox({ node, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { node?: unknown }) {
+  const label = useContext(TaskItemText);
+  return <input {...props} aria-label={props.type === "checkbox" && label ? label : props["aria-label"]} />;
+}
+
+/**
+ * A table wider than the answer scrolls sideways (the markdown stylesheet).
+ * While it does, it takes the keyboard focus: Safari reaches a scroll box with
+ * the keyboard only then (WCAG 2.1.1). Chrome and Firefox do it by themselves.
+ */
+function AnswerTable({ node, children, ...props }: React.TableHTMLAttributes<HTMLTableElement> & { node?: unknown }) {
+  const ref = useRef<HTMLTableElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  // On each new content (a streamed table grows without a change of its box)
+  // and when the bubble changes its width.
+  useLayoutEffect(() => {
+    const table = ref.current;
+    if (!table) return;
+    const check = () => setScrolls(table.scrollWidth > table.clientWidth + 1);
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(check);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [children]);
+  return <table {...props} ref={ref} tabIndex={scrolls ? 0 : undefined}>{children}</table>;
+}
 
 /**
  * The children that are not only emoji, whitespace or a line break, such as
@@ -320,6 +378,7 @@ export default function ChatMessage({
   retryLabel = "Try again",
   helpfulLabel = "Helpful",
   notHelpfulLabel = "Not helpful",
+  senderLabel,
   streaming = false,
 }: ChatMessageType & {
   api_key?: string;
@@ -340,6 +399,8 @@ export default function ChatMessage({
   /** Names of the feedback buttons for screen readers, in the chat language. */
   helpfulLabel?: string;
   notHelpfulLabel?: string;
+  /** Who wrote the message, read before it by screen readers ("You:", "Assistant:"). */
+  senderLabel?: string;
 }) {
   // Parse message content once and memoize it
   const parsedMessage = useMemo(() => parseMessage(message), [message]);
@@ -356,7 +417,12 @@ export default function ChatMessage({
   // end of the stream, can swap a link button for a card (see AnswerParagraph).
   const markdownComponents = useMemo<Components>(() => ({
     a: ({ href, children, node, ...props }) => (
-      <BookingkitCheckoutLink href={href} onCheckout={onCheckout} {...props}>
+      <BookingkitCheckoutLink
+        href={href}
+        onCheckout={onCheckout}
+        {...props}
+        aria-label={props["aria-label"] ?? (props.title || nameText(node) ? undefined : linkDestination(href))}
+      >
         {children}
       </BookingkitCheckoutLink>
     ),
@@ -376,11 +442,20 @@ export default function ChatMessage({
     ),
     // react-markdown 8 passes ordered, checked, index and depth to lists and
     // list items; they are not DOM attributes.
-    li: ({ node, children, ordered, checked, index, className, ...props }) => (
-      <li {...props} className={withClass(className, isLinkOnlyListItem(node) && "cl-link-only")}>
-        {children}
-      </li>
-    ),
+    li: ({ node, children, ordered, checked, index, className, ...props }) => {
+      const item = (
+        <li {...props} className={withClass(className, isLinkOnlyListItem(node) && "cl-link-only")}>
+          {children}
+        </li>
+      );
+      // remark-gfm marks a task item by its class. react-markdown sets checked
+      // only in a tight list, where the checkbox is not inside a paragraph.
+      return className?.split(" ").includes("task-list-item")
+        ? <TaskItemText.Provider value={nameText(node)}>{item}</TaskItemText.Provider>
+        : item;
+    },
+    input: TaskCheckbox,
+    table: AnswerTable,
     // A list of only link buttons drops its bullets (.cl-link-list). In a
     // mixed list, the buttons keep the bullets and the indent of the others.
     ul: ({ node, children, ordered, depth, className, ...props }) => (
@@ -459,6 +534,8 @@ export default function ChatMessage({
         "cl-chat-message " + (isSend ? " cl-justify-end" : " cl-justify-start") + (isLatest ? " cl-latest" : "")
       }
     >
+      {/* The bubbles show the sender only by place and colour. */}
+      {senderLabel && <span className="cl-sr-only">{senderLabel}</span>}
       {isSend ? (
         <div 
           style={{

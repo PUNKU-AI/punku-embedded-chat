@@ -79,6 +79,12 @@ In landscape, the window fills the height beside the trigger. In portrait, it us
 The checks also cover the on-screen keyboard, the closed hint, `bottom_offset` 80, the checkout dialog, and a rotation (`android` only).
 On a scaled page, Playwright WebKit maps touch points wrongly, also before this fix. Its checks test the hit target with `elementFromPoint` and then activate the element by script.
 
+Accessibility checks (`control-names.spec.ts`) read the Chrome accessibility tree through CDP, as accessibility checkers do. The tree also shows the closed shadow root.
+Every control must have a name: with the chat closed, open with an answer (links, an image link, a task list, a table), and in the new-conversation dialog.
+Desktop checks use only the keyboard in the dialog. The focus starts on Cancel, Tab stays inside, Escape first closes the dialog and then the chat, and the focus returns to "New conversation".
+In a 455 x 217 px window (300 % zoom), the dialog scrolls to each button that gets the focus.
+A chat that a page button opened gives the focus back to that button on Escape.
+
 Feedback checks cover positive and negative votes, header overrides, empty responses, error rollback, and retry.
 Local servers record the actual HTTP headers and body on both origins.
 Tests verify same-origin cookies, blocked cross-origin cookies, and no copied XSRF headers on every profile.

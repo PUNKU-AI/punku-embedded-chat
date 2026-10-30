@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ConfirmationModal from './ConfirmationModal';
+import * as utils from '../utils';
+import * as scrollContainment from '../scrollContainment';
 
 describe('ConfirmationModal', () => {
   const defaultProps = {
@@ -219,6 +221,124 @@ describe('ConfirmationModal', () => {
 
       const buttons = screen.getAllByRole('button');
       expect(buttons.length).toBe(3); // Close button, Cancel button, Confirm button
+    });
+
+    it('should be a modal alert dialog named by its title and described by its message', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+
+      const dialog = screen.getByRole('alertdialog', { name: 'Test Title', description: 'Test message content' });
+      expect(dialog).toHaveClass('cl-modal');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+    });
+
+    it('should name the close button (WCAG 4.1.2), also in the chat language', () => {
+      const { rerender } = render(<ConfirmationModal {...defaultProps} />);
+
+      const closeButton = screen.getByRole('button', { name: 'Close' });
+      expect(closeButton).toHaveClass('cl-modal-close');
+      expect(closeButton).toHaveAttribute('title', 'Close');
+      expect(closeButton.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+
+      rerender(<ConfirmationModal {...defaultProps} closeLabel="Schließen" />);
+      expect(screen.getByRole('button', { name: 'Schließen' })).toHaveClass('cl-modal-close');
+    });
+
+    it('should move the focus to Cancel, the safe answer, when it opens', () => {
+      const { rerender } = render(<ConfirmationModal {...defaultProps} isOpen={false} />);
+
+      rerender(<ConfirmationModal {...defaultProps} isOpen={true} />);
+
+      expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    });
+
+    it('should keep Tab and Shift+Tab inside the dialog', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+      const close = screen.getByRole('button', { name: 'Close' });
+      const confirm = screen.getByRole('button', { name: 'Yes' });
+
+      confirm.focus();
+      fireEvent.keyDown(confirm, { key: 'Tab' });
+      expect(close).toHaveFocus();
+
+      fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+      expect(confirm).toHaveFocus();
+    });
+
+    it('should move Tab between all its buttons itself, as Safari skips buttons', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(cancel).toHaveFocus();
+
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      cancel.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(screen.getByRole('button', { name: 'Yes' })).toHaveFocus();
+    });
+
+    it('should show the button that Tab moves to, also in a dialog that scrolls', () => {
+      const reveal = jest.spyOn(utils, 'revealInScrollContainer');
+      try {
+        render(<ConfirmationModal {...defaultProps} />);
+        const cancel = screen.getByRole('button', { name: 'Cancel' });
+        reveal.mockClear();
+
+        fireEvent.keyDown(cancel, { key: 'Tab', shiftKey: true });
+
+        const close = screen.getByRole('button', { name: 'Close' });
+        expect(close).toHaveFocus();
+        expect(reveal).toHaveBeenCalledWith(close);
+      } finally {
+        reveal.mockRestore();
+      }
+    });
+
+    it('should keep the wheel inside the dialog while it is open', () => {
+      const release = jest.fn();
+      const contain = jest.spyOn(scrollContainment, 'containScrollEvents').mockReturnValue(release);
+      try {
+        const { rerender } = render(<ConfirmationModal {...defaultProps} />);
+        expect(contain).toHaveBeenCalledWith(screen.getByRole('alertdialog'));
+
+        rerender(<ConfirmationModal {...defaultProps} isOpen={false} />);
+        expect(release).toHaveBeenCalledTimes(1);
+      } finally {
+        contain.mockRestore();
+      }
+    });
+
+    it('should take the focus itself on a press on its text, so Tab stays inside', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+      const dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveAttribute('tabindex', '-1');
+
+      dialog.focus();
+      fireEvent.keyDown(dialog, { key: 'Tab' });
+      expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+
+      dialog.focus();
+      fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+      expect(screen.getByRole('button', { name: 'Yes' })).toHaveFocus();
+    });
+
+    it('should keep the focus in the dialog when the visitor presses the dimmed backdrop', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+      const overlay = document.querySelector('.cl-modal-overlay') as HTMLElement;
+
+      // fireEvent returns false when the press has its default prevented.
+      expect(fireEvent.mouseDown(overlay)).toBe(false);
+      expect(fireEvent.mouseDown(screen.getByRole('alertdialog'))).toBe(true);
+    });
+
+    it('should leave other keys to the browser', () => {
+      render(<ConfirmationModal {...defaultProps} />);
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      cancel.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(cancel).toHaveFocus();
     });
   });
 });

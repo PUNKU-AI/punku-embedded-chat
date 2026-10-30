@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import ChatMessagePlaceholder, { PHRASE_INTERVAL_MS } from './index';
 import { splitThinkingText } from './phrases';
 import { crystallineThinkingMessages, Language, thinkingMessages } from '../translations';
@@ -136,8 +136,10 @@ describe('ChatMessagePlaceholder', () => {
     it('should render loader image for swarovski theme', () => {
       render(<ChatMessagePlaceholder theme="swarovski" />);
 
-      const loaderImage = screen.getByAltText('Loading...');
+      const loaderImage = document.querySelector('.cl-crystal-loader img');
       expect(loaderImage).toBeInTheDocument();
+      // Decorative: the phrase and the status region say that the assistant writes.
+      expect(loaderImage).toHaveAttribute('alt', '');
     });
 
     it('should NOT show typing dots for swarovski theme', () => {

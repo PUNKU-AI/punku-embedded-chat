@@ -43,7 +43,8 @@ export default function ChatMessagePlaceholder({
       <div className="cl-chat-message cl-justify-start">
         <div style={bot_message_style} className="cl-thinking-message">
           <div className="cl-crystal-loader">
-            <img src={crystalLoaderBase64} alt="Loading..." />
+            {/* Decorative: the phrase beside it and the status region say that the assistant writes. */}
+            <img src={crystalLoaderBase64} alt="" />
           </div>
           <span>{phrase}</span>
         </div>

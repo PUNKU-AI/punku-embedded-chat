@@ -580,8 +580,8 @@ Use the widget API to customize your widget:
 - **closed_widget_hint_text:**
   - Type: String
   - Required: No
-  - Default: "Hi, I am your AI assistant. How can I help you?"
-  - Description: Text displayed next to the closed chat launcher, pointing at the widget trigger.
+  - Default: in the chat's language, in English "Hi, I am your AI assistant. How can I help you?"
+  - Description: Text displayed next to the closed chat launcher, pointing at the widget trigger. An empty text shows no hint.
 
 - **show_closed_widget_hint:**
   - Type: Boolean
@@ -734,11 +734,15 @@ Screen readers hear "The assistant is writing" when a message is sent. When the 
 
 ## Accessibility and motion
 
+- Every control has a name that screen readers read, in the chat's language (WCAG 4.1.2). `e2e/control-names.spec.ts` reads the Chrome accessibility tree, as accessibility checkers do, also inside the closed shadow root.
 - The launcher button says what it does ("Open chat" or "Close chat", in the chat's language) and tells screen readers whether the chat is open.
-- The message list is a log named "Conversation", in the chat's language. New answers are read once from a status region, so the log itself does not announce changes.
+- The message list is a log named "Conversation", in the chat's language. New answers are read once from a status region, so the log itself does not announce changes. Before each message, screen readers hear who wrote it: "You:" or "Assistant:".
 - The feedback buttons are "Helpful" and "Not helpful", in the chat's language, and report the vote.
-- When the chat closes with the close button or Escape, the keyboard focus returns to the launcher. A closed chat window is out of the tab order.
+- In an answer, a link that shows only an image without alt text is named after the site it goes to. The checkboxes of a task list are named after their items. Code wraps inside the bubble. A table keeps whole words. A table wider than the bubble scrolls sideways, and then it takes the keyboard focus, so it scrolls with the arrow keys also in Safari.
+- The "New conversation" dialog is a modal alert dialog. It takes the focus on Cancel and keeps Tab inside. The chat behind it takes no focus or input. Escape closes the dialog first, and the next Escape closes the chat. The focus then returns to "New conversation". An answer that arrives while the dialog is open is read when the dialog closes.
+- When the chat closes with the close button or Escape, the keyboard focus returns to the control that opened it: a page button that opened it through the widget API, else the launcher. The launcher gets the focus instead when that control is off the screen, or when it is a text field on a touch screen, which would open the on-screen keyboard. When the launcher closes the chat, the launcher keeps the focus. A closed chat window is out of the tab order.
 - The chat focuses its input when it opens. After an answer, it focuses the input again only on devices with a mouse or trackpad, and never takes the focus from the host page or from a link in the messages.
+- On a device with a mouse or trackpad, a suggestion, the button back to the newest message and the send button keep the keyboard focus in the chat when they go away or turn off: the focus goes to the input. On a touch screen, the input does not take the focus, so no on-screen keyboard opens. The button back to the newest message gives the focus to the newest message, so a screen reader reads on from there.
 - The window fades in and rises 12px when it opens, and new messages fade in. If the visitor's system asks for reduced motion, nothing moves.
 
 ## Stacking order on the host page

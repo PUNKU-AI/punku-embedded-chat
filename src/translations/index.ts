@@ -275,6 +275,15 @@ const en = {
   checkoutPersonOther: "people",
   checkoutBookTickets: "Book tickets",
   checkoutBookNow: "Book now",
+  // The close button (X) of the new-conversation dialog.
+  closeDialog: "Close",
+  // Shown while the chat starts a new conversation.
+  sessionRefreshing: "Starting a new conversation…",
+  // The hint next to the closed launcher, when the site sets no text.
+  closedHint: "Hi, I am your AI assistant. How can I help you?",
+  // Screen readers read who wrote each message before it.
+  youSaid: "You:",
+  assistantSaid: "Assistant:",
 };
 
 export type Translation = typeof en;
@@ -294,7 +303,7 @@ export const translations: Record<Language, Translation> = {
     windowTitle: "Chat",
     newSessionConfirm: "Sind Sie sicher, dass Sie ein neues Gespräch beginnen möchten? Dies wird Ihren aktuellen Chat-Verlauf löschen.",
     newSessionTitle: "Neues Gespräch beginnen",
-    confirmButton: "Ja, Neu beginnen",
+    confirmButton: "Ja, neu beginnen",
     cancelButton: "Abbrechen",
     typing: "Der Assistent schreibt",
     retry: "Erneut versuchen",
@@ -324,6 +333,11 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "Personen",
     checkoutBookTickets: "Tickets buchen",
     checkoutBookNow: "Jetzt buchen",
+    closeDialog: "Schließen",
+    sessionRefreshing: "Neues Gespräch wird gestartet…",
+    closedHint: "Hallo, ich bin Ihr KI-Assistent. Wie kann ich Ihnen helfen?",
+    youSaid: "Sie:",
+    assistantSaid: "Assistent:",
   },
   it: {
     welcomeMessage: "Ciao! Come posso aiutarti oggi?",
@@ -366,6 +380,11 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "persone",
     checkoutBookTickets: "Prenota i biglietti",
     checkoutBookNow: "Prenota ora",
+    closeDialog: "Chiudi",
+    sessionRefreshing: "Avvio di una nuova conversazione…",
+    closedHint: "Ciao, sono il tuo assistente IA. Come posso aiutarti?",
+    youSaid: "Tu:",
+    assistantSaid: "Assistente:",
   },
   es: {
     welcomeMessage: "¡Hola! ¿En qué puedo ayudarte hoy?",
@@ -408,6 +427,11 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "personas",
     checkoutBookTickets: "Reservar entradas",
     checkoutBookNow: "Reservar ahora",
+    closeDialog: "Cerrar",
+    sessionRefreshing: "Iniciando una nueva conversación…",
+    closedHint: "Hola, soy tu asistente de IA. ¿En qué puedo ayudarte?",
+    youSaid: "Tú:",
+    assistantSaid: "Asistente:",
   },
   // European Portuguese, as on the Portuguese customer page (pt-PT).
   pt: {
@@ -451,6 +475,11 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "pessoas",
     checkoutBookTickets: "Reservar bilhetes",
     checkoutBookNow: "Reservar agora",
+    closeDialog: "Fechar",
+    sessionRefreshing: "A iniciar uma nova conversa…",
+    closedHint: "Olá, sou o seu assistente de IA. Como posso ajudar?",
+    youSaid: "A sua mensagem:",
+    assistantSaid: "Assistente:",
   },
   fr: {
     welcomeMessage: "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
@@ -493,6 +522,11 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "personnes",
     checkoutBookTickets: "Réserver les billets",
     checkoutBookNow: "Réserver maintenant",
+    closeDialog: "Fermer",
+    sessionRefreshing: "Démarrage d'une nouvelle conversation…",
+    closedHint: "Bonjour, je suis votre assistant IA. Comment puis-je vous aider ?",
+    youSaid: "Vous :",
+    assistantSaid: "Assistant :",
   },
   pl: {
     welcomeMessage: "Dzień dobry! W czym mogę dziś pomóc?",
@@ -537,5 +571,10 @@ export const translations: Record<Language, Translation> = {
     checkoutPersonOther: "osób",
     checkoutBookTickets: "Zarezerwuj bilety",
     checkoutBookNow: "Zarezerwuj teraz",
+    closeDialog: "Zamknij",
+    sessionRefreshing: "Rozpoczynanie nowej rozmowy…",
+    closedHint: "Dzień dobry, jestem Twoim asystentem AI. W czym mogę pomóc?",
+    youSaid: "Ty:",
+    assistantSaid: "Asystent:",
   },
 };

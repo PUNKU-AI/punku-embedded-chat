@@ -35,9 +35,11 @@ jest.mock('./chatMessage', () => {
     isLatest,
     streaming,
     message_id,
+    senderLabel,
   }: {
     message: string;
     message_id?: string;
+    senderLabel?: string;
     isSend: boolean;
     onRetry?: () => void;
     retryLabel?: string;
@@ -57,13 +59,16 @@ jest.mock('./chatMessage', () => {
     });
     return (
       <div
+        className="cl-chat-message"
         data-testid={isSend ? 'user-message' : 'bot-message'}
         data-latest={isLatest ? 'true' : undefined}
         data-streaming={streaming ? 'true' : undefined}
         data-checkout-cards={checkout.cards.map((card: { url: string }) => card.url).join(' ')}
         data-checkout-language={checkout.language}
         data-checkout-venue={checkout.venue}
+        data-sender-label={senderLabel ?? ''}
       >
+        <span className={isSend ? 'cl-user_message' : 'cl-bot_message'} />
         {message}
         {onRetry && <button type="button" onClick={onRetry}>{retryLabel}</button>}
       </div>
@@ -83,6 +88,7 @@ jest.mock('../components/ConfirmationModal', () => {
     onConfirm,
     onCancel,
     title,
+    closeLabel,
     buttonColor,
     buttonTextColor
   }: {
@@ -90,12 +96,18 @@ jest.mock('../components/ConfirmationModal', () => {
     onConfirm: () => void;
     onCancel: () => void;
     title: string;
+    closeLabel?: string;
     buttonColor?: string;
     buttonTextColor?: string;
   }) {
     if (!isOpen) return null;
     return (
-      <div data-testid="confirmation-modal" data-button-color={buttonColor ?? ''} data-button-text-color={buttonTextColor ?? ''}>
+      <div
+        data-testid="confirmation-modal"
+        data-button-color={buttonColor ?? ''}
+        data-button-text-color={buttonTextColor ?? ''}
+        data-close-label={closeLabel ?? ''}
+      >
         <span>{title}</span>
         <button onClick={onConfirm}>Confirm</button>
         <button onClick={onCancel}>Cancel</button>
@@ -569,9 +581,40 @@ describe('ChatWindow', () => {
       expect(scrollTo).not.toHaveBeenCalled();
 
       const jump = screen.getByRole('button', { name: 'Jump to the newest message' });
+      jump.focus();
       fireEvent.click(jump);
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
       expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      // The button hides itself: the focus stays in the chat, not on the page.
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should give the focus to the newest message after the jump on a touch screen', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      try {
+        jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        render(<ChatWindow {...defaultProps} messages={streamedAnswer('Partial')} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        scrollListTo(list, 440);
+        scrollListTo(list, 100);
+
+        const jump = screen.getByRole('button', { name: 'Jump to the newest message' });
+        jump.focus();
+        fireEvent.click(jump);
+
+        // No on-screen keyboard: a screen reader reads on from the newest message.
+        const newest = screen.getByTestId('bot-message');
+        expect(newest).toHaveFocus();
+        expect(newest).toHaveAttribute('tabindex', '-1');
+        expect(screen.getByRole('textbox')).not.toHaveFocus();
+        act(() => {
+          newest.blur();
+        });
+        // Never a tab stop afterwards.
+        expect(newest).not.toHaveAttribute('tabindex');
+      } finally {
+        delete (window as any).matchMedia;
+      }
     });
 
     it('should offer the way back once the stream grows far below a visitor who scrolled up a little', () => {
@@ -2293,6 +2336,209 @@ describe('ChatWindow', () => {
       expect(screen.getByRole('textbox')).toHaveFocus();
     });
 
+    it('should tell screen readers who wrote each message', () => {
+      render(
+        <ChatWindow
+          {...defaultProps}
+          language="de"
+          messages={[
+            { message: 'Preise?', isSend: true },
+            { message: 'Ab 12 Euro.', isSend: false },
+            { message: 'Der Assistent ist nicht erreichbar.', isSend: false, error: true },
+          ]}
+        />
+      );
+
+      expect(screen.getByTestId('user-message')).toHaveAttribute('data-sender-label', 'Sie:');
+      // An error is a notice of the widget, not a message of the assistant.
+      expect(screen.getAllByTestId('bot-message').map((bubble) => bubble.getAttribute('data-sender-label')))
+        .toEqual(['Assistent:', '']);
+    });
+
+    it('should keep the focus in the input when a suggested question sends', () => {
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} suggestions={['Opening hours']} />);
+      const chip = screen.getByRole('button', { name: 'Opening hours' });
+      chip.focus();
+
+      fireEvent.click(chip);
+
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should not focus the input after a suggestion on a touch screen, where it would open the keyboard', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} suggestions={['Opening hours']} />);
+      const chip = screen.getByRole('button', { name: 'Opening hours' });
+      chip.focus();
+
+      fireEvent.click(chip);
+
+      expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('textbox')).not.toHaveFocus();
+    });
+
+    it('should not focus the input after the send button on a touch screen', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} />);
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      const send = screen.getByRole('button', { name: 'Send message' });
+      send.focus();
+
+      fireEvent.click(send);
+
+      expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('textbox')).not.toHaveFocus();
+    });
+
+    it('should keep the focus in the input when the focused send button sends and turns disabled', () => {
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      render(<ChatWindow {...defaultProps} />);
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+      const send = screen.getByRole('button', { name: 'Send message' });
+      send.focus();
+
+      fireEvent.click(send);
+
+      expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('should give the focus back to the host page control that opened the chat', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger}>Launcher</button>
+          <button>Ask our assistant</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      openerRef.current = screen.getByRole('button', { name: 'Ask our assistant' });
+      runFocusTimer();
+      expect(screen.getByRole('textbox')).toHaveFocus();
+
+      rerender(page(false));
+
+      expect(openerRef.current).toHaveFocus();
+    });
+
+    it('should give the focus back to a page text field that opened the chat, on a desktop', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Ask a question" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      openerRef.current = screen.getByRole('textbox', { name: 'Ask a question' });
+      runFocusTimer();
+
+      rerender(page(false));
+
+      expect(openerRef.current).toHaveFocus();
+    });
+
+    it('should give the focus to the launcher, not to a page text field, on a touch screen', () => {
+      (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger}>Launcher</button>
+          <input aria-label="Ask a question" />
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      openerRef.current = screen.getByRole('textbox', { name: 'Ask a question' });
+      runFocusTimer();
+      // The chat focuses its input on opening, also on a touch screen.
+      expect(screen.getByRole('textbox', { name: 'Your message' })).toHaveFocus();
+
+      rerender(page(false));
+
+      // The field would open the on-screen keyboard over the page.
+      expect(trigger.current).toHaveFocus();
+    });
+
+    it('should give the focus to the launcher when the opener is off the screen', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger}>Launcher</button>
+          <button>Ask our assistant</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      const opener = screen.getByRole('button', { name: 'Ask our assistant' });
+      // The visitor scrolled the page down: the button is far above the screen.
+      opener.getBoundingClientRect = () => ({
+        top: -900, bottom: -860, left: 20, right: 180, width: 160, height: 40, x: 20, y: -900, toJSON: () => ({}),
+      });
+      openerRef.current = opener;
+      runFocusTimer();
+
+      rerender(page(false));
+
+      expect(trigger.current).toHaveFocus();
+    });
+
+    it('should give the focus to an opener off the screen when the launcher takes none', () => {
+      // A site that hides the launcher (chat_trigger_style display: none): it takes no focus.
+      const trigger = React.createRef<HTMLDivElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <div ref={trigger}>Hidden launcher</div>
+          <button>Ask our assistant</button>
+          <ChatWindow
+            {...defaultProps}
+            triggerRef={trigger as unknown as React.RefObject<HTMLButtonElement>}
+            openerRef={openerRef}
+            open={open}
+          />
+        </>
+      );
+      const { rerender } = render(page(true));
+      const opener = screen.getByRole('button', { name: 'Ask our assistant' });
+      opener.getBoundingClientRect = () => ({
+        top: -900, bottom: -860, left: 20, right: 180, width: 160, height: 40, x: 20, y: -900, toJSON: () => ({}),
+      });
+      openerRef.current = opener;
+      runFocusTimer();
+
+      rerender(page(false));
+
+      // Better than a focus that is lost with the closing window.
+      expect(opener).toHaveFocus();
+    });
+
+    it('should give the focus to the launcher when the opener left the page', () => {
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: document.createElement('button') } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger}>Launcher</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      runFocusTimer();
+
+      rerender(page(false));
+
+      expect(trigger.current).toHaveFocus();
+    });
+
     it('should focus the input on opening, but not after an answer, on a touch screen', () => {
       (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
       const chat = (open: boolean, messages: ChatMessageType[]) => (
@@ -2389,7 +2635,169 @@ describe('ChatWindow', () => {
     it('should show session refresh message when isRefreshingSession is true', () => {
       render(<ChatWindow {...defaultProps} isRefreshingSession={true} />);
 
-      expect(screen.getByText('Session refreshing...')).toBeInTheDocument();
+      expect(document.querySelector('.cl-session-refresh-message')).toHaveTextContent('Starting a new conversation…');
+      // The log does not announce changes: the status region does.
+      expect(screen.getByRole('status')).toHaveTextContent('Starting a new conversation…');
+    });
+
+    it('should keep "The assistant is writing" when a send finds the session expired', () => {
+      mockedStreamMessage.mockImplementationOnce(() => new Promise(() => {}));
+      function ExpiredChat() {
+        const [refreshing, setRefreshing] = React.useState(false);
+        return (
+          <ChatWindow
+            {...defaultProps}
+            isRefreshingSession={refreshing}
+            onSessionValidate={() => false}
+            onStartNewSession={() => setRefreshing(true)}
+          />
+        );
+      }
+      render(<ExpiredChat />);
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(screen.getByRole('status')).toHaveTextContent('Starting a new conversation… The assistant is writing');
+    });
+
+    it('should say nothing about a new conversation in a chat that closes', () => {
+      render(<ChatWindow {...defaultProps} open={false} isRefreshingSession={true} />);
+
+      expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('should show the session refresh message in the chat language', () => {
+      render(<ChatWindow {...defaultProps} language="de" isRefreshingSession={true} />);
+
+      expect(document.querySelector('.cl-session-refresh-message')).toHaveTextContent('Neues Gespräch wird gestartet…');
+    });
+
+    describe('new-conversation dialog focus', () => {
+      const openDialog = () => {
+        const newConversation = screen.getByRole('button', { name: 'New conversation' });
+        newConversation.focus();
+        fireEvent.click(newConversation);
+        return newConversation;
+      };
+
+      it('should make the window inert while the dialog is open', () => {
+        render(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} />);
+        const chatWindow = document.querySelector('.cl-window') as HTMLElement;
+        expect(chatWindow).not.toHaveAttribute('inert');
+
+        openDialog();
+        expect(chatWindow).toHaveAttribute('inert');
+
+        fireEvent.click(screen.getByText('Cancel'));
+        expect(chatWindow).not.toHaveAttribute('inert');
+      });
+
+      it('should give the focus back to "New conversation" after Cancel', () => {
+        render(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} />);
+        const newConversation = openDialog();
+        screen.getByText('Cancel').focus();
+
+        fireEvent.click(screen.getByText('Cancel'));
+
+        expect(newConversation).toHaveFocus();
+      });
+
+      it('should give the focus back to "New conversation" after Confirm', () => {
+        const onStartNewSession = jest.fn();
+        render(<ChatWindow {...defaultProps} onStartNewSession={onStartNewSession} />);
+        const newConversation = openDialog();
+
+        fireEvent.click(screen.getByText('Confirm'));
+
+        expect(onStartNewSession).toHaveBeenCalledTimes(1);
+        expect(newConversation).toHaveFocus();
+      });
+
+      it('should let Escape close the dialog, not the chat', () => {
+        const dismissDialogRef = { current: null } as React.MutableRefObject<(() => boolean) | null>;
+        render(<ChatWindow {...defaultProps} onStartNewSession={jest.fn()} dismissDialogRef={dismissDialogRef} />);
+        expect(dismissDialogRef.current).toBeNull();
+        const newConversation = openDialog();
+
+        let handled = false;
+        act(() => {
+          handled = dismissDialogRef.current!();
+        });
+
+        expect(handled).toBe(true);
+        expect(screen.queryByTestId('confirmation-modal')).not.toBeInTheDocument();
+        expect(newConversation).toHaveFocus();
+        // The next Escape closes the chat.
+        expect(dismissDialogRef.current).toBeNull();
+      });
+
+      it('should drop the dialog when the chat closes, so it never opens again behind it', () => {
+        const trigger = React.createRef<HTMLButtonElement>();
+        const chat = (open: boolean) => (
+          <>
+            <button ref={trigger}>Launcher</button>
+            <ChatWindow {...defaultProps} triggerRef={trigger} onStartNewSession={jest.fn()} open={open} />
+          </>
+        );
+        const { rerender } = render(chat(true));
+        openDialog();
+
+        rerender(chat(false));
+        // The launcher takes the focus, not the window that closes.
+        expect(trigger.current).toHaveFocus();
+        rerender(chat(true));
+
+        expect(screen.queryByTestId('confirmation-modal')).not.toBeInTheDocument();
+        expect(document.querySelector('.cl-window')).not.toHaveAttribute('inert');
+      });
+
+      it('should say an answer that came while the dialog was open after Cancel', async () => {
+        let answer: (value: unknown) => void = () => {};
+        mockedSendMessage.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve; }) as never);
+        render(<ChatWindow {...defaultProps} enable_streaming={false} onStartNewSession={jest.fn()} />);
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Opening hours?' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+        expect(screen.getByRole('status')).toHaveTextContent('The assistant is writing');
+        openDialog();
+
+        await act(async () => {
+          answer(successfulNonStreamingResponse());
+        });
+        // The window is inert: screen readers would miss the text now.
+        expect(screen.getByRole('status')).toHaveTextContent('The assistant is writing');
+
+        fireEvent.click(screen.getByText('Cancel'));
+
+        await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Assistant reply'));
+      });
+
+      it('should drop a held answer when the visitor confirms the new conversation', async () => {
+        let answer: (value: unknown) => void = () => {};
+        mockedSendMessage.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve; }) as never);
+        render(<ChatWindow {...defaultProps} enable_streaming={false} onStartNewSession={jest.fn()} />);
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Opening hours?' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+        openDialog();
+        await act(async () => {
+          answer(successfulNonStreamingResponse());
+        });
+
+        fireEvent.click(screen.getByText('Confirm'));
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        });
+
+        expect(screen.getByRole('status')).not.toHaveTextContent('Assistant reply');
+      });
+
+      it('should name the close button of the dialog in the chat language', () => {
+        render(<ChatWindow {...defaultProps} language="de" onStartNewSession={jest.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Neues Gespräch' }));
+
+        expect(screen.getByTestId('confirmation-modal')).toHaveAttribute('data-close-label', 'Schließen');
+      });
     });
   });
 
