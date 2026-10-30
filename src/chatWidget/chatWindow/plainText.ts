@@ -7,19 +7,30 @@
  */
 export function markdownToPlainText(markdown: string): string {
   return markdown
+    // Backslash escapes (\* or 1\.) show only the character. Set it aside
+    // until the end, so that no rule below takes it for a mark. Code keeps
+    // its backslashes, as on screen.
+    .replace(/(```[\s\S]*?```|`[^`\n]+`)|\\([!-/:-@[-`{-~])/g, (_escape: string, code: string | undefined, char: string) =>
+      code || String.fromCharCode(0xe000 + char.charCodeAt(0))
+    )
     // Fenced code blocks: keep the code, drop the fences.
     .replace(/```[^\n]*\n?([\s\S]*?)```/g, "$1")
     // Link reference definitions ([name]: url) show nothing on screen. A
     // footnote definition ([^1]: text) shows, so it stays.
     .replace(/^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*\S+.*$/gm, "")
-    // Images: the alt text. Links: the link text.
+    // Images: the alt text. Links: the link text. A link that shows only an
+    // image without alt text has no text: leave it out (its button has a name).
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[\]\([^)\n]*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     // Reference links: [text][name] and [text][] read as their text.
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
     // Line markers: headings, block quotes, bullets, rules, table separators.
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")
     .replace(/^[ \t]{0,3}>[ \t]?/gm, "")
+    // Task list marks ([ ] and [x]) of list items. On a line without a bullet
+    // or a number, the screen shows the marks as text, so they stay.
+    .replace(/^([ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[[ xX]\][ \t]+/gm, "$1")
     .replace(/^[ \t]*[-*+][ \t]+/gm, "")
     .replace(/^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$/gm, "")
     .replace(/^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/gm, "")
@@ -36,5 +47,14 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/`([^`]+)`/g, "$1")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    .trim()
+    // The escaped characters, back as plain characters. A loop, not a regex:
+    // the minifier writes a private-use range as raw characters, and a page that
+    // reads the bundle in another encoding could then not parse it.
+    .split("")
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 0xe000 && code <= 0xe07f ? String.fromCharCode(code - 0xe000) : char;
+    })
+    .join("");
 }
