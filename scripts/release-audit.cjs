@@ -14,6 +14,22 @@ const ACCEPTED = [
     reason: 'No patched deepmerge exists (4.2.0 to 4.3.1, the newest, are affected). Only jest-config and '
       + '@svgr/plugin-svgo use it, to merge our own config at test and build time. None of it ships in the widget bundle.',
   },
+  {
+    id: 'GHSA-3g3m-2fjr-6pw4',
+    package: 'glob',
+    until: '2026-11-30',
+    reason: 'The patched glob (14.0.2 and newer) needs a major upgrade of jest. Only the test tools use glob '
+      + '(jest-config, jest-runtime, @jest/reporters, test-exclude), with our own patterns at test time. None of it '
+      + 'ships in the widget bundle.',
+  },
+  {
+    id: 'GHSA-g3hv-75wg-m249',
+    package: 'minimatch',
+    until: '2026-11-30',
+    reason: 'The patched minimatch (11.0.1 and newer) needs major upgrades of jest and eslint. Only the test and '
+      + 'lint tools use minimatch (jest, test-exclude, @typescript-eslint/typescript-estree), with our own patterns. '
+      + 'None of it ships in the widget bundle.',
+  },
 ];
 
 // npm audit --audit-level=low fails on low and above; info does not fail.
