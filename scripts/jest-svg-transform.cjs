@@ -1,4 +1,3 @@
-/* eslint-env node */
 module.exports = {
   process() {
     return { code: `const React = require('react');

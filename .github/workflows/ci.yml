@@ -36,7 +36,7 @@ jobs:
         run: npm test -- --watchAll=false --maxWorkers=2
 
       - name: Test development and deployment tools
-        run: node --test --test-concurrency=1 scripts/dev-server.test.cjs scripts/lint-compatibility.test.cjs scripts/publish-header-icon-overrides.test.cjs
+        run: node --test --test-concurrency=1 scripts/dev-server.test.cjs scripts/dependency-overrides.test.cjs scripts/lint-compatibility.test.cjs scripts/publish-header-icon-overrides.test.cjs
 
   widget:
     uses: ./.github/workflows/widget-checks.yml

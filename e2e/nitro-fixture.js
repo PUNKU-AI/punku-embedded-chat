@@ -1,4 +1,3 @@
-/* eslint-env browser */
 // A small behavioral fixture, not copied vendor code. It reproduces the
 // Museum loader's cancellation, hidden path, delayed handlers, and host replay.
 // Force this contract on all engines, even those the vendor currently excludes.

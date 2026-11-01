@@ -68,7 +68,7 @@ npm test -- sessionStorage.test.ts # Specific file
 ### Test Structure
 - Tests located alongside source files as `*.test.ts` or `*.test.tsx`
 - Uses Jest + React Testing Library
-- Jest config is in `package.json`; Babel config is in `babel.config.cjs`
+- Jest config is in `package.json`; Babel config is in `babel.config.cjs`; ESLint config is in `eslint.config.cjs`
 
 ### Key Testing Patterns
 - Mock ESM modules in `package.json` `transformIgnorePatterns`

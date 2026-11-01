@@ -1,4 +1,3 @@
-/* eslint-env node */
 // Keep development output outside the committed release directory.
 const http = require('node:http');
 const fs = require('node:fs');

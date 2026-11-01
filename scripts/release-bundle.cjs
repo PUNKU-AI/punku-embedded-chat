@@ -1,4 +1,3 @@
-/* eslint-env node */
 // Bind browser/Gemini evidence and publication to the same bundle and commit.
 // The build writes the widget to widget.min.js. The committed bundle.min.js is
 // a small forwarder for old jsDelivr embeds (see release-forwarder.test.cjs).

@@ -1,4 +1,3 @@
-/* eslint-env node */
 // dist/build/static/js/bundle.min.js is a forwarder, not the widget. Old embeds
 // load it from jsDelivr (no version, @v1, @latest). It must load the v1 release
 // from cdn.punku.ai, and the full widget of the same release from jsDelivr if

@@ -1,4 +1,3 @@
-/* eslint-env node */
 /* eslint-disable no-template-curly-in-string -- GitHub expressions are literal workflow values. */
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');

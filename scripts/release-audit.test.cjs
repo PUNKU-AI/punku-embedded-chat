@@ -1,4 +1,3 @@
-/* eslint-env node */
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { ACCEPTED, acceptedAdvisories, failingAdvisories } = require('./release-audit.cjs');
@@ -31,19 +30,6 @@ test('fails the accepted advisory after its last day', () => {
   assert.deepEqual(failingAdvisories(report(deepmerge), rule.until), []);
   const failing = failingAdvisories(report(deepmerge), '2027-01-01');
   assert.deepEqual(failing.map((item) => [item.id, item.expired]), [['GHSA-gcqx-w48m-w2h4', true]]);
-});
-
-test('passes the glob and minimatch advisories of the test tools until 2026-11-30, then fails them', () => {
-  // The copies inside jest, test-exclude and typescript-estree name the same advisories.
-  const tools = report(
-    ['glob', [advisory('glob', 'GHSA-3g3m-2fjr-6pw4', 'moderate')]],
-    ['minimatch', [advisory('minimatch', 'GHSA-g3hv-75wg-m249', 'moderate')]],
-    ['test-exclude', ['glob', 'minimatch']],
-  );
-  assert.deepEqual(failingAdvisories(tools, '2026-11-30'), []);
-  assert.deepEqual(acceptedAdvisories(tools, '2026-11-30').map((rule) => rule.package), ['glob', 'minimatch']);
-  const failing = failingAdvisories(tools, '2026-12-01');
-  assert.deepEqual(failing.map((item) => [item.package, item.expired]), [['glob', true], ['minimatch', true]]);
 });
 
 test('accepts an advisory only for its own package', () => {

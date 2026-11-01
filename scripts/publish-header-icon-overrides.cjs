@@ -1,4 +1,3 @@
-/* eslint-env node */
 const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
