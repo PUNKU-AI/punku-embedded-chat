@@ -1,4 +1,3 @@
-/* eslint-env node */
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
 const fs = require("node:fs");

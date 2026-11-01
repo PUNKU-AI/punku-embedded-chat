@@ -1,11 +1,10 @@
-/* eslint-env node */
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { ESLint } = require('eslint');
 
 const lint = new ESLint();
-async function messages(code) {
-  const [result] = await lint.lintText(code, { filePath: 'src/lint-compatibility.test.ts' });
+async function messages(code, filePath = 'src/lint-compatibility.test.ts') {
+  const [result] = await lint.lintText(code, { filePath });
   assert.equal(result.fatalErrorCount, 0);
   return result.messages;
 }
@@ -19,7 +18,23 @@ test('preserves the restriction against importing or requiring the Jest runner',
   assert.deepEqual(globals, []);
 });
 
-test('keeps Testing Library asynchronous query checks with the updated utility dependency', async () => {
+test('keeps the Testing Library asynchronous query check', async () => {
   const result = await messages("import { screen } from '@testing-library/react'; test('sample', () => { screen.findByText('Ready'); });");
-  assert.ok(result.some((message) => message.ruleId === 'testing-library/await-async-query' && message.severity === 2));
+  assert.ok(result.some((message) => message.ruleId === 'testing-library/await-async-queries' && message.severity === 2));
+});
+
+test('runs the React, accessibility, import and hooks rules with the forced minimatch 11', async () => {
+  // These plugins still ask for minimatch 3 (see eslint.config.cjs).
+  const code = [
+    "import { useState } from 'react';",
+    'export function Card() {',
+    '  if (Math.random()) useState(0);',
+    '  return <Card_image><img src="card.png" /></Card_image>;',
+    '}',
+    "import './late';",
+  ].join('\n');
+  const rules = new Set((await messages(code, 'src/lint-compatibility.tsx')).map((message) => message.ruleId));
+  for (const rule of ['react/jsx-pascal-case', 'react/jsx-no-undef', 'jsx-a11y/alt-text', 'import/first', 'react-hooks/rules-of-hooks']) {
+    assert.ok(rules.has(rule), `${rule} did not report`);
+  }
 });

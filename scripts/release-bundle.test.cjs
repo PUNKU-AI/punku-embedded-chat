@@ -1,4 +1,3 @@
-/* eslint-env node */
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');

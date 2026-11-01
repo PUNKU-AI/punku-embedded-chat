@@ -1,4 +1,3 @@
-/* eslint-env node */
 // Build the release once, with a fixed memory and worker limit.
 const { spawnSync } = require('node:child_process');
 process.env.NODE_ENV = 'production';
