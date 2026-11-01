@@ -67,6 +67,22 @@ describe('ChatTrigger', () => {
       expect(screen.getByRole('button', { name: 'Otwórz czat' })).toHaveAttribute('lang', 'pl');
     });
 
+    it('should leave the tab order while something covers it, and still take a click (WCAG 2.4.11)', () => {
+      const setOpen = jest.fn();
+      render(<ChatTrigger {...defaultProps} setOpen={setOpen} tabIndex={-1} />);
+      const button = screen.getByRole('button', { name: 'Open chat' });
+
+      expect(button).toHaveAttribute('tabindex', '-1');
+      fireEvent.click(button);
+      expect(setOpen).toHaveBeenCalledWith(true);
+    });
+
+    it('should stay in the tab order by default', () => {
+      render(<ChatTrigger {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: 'Open chat' })).not.toHaveAttribute('tabindex');
+    });
+
     it('should hide the icons from screen readers', () => {
       render(<ChatTrigger {...defaultProps} triggerIcon="https://example.com/icon.png" />);
 

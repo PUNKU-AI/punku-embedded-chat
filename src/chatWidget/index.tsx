@@ -14,7 +14,8 @@ import { ClosedWidgetHintLayout, layoutClosedWidgetHint } from "./closedWidgetHi
 import { useHeaderIconOverride } from "./headerIconOverrides";
 import { guardHintColors } from "./controlColors";
 import { belowBlockingDialog, usePageDialogs } from "./pageDialogs";
-import { isVisitorAction, watchVisitorInput } from "./visitorAction";
+import { HOST_TOGGLE_SELECTOR, isVisitorAction, watchVisitorInput } from "./visitorAction";
+import { useWindowCoversTrigger } from "./windowCover";
 import { observeClosedWidgetHintVisibility } from "./closedWidgetHintVisibility";
 import { getScaledFrameStyle, trackScaledFrame, useScaledPage } from "./scaledPage";
 import type { AnchorMetrics } from "./anchoredChatWindow";
@@ -49,10 +50,6 @@ export const DEFAULT_HOST_URL = "https://app.punku.ai";
 // the widget step below it while it is visible (pageDialogs.ts).
 export const DEFAULT_Z_INDEX = 2147483000;
 export const MAX_Z_INDEX = 2147483647;
-// A page button that opens and closes the widget through the global API.
-// A press on it is not a click outside: the button closes the widget itself.
-// data-punku-handler is the mark of the Swarovski page script.
-export const HOST_TOGGLE_SELECTOR = "[data-punku-chat-toggle], [data-punku-handler]";
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && isFinite(value);
@@ -549,16 +546,19 @@ export default function ChatWidget({
   // the chat closes from inside (ChatWindow). None for the launcher.
   const openerRef = useRef<HTMLElement | null>(null);
   // True when a visitor action opened the chat: the launcher, or api.open()
-  // in the handler of the visitor's click, tap or key press. Only then does
-  // the window take the focus as it opens (ChatWindow). start_open and a
-  // timer are no visitor action (visitorAction.ts).
+  // in the handler of the visitor's click, tap or key press, or a moment
+  // after a click on a control that has gone since, such as the button of a
+  // page notice. Only then does the window take the focus as it opens
+  // (ChatWindow). start_open and a timer are no visitor action
+  // (visitorAction.ts).
   const openedByVisitorRef = useRef(false);
   useEffect(() => watchVisitorInput(), []);
 
   const openWidget = useCallback((userMessage?: string) => {
     if (!openRef.current) {
       openerRef.current = focusedPageElement(widgetRootRef.current);
-      openedByVisitorRef.current = isVisitorAction();
+      // A page field that has the focus keeps it after a later open.
+      openedByVisitorRef.current = isVisitorAction(openerRef.current);
     }
     setOpenWithSessionValidation(true);
     queueProgrammaticMessage(userMessage);
@@ -4702,8 +4702,8 @@ input::-ms-input-placeholder { /* Microsoft Edge */
   const hintText = hintColors.text || closed_widget_hint_text_color;
   // A consent dialog or another modal dialog of the page stays above the
   // widget, so a visitor can answer it (pageDialogs.ts). While one covers the
-  // whole trigger, the trigger anchor is inert: Tab would reach a launcher
-  // that the visitor cannot see (WCAG 2.4.11).
+  // whole trigger, the trigger leaves the tab order: Tab would reach a
+  // launcher that the visitor cannot see (WCAG 2.4.11).
   const { zIndex: blockingDialogZIndex, covers: dialogCoversTrigger } = usePageDialogs(triggerRef);
   // The open window goes to the browser's top layer (a manual popover), above
   // every z-index of the page. An accessibility button at 2147483647 that the
@@ -4792,6 +4792,26 @@ input::-ms-input-placeholder { /* Microsoft Edge */
     if (!root || !pageScale) return;
     return trackScaledFrame(root, pageScale, open);
   }, [pageScale, open]);
+
+  /*
+   * The open window can cover the whole trigger: a short screen (a desktop
+   * at 400 % zoom), the on-screen keyboard on a phone, or a trigger that the
+   * site raised above the window (windowCover.ts). The trigger then leaves
+   * the tab order, as under a page dialog: Tab would reach a launcher that
+   * the visitor cannot see (WCAG 2.4.11). The window header shows its close
+   * button instead. A site can move the trigger without a resize
+   * (setTriggerPosition), so its insets go into the check. This runs after
+   * the layout effects above, so the check sees the moved trigger.
+   */
+  const windowCoversTrigger = useWindowCoversTrigger(
+    open,
+    windowLayerRef,
+    triggerRef,
+    `${triggerStyle.top} ${triggerStyle.left} ${triggerStyle.bottom} ${triggerStyle.right}`,
+  );
+  // In the render that closes the chat, the trigger is back in the tab
+  // order: the window gives the focus back to it in that render's effects.
+  const triggerOutOfTabOrder = dialogCoversTrigger || (open && windowCoversTrigger);
 
   const getClosedHintPositionClass = () => {
     switch (closed_widget_hint_position) {
@@ -4902,9 +4922,6 @@ input::-ms-input-placeholder { /* Microsoft Edge */
         ref={triggerAnchorRef}
         // In the scaled page frame, the trigger takes the corner of the frame.
         style={scaledPage ? { position: "absolute", ...triggerStyle, pointerEvents: "auto" } : { position: "relative" }}
-        // Under a page dialog, the launcher takes no focus and no clicks. The
-        // installed React types predate the attribute; React 18 renders it.
-        {...(dialogCoversTrigger ? ({ inert: "" } as Record<string, string>) : {})}
       >
         {shouldRenderClosedWidgetHint && (
           <div
@@ -4933,6 +4950,11 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           openLabel={(translations[currentLanguage] || translations.en).triggerOpen}
           closeLabel={(translations[currentLanguage] || translations.en).triggerClose}
           lang={currentLanguage}
+          // Under a page dialog or the open window, Tab skips the launcher. A
+          // tap still reaches it: inert blocked the taps too, and the dialog
+          // check runs once a second, so a launcher whose dialog had just
+          // gone took no taps for up to a second.
+          tabIndex={triggerOutOfTabOrder ? -1 : undefined}
         />
       </div>
       <div
@@ -5022,6 +5044,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           dismissDialogRef={dismissWindowDialogRef}
           openerRef={openerRef}
           openedByVisitorRef={openedByVisitorRef}
+          coversTrigger={windowCoversTrigger}
         />
       </div>
       <BookingkitCheckoutModal url={checkoutUrl} returnFocusTo={checkout?.opener} onClose={closeCheckout} language={currentLanguage} scaledPage={scaledPage} />

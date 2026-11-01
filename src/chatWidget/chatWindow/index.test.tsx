@@ -989,6 +989,36 @@ describe('ChatWindow', () => {
       expect(screen.getByRole('textbox')).toHaveFocus();
     });
 
+    it('should not focus an input that a page dialog covers, such as a consent sheet', () => {
+      // The window stays below a consent dialog of the page: its input is under the sheet.
+      const sheet = document.createElement('div');
+      document.body.appendChild(sheet);
+      let topmost: Element | null = sheet;
+      const elementFromPoint = jest.fn(() => topmost);
+      Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: elementFromPoint });
+      try {
+        const { rerender } = render(<ChatWindow {...defaultProps} open={false} />);
+        rerender(<ChatWindow {...defaultProps} open={true} />);
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
+        expect(elementFromPoint).toHaveBeenCalled();
+        expect(screen.getByRole('textbox')).not.toHaveFocus();
+
+        // Nothing of the page on top: the window focuses its input, as before.
+        topmost = screen.getByRole('textbox');
+        rerender(<ChatWindow {...defaultProps} open={false} />);
+        rerender(<ChatWindow {...defaultProps} open={true} />);
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
+        expect(screen.getByRole('textbox')).toHaveFocus();
+      } finally {
+        delete (document as unknown as Record<string, unknown>).elementFromPoint;
+        sheet.remove();
+      }
+    });
+
     it('should focus the input without scrolling the host page', () => {
       render(<ChatWindow {...defaultProps} open={true} />);
       const focus = jest.spyOn(screen.getByRole('textbox'), 'focus');
@@ -2620,6 +2650,32 @@ describe('ChatWindow', () => {
       expect(opener).toHaveFocus();
     });
 
+    it('should give the focus to the opener, not to a launcher that a page dialog covers', () => {
+      // A launcher under a page dialog has left the tab order (pageDialogs.ts).
+      const trigger = React.createRef<HTMLButtonElement>();
+      const openerRef = { current: null } as React.MutableRefObject<HTMLElement | null>;
+      const page = (open: boolean) => (
+        <>
+          <button ref={trigger} tabIndex={-1}>Launcher</button>
+          <button>Ask our assistant</button>
+          <ChatWindow {...defaultProps} triggerRef={trigger} openerRef={openerRef} open={open} />
+        </>
+      );
+      const { rerender } = render(page(true));
+      const opener = screen.getByRole('button', { name: 'Ask our assistant' });
+      // Off the screen: without the guard, the launcher would come first.
+      opener.getBoundingClientRect = () => ({
+        top: -900, bottom: -860, left: 20, right: 180, width: 160, height: 40, x: 20, y: -900, toJSON: () => ({}),
+      });
+      openerRef.current = opener;
+      runFocusTimer();
+
+      rerender(page(false));
+
+      expect(trigger.current).not.toHaveFocus();
+      expect(opener).toHaveFocus();
+    });
+
     it('should give the focus to the launcher when the opener left the page', () => {
       const trigger = React.createRef<HTMLButtonElement>();
       const openerRef = { current: document.createElement('button') } as React.MutableRefObject<HTMLElement | null>;
@@ -3379,6 +3435,28 @@ describe('ChatWindow', () => {
       expect(closeBtn).toHaveStyle({ display: 'flex' });
     });
 
+    it('should show the close button on a desktop while the window covers the launcher', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} onClose={jest.fn()} coversTrigger={true} />);
+      expect(document.querySelector('.cl-close-btn')).toHaveStyle({ display: 'flex' });
+
+      // The launcher shows again: the default desktop rule hides the button.
+      rerender(<ChatWindow {...defaultProps} onClose={jest.fn()} coversTrigger={false} />);
+      expect(document.querySelector('.cl-close-btn')).toHaveStyle({ display: 'none' });
+    });
+
+    it('should keep the close button showing while it has the focus', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} onClose={jest.fn()} coversTrigger={true} />);
+      const close = document.querySelector<HTMLButtonElement>('.cl-close-btn')!;
+      act(() => close.focus());
+
+      // The window stops covering the launcher: hiding the X would drop the focus.
+      rerender(<ChatWindow {...defaultProps} onClose={jest.fn()} coversTrigger={false} />);
+      expect(close).toHaveStyle({ display: 'flex' });
+
+      act(() => close.blur());
+      expect(close).toHaveStyle({ display: 'none' });
+    });
+
     it('should not render close button when onClose is not provided', () => {
       render(<ChatWindow {...defaultProps} />);
 
@@ -3638,8 +3716,9 @@ describe('ChatWindow', () => {
       const shortQuery = '@media (max-width: 640px) and (max-height: 420px) {';
       expect(styles).toContain(shortQuery);
 
-      // No top offset and no room for the trigger. The keyboard layout keeps its own rule.
-      const short = rule(styles.slice(styles.indexOf(shortQuery)), '.cl-chat-window:not([data-cl-keyboard])');
+      // No top offset and no room for the trigger. The keyboard layout keeps
+      // its own rule. A zoomed page keeps the gaps of the phone layout.
+      const short = rule(styles.slice(styles.indexOf(shortQuery)), '.cl-chat-window:not([data-cl-keyboard]):not([data-cl-zoomed])');
       expect(short).toContain('--cl-top-offset: 0px !important;');
       expect(short).toContain('--cl-trigger-room: var(--cl-safe-area-bottom, 0px);');
     });
@@ -3651,7 +3730,21 @@ describe('ChatWindow', () => {
 
       // A 568 x 320 phone in landscape.
       render(<ChatWindow {...defaultProps} scaledPage={{ scale: 1.775, width: 568, height: 320 }} />);
-      expect(rule(renderedStyles(), '.cl-chat-window:not([data-cl-keyboard])')).toContain('--cl-top-offset: 0px !important;');
+      expect(rule(renderedStyles(), '.cl-chat-window:not([data-cl-keyboard]):not([data-cl-zoomed])')).toContain('--cl-top-offset: 0px !important;');
+    });
+
+    it('clears the zoom and keyboard marks when the page turns into a scaled frame', () => {
+      const { rerender } = render(<ChatWindow {...defaultProps} open={true} />);
+      const chatWindow = document.querySelector('.cl-chat-window')!;
+      // Marks from before a rotation, such as a pinch zoom in portrait.
+      chatWindow.setAttribute('data-cl-zoomed', '');
+      chatWindow.setAttribute('data-cl-keyboard', '');
+
+      rerender(<ChatWindow {...defaultProps} open={true} scaledPage={{ scale: 1.775, width: 568, height: 320 }} />);
+
+      // The frame gets no tracking: a mark that stayed would keep the short rule off for good.
+      expect(chatWindow).not.toHaveAttribute('data-cl-zoomed');
+      expect(chatWindow).not.toHaveAttribute('data-cl-keyboard');
     });
 
     it('hides the header on a short landscape screen while the keyboard is open', () => {

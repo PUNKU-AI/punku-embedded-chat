@@ -8,18 +8,21 @@ jest.mock('./chatTrigger', () => {
     open,
     setOpen,
     triggerRef,
-    lang
+    lang,
+    tabIndex
   }: {
     open: boolean;
     setOpen: (open: boolean) => void;
     triggerRef: React.RefObject<HTMLButtonElement>;
     lang?: string;
+    tabIndex?: number;
   }) {
     return (
       <button
         ref={triggerRef}
         data-testid="chat-trigger"
         lang={lang}
+        tabIndex={tabIndex}
         onClick={() => setOpen(!open)}
       >
         {open ? 'Close' : 'Open'}
@@ -46,7 +49,9 @@ jest.mock('./chatWindow', () => {
     mobile_chat_window_style,
     dismissDialogRef,
     openerRef,
-    openedByVisitorRef
+    openedByVisitorRef,
+    triggerRef,
+    coversTrigger
   }: {
     open: boolean;
     messages: any[];
@@ -63,6 +68,8 @@ jest.mock('./chatWindow', () => {
     dismissDialogRef?: React.MutableRefObject<(() => boolean) | null>;
     openerRef?: React.RefObject<HTMLElement | null>;
     openedByVisitorRef?: React.RefObject<boolean>;
+    triggerRef?: React.RefObject<HTMLButtonElement>;
+    coversTrigger?: boolean;
   }) {
     mockReact.useEffect(() => {
       if (!open || !programmaticMessage) return;
@@ -88,6 +95,12 @@ jest.mock('./chatWindow', () => {
       };
     }, [dismissDialogRef, dialogOpen]);
 
+    // ChatWindow gives the focus back to the launcher in an effect of the
+    // render that closes it. The tests read the launcher's tab index then.
+    mockReact.useEffect(() => {
+      if (!open) (globalThis as any).mockTriggerTabIndexOnClose = triggerRef?.current?.tabIndex;
+    }, [open, triggerRef]);
+
     if (!open) return null;
     return (
       <div data-testid="chat-window" style={positionOverrideStyle}>
@@ -95,6 +108,7 @@ jest.mock('./chatWindow', () => {
         <span data-testid="language">{language || 'en'}</span>
         <span data-testid="host-url">{hostUrl}</span>
         <span data-testid="show-close-button-on-desktop">{String(Boolean(show_close_button_on_desktop))}</span>
+        <span data-testid="covers-trigger">{String(Boolean(coversTrigger))}</span>
         <span data-testid="mobile-chat-window-style">{JSON.stringify(mobile_chat_window_style ?? null)}</span>
         <button data-testid="add-message" onClick={() => addMessage({ message: 'Test', isSend: true })}>
           Add Message
@@ -696,6 +710,156 @@ describe('ChatWidget', () => {
           pageButton.remove();
         }
       });
+
+      describe('a page that opens the chat a moment after the click', () => {
+        // jsdom has no layout: a control that stays on the screen gets a box.
+        const showOnScreen = (element: Element) => {
+          element.getClientRects = () => [{ width: 80, height: 32 }] as unknown as DOMRectList;
+        };
+        // The window's listener notes the visitor's click before the page handles it.
+        // jsdom cannot dispatch a trusted event, so the test notes the event itself.
+        const clickAsVisitor = (element: HTMLElement) => {
+          noteVisitorInput({ isTrusted: true, type: 'click', target: element } as unknown as Event);
+          element.click();
+        };
+
+        it('should count api.open() that a page notice runs 200 ms after the Accept of the visitor', () => {
+          jest.useFakeTimers();
+          // The notice fades out, leaves the page, and then opens the chat (closeConsentPopup).
+          const notice = document.createElement('div');
+          const accept = document.createElement('button');
+          accept.addEventListener('click', () => {
+            setTimeout(() => {
+              notice.remove();
+              api().open();
+            }, 200);
+          });
+          notice.appendChild(accept);
+          document.body.appendChild(notice);
+          showOnScreen(accept);
+          try {
+            render(<ChatWidget {...defaultProps} />);
+            accept.focus();
+
+            act(() => clickAsVisitor(accept));
+            act(() => {
+              jest.advanceTimersByTime(200);
+            });
+
+            expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+            expect(openedByVisitor()).toBe(true);
+            // The Accept button left the page: on close, the launcher gets the focus.
+            expect((globalThis as any).mockOpenerRef.current).toBeNull();
+          } finally {
+            notice.remove();
+          }
+        });
+
+        it('should leave the focus on the page when a timer opens the chat after a click on a control that stays', () => {
+          jest.useFakeTimers();
+          const link = document.createElement('button');
+          link.addEventListener('click', () => {
+            setTimeout(() => api().open(), 300);
+          });
+          document.body.appendChild(link);
+          showOnScreen(link);
+          try {
+            render(<ChatWidget {...defaultProps} />);
+
+            act(() => clickAsVisitor(link));
+            act(() => {
+              jest.advanceTimersByTime(300);
+            });
+
+            expect(screen.getByTestId('chat-window')).toBeInTheDocument();
+            expect(openedByVisitor()).toBe(false);
+          } finally {
+            link.remove();
+          }
+        });
+
+        it('should count a chat toggle of the page that opens the chat a moment later', () => {
+          jest.useFakeTimers();
+          const toggle = document.createElement('button');
+          toggle.setAttribute('data-punku-chat-toggle', '');
+          toggle.addEventListener('click', () => {
+            setTimeout(() => api().open(), 300);
+          });
+          document.body.appendChild(toggle);
+          showOnScreen(toggle);
+          try {
+            render(<ChatWidget {...defaultProps} />);
+
+            act(() => clickAsVisitor(toggle));
+            act(() => {
+              jest.advanceTimersByTime(300);
+            });
+
+            expect(openedByVisitor()).toBe(true);
+          } finally {
+            toggle.remove();
+          }
+        });
+
+        it('should leave the focus in a page field that has it when the chat opens', () => {
+          jest.useFakeTimers();
+          const notice = document.createElement('div');
+          const accept = document.createElement('button');
+          const field = document.createElement('input');
+          accept.addEventListener('click', () => {
+            setTimeout(() => {
+              notice.remove();
+              api().open();
+            }, 200);
+          });
+          notice.appendChild(accept);
+          document.body.append(notice, field);
+          showOnScreen(accept);
+          try {
+            render(<ChatWidget {...defaultProps} />);
+
+            act(() => clickAsVisitor(accept));
+            // The page puts the focus into its search field before its timer opens the chat.
+            field.focus();
+            act(() => {
+              jest.advanceTimersByTime(200);
+            });
+
+            expect(openedByVisitor()).toBe(false);
+            expect((globalThis as any).mockOpenerRef.current).toBe(field);
+          } finally {
+            notice.remove();
+            field.remove();
+          }
+        });
+
+        it('should not count a later open after the next press of the visitor', () => {
+          jest.useFakeTimers();
+          const notice = document.createElement('div');
+          const accept = document.createElement('button');
+          accept.addEventListener('click', () => {
+            notice.remove();
+            setTimeout(() => api().open(), 500);
+          });
+          notice.appendChild(accept);
+          document.body.appendChild(notice);
+          showOnScreen(accept);
+          try {
+            render(<ChatWidget {...defaultProps} />);
+
+            act(() => clickAsVisitor(accept));
+            // The visitor moves on: a press somewhere else, or a key.
+            noteVisitorInput({ isTrusted: true, type: 'pointerdown', target: document.body } as unknown as Event);
+            act(() => {
+              jest.advanceTimersByTime(500);
+            });
+
+            expect(openedByVisitor()).toBe(false);
+          } finally {
+            notice.remove();
+          }
+        });
+      });
     });
 
     it('should say the language of the launcher name, but not of the widget root or the hint (WCAG 3.1.2)', () => {
@@ -1270,16 +1434,46 @@ describe('ChatWidget', () => {
       jest.useFakeTimers();
       try {
         render(<ChatWidget {...defaultProps} />);
-        // The anchor holds the trigger and the hint.
-        const anchor = screen.getByTestId('chat-trigger').parentElement!;
-        expect(anchor).toHaveAttribute('inert');
+        const trigger = screen.getByTestId('chat-trigger');
+        expect(trigger).toHaveAttribute('tabindex', '-1');
+        // Not inert: a tap reaches the launcher as soon as the dialog has gone.
+        expect(trigger.closest('[inert]')).toBeNull();
 
         // The visitor answers the dialog: Tab reaches the launcher again.
         act(() => {
           bar.remove();
           jest.advanceTimersByTime(PAGE_DIALOG_CHECK_MS);
         });
-        expect(anchor).not.toHaveAttribute('inert');
+        expect(trigger).not.toHaveAttribute('tabindex');
+      } finally {
+        jest.useRealTimers();
+        bar.remove();
+      }
+    });
+
+    it('should look at the page again when the visitor presses Tab, before the focus moves', () => {
+      const bar = addCookieBar(368, 400);
+      jest.useFakeTimers();
+      try {
+        render(<ChatWidget {...defaultProps} />);
+        const trigger = screen.getByTestId('chat-trigger');
+        expect(trigger).toHaveAttribute('tabindex', '-1');
+
+        // The dialog goes between two checks. A held Tab repeats: its first press did the check.
+        bar.remove();
+        fireEvent.keyDown(document.body, { key: 'Tab', repeat: true });
+        expect(trigger).toHaveAttribute('tabindex', '-1');
+        fireEvent.keyDown(document.body, { key: 'Tab' });
+        expect(trigger).not.toHaveAttribute('tabindex');
+
+        // A dialog that comes over the launcher: the next Tab skips it at once.
+        const again = addCookieBar(368, 400);
+        try {
+          fireEvent.keyDown(document.body, { key: 'Tab' });
+          expect(trigger).toHaveAttribute('tabindex', '-1');
+        } finally {
+          again.remove();
+        }
       } finally {
         jest.useRealTimers();
         bar.remove();
@@ -1290,13 +1484,87 @@ describe('ChatWidget', () => {
       const partly = addCookieBar(420, 348);
       try {
         render(<ChatWidget {...defaultProps} />);
-        const anchor = screen.getByTestId('chat-trigger').parentElement!;
         // The widget still goes below the dialog, but the visitor sees the launcher.
         expect((document.querySelector('.cl-widget-root') as HTMLElement).style.zIndex).toBe('999996');
-        expect(anchor).not.toHaveAttribute('inert');
+        expect(screen.getByTestId('chat-trigger')).not.toHaveAttribute('tabindex');
       } finally {
         partly.remove();
       }
+    });
+
+    describe('the open window over the launcher (WCAG 2.4.11)', () => {
+      // jsdom has no layout, and the mock window has no card. Put a stand-in
+      // card in the window layer, where ChatWindow renders it. The trigger is
+      // at 400-448 px (beforeEach).
+      const addWindowCard = (left: number, top: number, width: number, height: number) => {
+        const chatWindow = document.createElement('div');
+        chatWindow.className = 'cl-chat-window';
+        const card = document.createElement('div');
+        card.className = 'cl-window';
+        card.getBoundingClientRect = () => ({
+          x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON: () => ({}),
+        }) as DOMRect;
+        chatWindow.appendChild(card);
+        document.querySelector('.cl-window-layer')!.appendChild(chatWindow);
+      };
+
+      it('should take the launcher out of the tab order while the open window covers it, and back in the render that closes the chat', () => {
+        render(<ChatWidget {...defaultProps} />);
+        addWindowCard(0, 0, 1024, 768);
+        const trigger = screen.getByTestId('chat-trigger');
+
+        fireEvent.click(trigger);
+        expect(trigger).toHaveAttribute('tabindex', '-1');
+        expect(trigger.closest('[inert]')).toBeNull();
+        // The window header shows its close button instead.
+        expect(screen.getByTestId('covers-trigger')).toHaveTextContent('true');
+
+        (globalThis as any).mockTriggerTabIndexOnClose = undefined;
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(trigger).not.toHaveAttribute('tabindex');
+        // ChatWindow gives the focus back to the launcher in an effect of that render.
+        expect((globalThis as any).mockTriggerTabIndexOnClose).toBe(0);
+      });
+
+      it('should keep the launcher in the tab order while the open window leaves it visible', () => {
+        render(<ChatWidget {...defaultProps} />);
+        // Above the trigger, as on a desktop.
+        addWindowCard(400, 0, 450, 380);
+
+        fireEvent.click(screen.getByTestId('chat-trigger'));
+
+        expect(screen.getByTestId('chat-trigger')).not.toHaveAttribute('tabindex');
+        expect(screen.getByTestId('covers-trigger')).toHaveTextContent('false');
+      });
+
+      it('should keep the launcher out of the tab order while a page dialog or the window covers it', () => {
+        jest.useFakeTimers();
+        const bar = addCookieBar(368, 400);
+        try {
+          render(<ChatWidget {...defaultProps} />);
+          addWindowCard(0, 0, 1024, 768);
+          const trigger = screen.getByTestId('chat-trigger');
+          act(() => {
+            (window as any)['punku-chat-widget_api'].open();
+          });
+          expect(trigger).toHaveAttribute('tabindex', '-1');
+
+          // The dialog goes: the window still covers the launcher.
+          act(() => {
+            bar.remove();
+            jest.advanceTimersByTime(PAGE_DIALOG_CHECK_MS);
+          });
+          expect(trigger).toHaveAttribute('tabindex', '-1');
+
+          act(() => {
+            (window as any)['punku-chat-widget_api'].close();
+          });
+          expect(trigger).not.toHaveAttribute('tabindex');
+        } finally {
+          jest.useRealTimers();
+          bar.remove();
+        }
+      });
     });
 
     // jsdom has no popovers: record the calls of the top layer.

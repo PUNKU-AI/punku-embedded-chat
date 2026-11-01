@@ -15,6 +15,7 @@ import {
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
   visualViewportInset,
+  ZOOMED_ATTRIBUTE,
 } from './utils';
 
 describe('getChatPosition', () => {
@@ -474,6 +475,80 @@ describe('visual viewport tracking', () => {
     expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
   });
 
+  // jsdom has no matchMedia: a touch screen or a desktop with a fine pointer.
+  const pointer = (coarse: boolean) => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({ media: query, matches: coarse && query === '(pointer: coarse)' }),
+    });
+  };
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('marks the element while the page is zoomed in, in the same event that removes the box', () => {
+    pointer(true);
+    const element = document.createElement('div');
+    track(element);
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+
+    Object.assign(viewport, { scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
+    viewport.dispatchEvent(new Event('resize'));
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
+    expect(variables(element)).toEqual(['', '', '', '']);
+
+    Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
+    viewport.dispatchEvent(new Event('resize'));
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+  });
+
+  it('does not mark a pinch on a desktop: the short layout of a 400 % zoom stays', () => {
+    // A trackpad pinch on a 320 x 231 desktop window at 400 % zoom.
+    pointer(false);
+    const element = document.createElement('div');
+    track(element);
+
+    Object.assign(viewport, { scale: 1.5, width: 213, height: 154 });
+    viewport.dispatchEvent(new Event('resize'));
+    expect(variables(element)).toEqual(['', '', '', '']);
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+  });
+
+  describe('after a rotation that leaves the page zoomed in', () => {
+    // Chrome on Android keeps the zoom of a 371 px page from the 320 px portrait
+    // screen: 490 x 276 px of the 568 x 320 px layout viewport.
+    const root = document.documentElement as unknown as { clientWidth?: number; clientHeight?: number };
+    beforeEach(() => {
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 568 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 320 });
+    });
+    afterEach(() => {
+      delete root.clientWidth;
+      delete root.clientHeight;
+    });
+
+    it('marks the element as zoomed, not as a keyboard', () => {
+      pointer(true);
+      Object.assign(viewport, { scale: 568 / 490, offsetLeft: 78, offsetTop: 0, width: 490, height: 276 });
+      const element = document.createElement('div');
+      track(element);
+
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
+      expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(false);
+      expect(variables(element)).toEqual(['', '', '', '']);
+    });
+
+    it('does not mark a page that fits the landscape screen', () => {
+      pointer(true);
+      Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 568, height: 320 });
+      const element = document.createElement('div');
+      track(element);
+
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+      expect(variables(element)).toEqual(['0px', '0px', '568px', '320px']);
+    });
+  });
+
   describe('on a page that the browser scales up (#82)', () => {
     // width=320 on a 740 x 360 phone in landscape: a page scale of 2.3125.
     const root = document.documentElement as unknown as { clientWidth?: number };
@@ -598,6 +673,8 @@ describe('visual viewport tracking', () => {
     stops.push(subscribeVisualViewport(listener));
 
     expect(variables(element)).toEqual(['', '', '', '']);
+    // No visual viewport is no zoom.
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
     expect(listener).toHaveBeenCalledWith(null);
     expect(() => stop()).not.toThrow();
   });

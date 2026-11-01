@@ -68,7 +68,7 @@ The widget also accepts `data-punku-handler`, which existing page scripts set.
 
 If your button replaces the trigger (`chat_trigger_style='{"display":"none"}'`), the phone window still keeps 80 px free above the bottom of the screen for the trigger. Use `mobile_chat_window_style` to place it on phones, for example above a bottom bar of your page. See the README.
 
-Call `open()` in the click handler itself. Then the chat moves the keyboard focus to its input, because the visitor opened it. A call from a timer, or after the handler waits for a network request, is no visitor action: the chat opens and the focus stays on the page (WCAG 3.2.1).
+Call `open()` in the click handler itself. Then the chat moves the keyboard focus to its input, because the visitor opened it. A call up to one second later also counts when the control that the visitor pressed has left the page or is hidden by then, for example a notice that fades out before it opens the chat, or when the control has `data-punku-chat-toggle`. The next press or key of the visitor ends that second, and a page field that has the focus keeps it. Any other call from a timer, or after the handler waits for a network request, is no visitor action: the chat opens and the focus stays on the page (WCAG 3.2.1).
 
 When the visitor closes the chat with its close button or Escape, the keyboard focus goes back to the page control that had the focus when `open()` ran, for example your button. If that control is off the screen, or on a touch screen is a text field (which would open the on-screen keyboard), the trigger gets the focus instead. With a hidden trigger, your control gets it anyway.
 
