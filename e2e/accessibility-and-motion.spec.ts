@@ -213,6 +213,54 @@ test.describe('focus on open only after a visitor action (WCAG 3.2.1)', () => {
 
     expect(await pageFocus(page)).not.toContain('cl-input-element');
   });
+
+  // The opening focus does not wait for the answer to the opening question.
+  // Before, it came only with the whole answer: 12 s here.
+  test('a page button that opens the chat with a question moves the focus to the input while the answer streams', async ({ page, hasTouch }) => {
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (!url.includes('/api/v1/run/')) return originalFetch(input, init);
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            let words = 0;
+            const push = () => {
+              words += 1;
+              const text = Array.from({ length: words }, (_, index) => `word${index + 1}`).join(' ');
+              const event = words <= 60
+                ? { event: 'add_message', data: { sender: 'Machine', id: 'slow-answer', text } }
+                : { event: 'end', data: { result: { session_id: 'synthetic-session' } } };
+              controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+              if (words <= 60) setTimeout(push, 200);
+              else controller.close();
+            };
+            setTimeout(push, 100);
+          },
+        });
+        return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }));
+      };
+    });
+    await extendHostPage(page, `
+      <button id="ask-hours" type="button">Ask about opening hours</button>
+      <script>
+        document.getElementById('ask-hours').addEventListener('click', () => {
+          window['browser-fixture_api'].open('Opening hours?');
+        });
+      </script>`);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+
+    if (hasTouch) await page.locator('#ask-hours').tap();
+    else await page.locator('#ask-hours').click();
+
+    await waitForInputFocus(page, { fromWidget: true });
+    // The answer still streams.
+    expect(await page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+      .querySelector('.cl-messages_container')!.getAttribute('aria-busy'))).toBe('true');
+    await page.keyboard.type('Hi');
+    expect(await chatInputValue(page)).toBe('Hi');
+  });
 });
 
 test('the open window fades and rises on every screen, and only that animates', async ({ page }) => {

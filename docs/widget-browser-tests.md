@@ -88,9 +88,12 @@ A chat that a page button opened gives the focus back to that button on Escape.
 Zoom checks (`zoom-reflow.spec.ts`) use a 320 x 231 px window, a 1280 x 924 desktop at 400 % zoom.
 The keyboard opens the chat. The focused input must lie inside the open window, and the window must fill the visible height.
 At 320 x 400 px with the on-screen keyboard, the window keeps `top_offset` above it, as before.
+On `android`, a phone turns to landscape on a page wider than the portrait screen, and Chromium keeps a zoom. The window, its header, close X, input and send button must lie inside the visible area, also after a pan.
+A pinch with CDP touch events keeps the window on the layout viewport, with the gaps of the phone layout and the launcher below it.
 
 Focus checks (`accessibility-and-motion.spec.ts`) open the chat without a visitor action: with `start_open`, and from a page timer.
 The focus stays on the page, and a visitor who types in a page field keeps typing there. The launcher moves the focus to the input.
+A page button that opens the chat with a question moves the focus to the input while the answer still streams.
 
 While a consent dialog covers the whole launcher, the launcher takes no focus (`host-overlay-stacking.spec.ts`).
 In Chromium and Firefox, Tab goes past it to the dialog. After the dialog closes, the launcher takes the focus again.

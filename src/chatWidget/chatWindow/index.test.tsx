@@ -2003,6 +2003,32 @@ describe('ChatWindow', () => {
       await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Assistant reply'));
     });
 
+    // The screen shows a footnote mark as its number in brackets, and the
+    // notes under a heading for screen readers, in the chat language.
+    it('should read footnotes as the screen shows them', async () => {
+      mockedStreamMessage.mockImplementationOnce(answerStream('Open daily.[^1]\n\n[^1]: Except **Monday**.'));
+
+      render(<ChatWindow {...defaultProps} enable_streaming={true} language="de" />);
+      send('Hallo');
+
+      await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Open daily.[1]\n\nFußnoten\n1. Except Monday.'));
+    });
+
+    it('should read the footnotes of each non-streaming answer on their own', async () => {
+      const response = successfulNonStreamingResponse();
+      (response.data.outputs[0].outputs[0] as { outputs: unknown }).outputs = {
+        first: { type: 'message', message: { text: 'Open daily.[^1]\n\n[^1]: Except Monday.' } },
+        second: { type: 'message', message: { text: 'Tickets online.[^1]\n\n[^1]: Until noon.' } },
+      };
+      mockedSendMessage.mockResolvedValueOnce(response as any);
+
+      render(<ChatWindow {...defaultProps} enable_streaming={false} />);
+      send('Hello');
+
+      await waitFor(() => expect(screen.getByRole('status').textContent)
+        .toBe('Open daily.[1]\n\nFootnotes\n1. Except Monday.\n\nTickets online.[1]\n\nFootnotes\n1. Until noon.'));
+    });
+
     it('should not announce messages restored from the session', () => {
       render(
         <ChatWindow
@@ -2232,6 +2258,10 @@ describe('ChatWindow', () => {
             <StatefulChat />
           </>
         );
+        // The opening focus comes first: the visitor types after it.
+        act(() => {
+          jest.advanceTimersByTime(100);
+        });
         const input = screen.getByRole('textbox');
         send('Hello');
 
@@ -2385,6 +2415,111 @@ describe('ChatWindow', () => {
       runFocusTimer();
 
       expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    // The opening focus does not wait for an answer on its way: the input
+    // takes text while the assistant answers.
+    describe('an answer on its way when the chat opens', () => {
+      // The answer streams until the test ends it.
+      const streamingAnswer = () => {
+        let end = () => {};
+        mockedStreamMessage.mockImplementationOnce((...args: any[]) => {
+          const onStreamData = args[10] as (data: any) => void;
+          const onStreamEnd = args[11] as (terminal: 'end') => void;
+          onStreamData({ event: 'add_message', data: { sender: 'Machine', id: 'answer', text: 'We open' } });
+          end = () => {
+            onStreamData({ event: 'add_message', data: { sender: 'Machine', id: 'answer', text: 'We open at 9.' } });
+            onStreamData({ event: 'end', data: { result: {} } });
+            onStreamEnd('end');
+          };
+          return Promise.resolve();
+        });
+        return () => act(() => end());
+      };
+      // A page button calls api.open("…") in the handler of the visitor's click.
+      const chatWithMessage = (open: boolean) => (
+        <>
+          <button>Ask about opening hours</button>
+          <input aria-label="Host search" />
+          <ChatWindow
+            {...defaultProps}
+            enable_streaming={true}
+            open={open}
+            programmaticMessage={open ? { id: 1, message: 'Opening hours?' } : null}
+          />
+        </>
+      );
+      const openWithMessage = () => {
+        const { rerender } = render(chatWithMessage(false));
+        screen.getByRole('button', { name: 'Ask about opening hours' }).focus();
+        rerender(chatWithMessage(true));
+      };
+
+      it('should focus the input while the answer to the opening message streams', () => {
+        const endAnswer = streamingAnswer();
+        openWithMessage();
+        runFocusTimer();
+
+        expect(mockedStreamMessage).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole('status')).toHaveTextContent('The assistant is writing');
+        expect(screen.getByRole('textbox', { name: 'Your message' })).toHaveFocus();
+        endAnswer();
+      });
+
+      it('should not take the focus from the page when that answer is complete', () => {
+        const endAnswer = streamingAnswer();
+        openWithMessage();
+        runFocusTimer();
+        const hostField = screen.getByRole('textbox', { name: 'Host search' });
+        hostField.focus();
+
+        endAnswer();
+        runFocusTimer();
+
+        expect(screen.getByRole('status')).toHaveTextContent('We open at 9.');
+        expect(hostField).toHaveFocus();
+      });
+
+      it('should not open the keyboard when that answer is complete, on a touch screen', () => {
+        (window as any).matchMedia = (query: string) => ({ matches: query === '(pointer: coarse)', media: query });
+        const endAnswer = streamingAnswer();
+        openWithMessage();
+        runFocusTimer();
+        // The visitor closes the keyboard to read the answer.
+        const input = screen.getByRole('textbox', { name: 'Your message' });
+        act(() => input.blur());
+
+        endAnswer();
+        runFocusTimer();
+
+        expect(screen.getByRole('status')).toHaveTextContent('We open at 9.');
+        expect(input).not.toHaveFocus();
+      });
+
+      it('should move the focus from the launcher to the input when the visitor opens the chat again', () => {
+        const endAnswer = streamingAnswer();
+        const trigger = React.createRef<HTMLButtonElement>();
+        const chat = (open: boolean) => (
+          <>
+            <button ref={trigger}>Launcher</button>
+            <ChatWindow {...defaultProps} enable_streaming={true} triggerRef={trigger} open={open} />
+          </>
+        );
+        const { rerender } = render(chat(true));
+        runFocusTimer();
+        const input = screen.getByRole('textbox');
+        fireEvent.change(input, { target: { value: 'Opening hours?' } });
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+        // The launcher closes the chat while the answer streams, and opens it again.
+        rerender(chat(false));
+        expect(trigger.current).toHaveFocus();
+        rerender(chat(true));
+        runFocusTimer();
+
+        expect(input).toHaveFocus();
+        endAnswer();
+      });
     });
 
     describe('a chat that opens without a visitor action (WCAG 3.2.1)', () => {

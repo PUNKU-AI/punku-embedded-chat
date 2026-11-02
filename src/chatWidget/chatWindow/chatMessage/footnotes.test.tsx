@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import ChatMessage from './index';
+import { markdownToPlainText } from '../plainText';
 
 // Real markdown rendering. GitHub footnotes link to ids in the answer, but the
 // closed shadow root hides those ids from the host page: a link would change
@@ -77,5 +78,33 @@ describe('footnotes in answers', () => {
 
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href')))
       .toEqual(['https://tickets.example.com', 'https://example.com/prices']);
+  });
+
+  // The status region reads each answer as plain text (plainText.ts). Its
+  // footnotes must have the numbers and the notes that the screen shows.
+  it.each([
+    ['notes at the end and a mark used twice', answer],
+    ['notes in the middle', 'Tickets cost 12 euros.[^price] Children under 6 go free.[^kids]\n\n[^kids]: With an adult.\n'
+      + '[^price]: Prices of [2026](https://example.com/prices).\n\nThe museum is open daily.[^price]'],
+    ['a mark in a note', 'A[^a] B[^b]\n\n[^a]: See also[^c].\n[^b]: Two.\n[^c]: Three.'],
+    ['labels in other cases, a note without a mark and a mark without a note', 'Prices[^Note] and hours[^9].[^x]\n\n[^note]: First.\n[^NOTE]: Second.\n[^y]: Never used.\n[^x]: Last.'],
+    ['a note of several lines and paragraphs', 'See the days.[^days]\n\n[^days]: Open on\nweekdays:\n\n    - Monday\n    - Tuesday\n\nWelcome![^1][^2]\n\n[^1]: One.\n[^2]: Two.'],
+  ])('reads the footnote numbers and notes that the screen shows: %s', (_case, markdown) => {
+    renderAnswer(markdown);
+    const shown = document.querySelector('.markdown-body')!.cloneNode(true) as HTMLElement;
+    // The stylesheet adds the brackets around each number.
+    shown.querySelectorAll('[data-footnote-ref]').forEach((mark) => {
+      mark.textContent = `[${mark.textContent}]`;
+    });
+    const words = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim();
+    const noteItems = Array.from(shown.querySelectorAll('[data-footnotes] > ol > li'));
+    const shownNotes = noteItems.map((item) => words(item.textContent));
+    noteItems.forEach((item) => item.remove());
+    const shownMarks = shown.textContent!.match(/\[\^?\w+\]/g);
+
+    const [spokenText, spokenNotes = ''] = markdownToPlainText(markdown, 'Footnotes').split('\n\nFootnotes\n');
+    expect(spokenText.match(/\[\^?\w+\]/g)).toEqual(shownMarks);
+    expect(spokenNotes.split(/\n(?=\d+\. )/).map((note) => words(note.replace(/^\d+\. /, '')))).toEqual(shownNotes);
+    expect(spokenNotes.split(/\n(?=\d+\. )/).map((note) => note.split('. ')[0])).toEqual(shownNotes.map((_note, index) => `${index + 1}`));
   });
 });
