@@ -89,6 +89,9 @@ describe('footnotes in answers', () => {
     ['a mark in a note', 'A[^a] B[^b]\n\n[^a]: See also[^c].\n[^b]: Two.\n[^c]: Three.'],
     ['labels in other cases, a note without a mark and a mark without a note', 'Prices[^Note] and hours[^9].[^x]\n\n[^note]: First.\n[^NOTE]: Second.\n[^y]: Never used.\n[^x]: Last.'],
     ['a note of several lines and paragraphs', 'See the days.[^days]\n\n[^days]: Open on\nweekdays:\n\n    - Monday\n    - Tuesday\n\nWelcome![^1][^2]\n\n[^1]: One.\n[^2]: Two.'],
+    ['a note line in a tilde-fenced code block', 'Write:\n\n~~~markdown\n[^example]: Important code content\n~~~\n\nDone.[^1]\n\n[^1]: A note.'],
+    // A shorter fence inside the block does not close it.
+    ['a longer tilde fence around a shorter one', 'Text[^1]\n\n~~~~\n~~~\n[^2]: in code\n~~~\n~~~~\n\n[^1]: The note.'],
   ])('reads the footnote numbers and notes that the screen shows: %s', (_case, markdown) => {
     renderAnswer(markdown);
     const shown = document.querySelector('.markdown-body')!.cloneNode(true) as HTMLElement;

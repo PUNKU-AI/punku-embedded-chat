@@ -69,6 +69,12 @@ describe('markdownToPlainText', () => {
         .toBe('Write [^1] for a note.[1]\n\n[^1]: not a note\n\nFootnotes\n1. A note.');
     });
 
+    it('keeps footnote syntax in a tilde-fenced code block, and reads the block as code', () => {
+      // A note line in code without a mark was left out: the screen shows it as code.
+      expect(markdownToPlainText('Write a note like this:\n\n~~~markdown\n[^example]: Important code content\n~~~\n\nDone.[^1]\n\n[^1]: A note.'))
+        .toBe('Write a note like this:\n\n[^example]: Important code content\n\nDone.[1]\n\nFootnotes\n1. A note.');
+    });
+
     it('keeps an escaped mark as text', () => {
       expect(markdownToPlainText('Not a mark: \\[^1]\n\n[^1]: Never used.')).toBe('Not a mark: [^1]');
     });

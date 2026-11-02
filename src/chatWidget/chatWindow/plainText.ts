@@ -10,11 +10,11 @@ export function markdownToPlainText(markdown: string, footnotesLabel = "Footnote
   // Backslash escapes (\* or 1\.) show only the character. Set it aside until
   // the end, so that no rule below takes it for a mark. Code keeps its
   // backslashes, as on screen.
-  const escaped = markdown.replace(/(```[\s\S]*?```|`[^`\n]+`)|\\([!-/:-@[-`{-~])/g,
+  const escaped = markdown.replace(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)|\\([!-/:-@[-`{-~])/g,
     (_escape: string, code: string | undefined, char: string) => code || setAside(char));
   return footnotesAsShown(escaped, footnotesLabel)
-    // Fenced code blocks: keep the code, drop the fences.
-    .replace(/```[^\n]*\n?([\s\S]*?)```/g, "$1")
+    // Fenced code blocks (backticks or tildes): keep the code, drop the fences.
+    .replace(/(```|~~~)[^\n]*\n?([\s\S]*?)\1/g, "$2")
     // Link reference definitions ([name]: url) show nothing on screen. A
     // footnote definition left by now is in code, where it shows as text.
     .replace(/^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*\S+.*$/gm, "")
@@ -64,10 +64,27 @@ const setAside = (char: string) => String.fromCharCode(0xe000 + char.charCodeAt(
 
 const FOOTNOTE_DEFINITION = /^[ \t]{0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)$/;
 const FOOTNOTE_MARK = /\[\^([^\]\s]+)\]/g;
-const FENCE = /^[ \t]{0,3}```/;
 // A line that starts a new block ends the first paragraph of a footnote.
-const BLOCK_START = /^[ \t]{0,3}(?:[-*+][ \t]|\d+[.)][ \t]|#{1,6}[ \t]|>|```)/;
+const BLOCK_START = /^[ \t]{0,3}(?:[-*+][ \t]|\d+[.)][ \t]|#{1,6}[ \t]|>|```|~~~)/;
 const INDENT = /^(?: {4}|\t)/;
+// A fenced code block opens with three or more backticks or tildes. The same
+// character, at least as many times and alone on its line, closes it.
+const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/;
+
+/** Says line by line whether a line is in a fenced code block, its fences included. */
+function codeLines() {
+  let fence = "";
+  return (line: string) => {
+    const match = FENCE.exec(line);
+    if (fence) {
+      if (match && match[1][0] === fence[0] && match[1].length >= fence.length && !match[2].trim()) fence = "";
+      return true;
+    }
+    // A backtick after backticks is inline code, not a fence.
+    if (match && !(match[1][0] === "`" && match[2].includes("`"))) fence = match[1];
+    return !!fence;
+  };
+}
 
 /*
  * GitHub footnotes, as the answer shows them (plainFootnotes in chatMessage).
@@ -83,7 +100,7 @@ function footnotesAsShown(markdown: string, footnotesLabel: string): string {
   const notes = new Map<string, string[]>();
   let note: string[] | null = null;
   let afterBlankLine = false;
-  let inFence = false;
+  const inCode = codeLines();
   for (const line of markdown.split("\n")) {
     if (note) {
       // A note goes on in lines indented by four spaces. Its paragraph also
@@ -100,8 +117,7 @@ function footnotesAsShown(markdown: string, footnotesLabel: string): string {
       }
       note = null;
     }
-    if (FENCE.test(line)) inFence = !inFence;
-    const definition = inFence ? null : FOOTNOTE_DEFINITION.exec(line);
+    const definition = inCode(line) ? null : FOOTNOTE_DEFINITION.exec(line);
     if (!definition) {
       text.push(line);
       continue;
@@ -118,10 +134,9 @@ function footnotesAsShown(markdown: string, footnotesLabel: string): string {
   // two marks in a row ([1][2]) would look like a reference link.
   const order: string[] = [];
   const markNumbers = (lines: string[]) => {
-    let inCode = false;
+    const inCode = codeLines();
     return lines.map((line) => {
-      if (FENCE.test(line)) inCode = !inCode;
-      if (inCode) return line;
+      if (inCode(line)) return line;
       // The odd parts of the split are inline code.
       return line.split(/(`[^`]+`)/).map((part, index) => index % 2 ? part : part.replace(FOOTNOTE_MARK, (mark, label: string) => {
         const key = label.toLowerCase();
