@@ -2910,7 +2910,8 @@ describe('ChatWindow', () => {
       // Dark text reads on the lighter red of v1.0.24, not on #dc2626.
       ['a dark button_text_color without button_color', { button_text_color: '#1C1C1C' }, '#ef4444', '#1C1C1C'],
       ['button_color and button_text_color', { button_color: '#9e183b', button_text_color: '#ffffff' }, '#9e183b', '#ffffff'],
-      ['the swarovski theme', { theme: 'swarovski' as const }, '#ef4444', ''],
+      // White read at 3.76:1 on the branch's #ef4444. The stylesheet red reads at 4.8:1.
+      ['the swarovski theme', { theme: 'swarovski' as const }, '', ''],
     ])('gives the dialog confirm button readable colours with %s', (_case, props, color, text) => {
       render(<ChatWindow {...defaultProps} {...props} onStartNewSession={jest.fn()} />);
 

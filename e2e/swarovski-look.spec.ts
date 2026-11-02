@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { loadWidget, waitForInputFocus } from './widget-helpers';
+import { activate, loadWidget, waitForInputFocus } from './widget-helpers';
 
 // The swarovski theme keeps the look of the swarovski-widget branch, the
 // bundle that its page loaded before v1.0.22: links in a sentence stay text
@@ -186,6 +186,28 @@ test('the send button is a black paper plane in the white field, and focus is da
   expect(state.fieldBorder).toBe('rgb(26, 26, 26)');
   expect(state.fieldRing).toContain('rgba(26, 26, 26, 0.14)');
   expect(state.fieldRing).not.toContain('37, 99, 235');
+});
+
+// The one colour that leaves the branch look: white text read at 3.76:1 on
+// the branch's red #ef4444 (WCAG 1.4.3). The confirm button now takes the red
+// of the other themes.
+test('the confirm button of the new-conversation dialog reads at 4.5:1', async ({ page, hasTouch }) => {
+  await openConversation(page, swarovskiEmbed);
+  await activate(page, '.cl-new-session-btn', hasTouch);
+  await expect.poll(() => page.evaluate(() => !!window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+    .querySelector('.cl-modal-btn-confirm'))).toBe(true);
+
+  const confirm = await page.evaluate(() => {
+    const button = window.__widgetRoots.get(document.querySelector('punku-chat')!)!.querySelector<HTMLElement>('.cl-modal-btn-confirm')!;
+    const style = getComputedStyle(button);
+    const luminance = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3)
+      .map((channel) => Number(channel) / 255)
+      .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    const [light, dark] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => b - a);
+    return { fill: style.backgroundColor, label: style.color, ratio: Math.round(((light + 0.05) / (dark + 0.05)) * 100) / 100 };
+  });
+  expect(confirm).toEqual({ fill: 'rgb(220, 38, 38)', label: 'rgb(255, 255, 255)', ratio: 4.83 });
 });
 
 test('other themes keep their link buttons and the arrow', async ({ page }) => {

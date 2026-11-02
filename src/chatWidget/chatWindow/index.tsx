@@ -1965,10 +1965,11 @@ export default function ChatWindow({
           cancelText={t.cancelButton}
           closeLabel={t.closeDialog}
           lang={language}
-          // The swarovski theme keeps the branch's red (#ef4444). Else a
-          // site text colour without button_color gets a red it reads on.
-          buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}
-          buttonTextColor={(!button_color && !branchLook && dialogConfirm.label) || button_text_color}
+          // A site text colour without button_color gets a red it reads on.
+          // The swarovski theme takes the same red: white on the branch's
+          // #ef4444 was 3.76:1 (WCAG 1.4.3).
+          buttonColor={button_color || dialogConfirm.fill}
+          buttonTextColor={(!button_color && dialogConfirm.label) || button_text_color}
         />
 
         <style>{`

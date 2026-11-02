@@ -86,8 +86,8 @@ The `default`, `dark`, `ocean`, `aurora` and `punku-ai-bookingkit` themes meet W
 - On the dark themes, the send button and the launcher turn lighter on hover. A darker shade would vanish in the dark input field.
 - The focus ring of a link in an answer takes the link colour, which reaches 4.5:1 on the answer bubble.
 - With `button_color`, the subtitle under the title shows `button_text_color` at 85% opacity, as before. Where 85% falls below 4.5:1 on `button_color`, it shows at full opacity.
-- The confirm button of the new-conversation dialog is red `#dc2626` with white text (4.8:1). Without `button_color`, a dark `button_text_color` keeps the lighter red `#ef4444` of earlier versions, where it reads at 4.5:1.
-- The `swarovski` theme keeps the look of the swarovski-widget branch and is not changed.
+- The confirm button of the new-conversation dialog is red `#dc2626` with white text (4.8:1), also in the `swarovski` theme. Without `button_color`, a dark `button_text_color` keeps the lighter red `#ef4444` of earlier versions, where it reads at 4.5:1.
+- The `swarovski` theme keeps the look of the swarovski-widget branch and is not changed, except for the confirm button of the new-conversation dialog: white text read at 3.76:1 on the branch's `#ef4444`.
 
 Your own colours (`button_color`, `bot_message_color`, `send_button_style` and others) replace the theme colours. The widget keeps them where they read and corrects only the controls that would vanish (see [Readable controls on your colours](#color-customization)).
 
