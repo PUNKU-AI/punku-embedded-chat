@@ -13,7 +13,71 @@ describe('markdownToPlainText', () => {
   it('reads a reference link as its text and leaves out its definition, but keeps a footnote', () => {
     expect(markdownToPlainText('Book [our ticket page][tickets] or [the shop][].\n\n[tickets]: https://example.com/tickets\n'
       + '  [the shop]: <https://example.com/shop> "Shop"\n\nPrices[^1]\n\n[^1]: Children pay half.'))
-      .toBe('Book our ticket page or the shop.\n\nPrices[^1]\n\n[^1]: Children pay half.');
+      .toBe('Book our ticket page or the shop.\n\nPrices[1]\n\nFootnotes\n1. Children pay half.');
+  });
+
+  // The screen shows a footnote mark as its number in brackets, and the notes
+  // at the end under a heading for screen readers (chatMessage plainFootnotes).
+  describe('footnotes', () => {
+    it('reads the marks as their numbers, in the order of first use, and the notes at the end', () => {
+      expect(markdownToPlainText([
+        'Tickets cost 12 euros.[^price] Children under 6 go free.[^kids]',
+        '',
+        '[^kids]: With an adult.',
+        '[^price]: Prices of [2026](https://example.com/prices).',
+        '',
+        'The museum is open daily.[^price]',
+      ].join('\n'), 'Fußnoten')).toBe([
+        'Tickets cost 12 euros.[1] Children under 6 go free.[2]',
+        '',
+        'The museum is open daily.[1]',
+        '',
+        'Fußnoten',
+        '1. Prices of 2026.',
+        '2. With an adult.',
+      ].join('\n'));
+    });
+
+    it('keeps two marks in a row apart', () => {
+      expect(markdownToPlainText('Open daily.[^1][^2]\n\n[^1]: Except Monday.\n[^2]: Until 6 pm.'))
+        .toBe('Open daily.[1][2]\n\nFootnotes\n1. Except Monday.\n2. Until 6 pm.');
+    });
+
+    it('reads a note of several lines and paragraphs without its marks', () => {
+      expect(markdownToPlainText('See the days.[^days]\n\n[^days]: Open on\nweekdays:\n\n    - **Monday**\n    - Tuesday\n\nWelcome!'))
+        .toBe('See the days.[1]\n\nWelcome!\n\nFootnotes\n1. Open on\nweekdays:\n\nMonday\nTuesday');
+    });
+
+    it('leaves out a note without a mark, and keeps a mark without a note as typed', () => {
+      expect(markdownToPlainText('Prices[^1] and hours[^9].\n\n[^1]: Of 2026.\n[^2]: Never used.'))
+        .toBe('Prices[1] and hours[^9].\n\nFootnotes\n1. Of 2026.');
+      expect(markdownToPlainText('Hours[^9].\n\n[^2]: Never used.')).toBe('Hours[^9].');
+    });
+
+    it('matches labels without case, and the first note of a label wins', () => {
+      expect(markdownToPlainText('Prices[^Note]\n\n[^note]: First.\n[^NOTE]: Second.'))
+        .toBe('Prices[1]\n\nFootnotes\n1. First.');
+    });
+
+    it('numbers a mark in a note after the marks of the answer', () => {
+      expect(markdownToPlainText('A[^a] B[^b]\n\n[^a]: See also[^c].\n[^b]: Two.\n[^c]: Three.'))
+        .toBe('A[1] B[2]\n\nFootnotes\n1. See also[3].\n2. Two.\n3. Three.');
+    });
+
+    it('keeps footnote syntax in code, as the screen shows it', () => {
+      expect(markdownToPlainText('Write `[^1]` for a note.[^1]\n\n```\n[^1]: not a note\n```\n\n[^1]: A note.'))
+        .toBe('Write [^1] for a note.[1]\n\n[^1]: not a note\n\nFootnotes\n1. A note.');
+    });
+
+    it('keeps footnote syntax in a tilde-fenced code block, and reads the block as code', () => {
+      // A note line in code without a mark was left out: the screen shows it as code.
+      expect(markdownToPlainText('Write a note like this:\n\n~~~markdown\n[^example]: Important code content\n~~~\n\nDone.[^1]\n\n[^1]: A note.'))
+        .toBe('Write a note like this:\n\n[^example]: Important code content\n\nDone.[1]\n\nFootnotes\n1. A note.');
+    });
+
+    it('keeps an escaped mark as text', () => {
+      expect(markdownToPlainText('Not a mark: \\[^1]\n\n[^1]: Never used.')).toBe('Not a mark: [^1]');
+    });
   });
 
   it('reads the alt text of images', () => {

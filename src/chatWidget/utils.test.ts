@@ -15,6 +15,7 @@ import {
   trackVisualViewport,
   VISUAL_VIEWPORT_PROPERTIES,
   visualViewportInset,
+  watchPageZoom,
   ZOOMED_ATTRIBUTE,
 } from './utils';
 
@@ -486,20 +487,57 @@ describe('visual viewport tracking', () => {
     delete (window as { matchMedia?: unknown }).matchMedia;
   });
 
-  it('marks the element while the page is zoomed in, in the same event that removes the box', () => {
+  // The widget watches the page zoom while it is on the page (ChatWidget).
+  const watchZoom = () => stops.push(watchPageZoom());
+  const pinch = (box: Partial<FakeVisualViewport>) => {
+    window.dispatchEvent(new Event('touchstart'));
+    Object.assign(viewport, box);
+    viewport.dispatchEvent(new Event('resize'));
+  };
+
+  it('marks the element while the visitor pinch-zooms in, in the same event that removes the box', () => {
     pointer(true);
+    watchZoom();
     const element = document.createElement('div');
     track(element);
     expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
 
-    Object.assign(viewport, { scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
-    viewport.dispatchEvent(new Event('resize'));
+    pinch({ scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
     expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
     expect(variables(element)).toEqual(['', '', '', '']);
 
-    Object.assign(viewport, { scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
+    pinch({ scale: 1, offsetLeft: 0, offsetTop: 0, width: 412, height: 839 });
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+    expect(variables(element)).toEqual(['0px', '0px', '412px', '839px']);
+  });
+
+  it('keeps the box when the zoom changes without a touch, on a touch screen', () => {
+    // A pinch needs fingers on the screen. Without a touch, the browser zoomed.
+    pointer(true);
+    watchZoom();
+    const element = document.createElement('div');
+    track(element);
+
+    Object.assign(viewport, { scale: 2, offsetLeft: 50, offsetTop: 150, width: 206, height: 419.5 });
     viewport.dispatchEvent(new Event('resize'));
     expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+    expect(variables(element)).toEqual(['50px', '150px', '206px', '419.5px']);
+  });
+
+  it('keeps the box after a touch without a zoom change', () => {
+    // A tap or a scroll of the visitor, for example on the launcher.
+    pointer(true);
+    watchZoom();
+    Object.assign(viewport, { scale: 1.5, width: 274.67, height: 559.33 });
+    viewport.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new Event('touchstart'));
+    const element = document.createElement('div');
+    track(element);
+
+    viewport.offsetTop = 40;
+    viewport.dispatchEvent(new Event('scroll'));
+    expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+    expect(variables(element)).toEqual(['0px', '40px', '274.67px', '559.33px']);
   });
 
   it('does not mark a pinch on a desktop: the short layout of a 400 % zoom stays', () => {
@@ -527,14 +565,40 @@ describe('visual viewport tracking', () => {
       delete root.clientHeight;
     });
 
-    it('marks the element as zoomed, not as a keyboard', () => {
+    it("follows the visible area: the zoom is not the visitor's", () => {
+      // On the layout viewport, the window was 568 px wide: no pan showed all of it.
       pointer(true);
+      watchZoom();
       Object.assign(viewport, { scale: 568 / 490, offsetLeft: 78, offsetTop: 0, width: 490, height: 276 });
       const element = document.createElement('div');
       track(element);
 
-      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
       expect(element.hasAttribute(KEYBOARD_ATTRIBUTE)).toBe(false);
+      expect(variables(element)).toEqual(['78px', '0px', '490px', '276px']);
+    });
+
+    it('forgets a pinch from before the rotation, and marks a pinch after it', () => {
+      pointer(true);
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 320 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 568 });
+      Object.assign(viewport, { width: 320, height: 568 });
+      watchZoom();
+      pinch({ scale: 1.5, width: 213.5, height: 378.5 });
+      const element = document.createElement('div');
+      track(element);
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
+
+      // The screen turns. The zoom comes with the new layout viewport.
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 568 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 320 });
+      Object.assign(viewport, { scale: 568 / 490, offsetLeft: 0, offsetTop: 0, width: 490, height: 276 });
+      window.dispatchEvent(new Event('resize'));
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(false);
+      expect(variables(element)).toEqual(['0px', '0px', '490px', '276px']);
+
+      pinch({ scale: 2, width: 284, height: 160 });
+      expect(element.hasAttribute(ZOOMED_ATTRIBUTE)).toBe(true);
       expect(variables(element)).toEqual(['', '', '', '']);
     });
 

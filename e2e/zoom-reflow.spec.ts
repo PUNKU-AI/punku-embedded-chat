@@ -83,28 +83,66 @@ test.describe('400 % zoom', () => {
   });
 });
 
+// True while the window keeps to the layout viewport for the visitor's zoom.
+function zoomMark(page: Page) {
+  return page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
+    .querySelector('.cl-chat-window')!.hasAttribute('data-cl-zoomed'));
+}
+
 // A phone turned to landscape on a page that is wider than the portrait screen
 // (release test 2026-10-30, phone-320: four sites). Chromium keeps the zoom
 // of such a page when the screen turns: a 371 px page on a 320 px phone shows
-// 490 x 276 px of the 568 x 320 px layout viewport. The window does not follow
-// the visible area while the page is zoomed in, so the short phone rule must
-// not give it the whole layout height: its close X, its send button and the
-// launcher went off the screen.
+// 490 x 276 px of the 568 x 320 px layout viewport. That zoom is not the
+// visitor's (watchPageZoom): the window follows the visible area, as on a page
+// that is not zoomed in. On the layout viewport the window was 568 px wide,
+// and no pan showed all of it.
 test.describe('a phone turned to a short landscape screen', () => {
   test.use({ viewport: { width: 320, height: 568 } });
-  const wideHost = `<div style="width:371px;height:40px;background:#c8d3df"></div>${hostCorner}`;
+  const wideHost = (width: number) => `<div style="width:${width}px;height:40px;background:#c8d3df"></div>${hostCorner}`;
+  const windowParts = ['.cl-chat-window', '.cl-header', '.cl-close-btn', '.cl-input-element', '.cl-send-button'];
 
-  test('keeps the gaps of the phone layout while the page stays zoomed in', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'android', 'Chromium phone emulation keeps the zoom when the screen turns');
-    await extendHostPage(page, wideHost);
-    await loadWidget(page, { show_closed_widget_hint: 'false', start_open: 'true' });
+  for (const { screen, pageWidth } of [{ screen: { width: 320, height: 568 }, pageWidth: 371 }, { screen: { width: 412, height: 839 }, pageWidth: 455 }]) {
+    test(`fits the window into the visible area of a page that stays zoomed in (${screen.width} px phone)`, async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== 'android', 'Chromium phone emulation keeps the zoom when the screen turns');
+      await page.setViewportSize(screen);
+      await extendHostPage(page, wideHost(pageWidth));
+      await loadWidget(page, { show_closed_widget_hint: 'false', start_open: 'true' });
+      await page.setViewportSize({ width: screen.height, height: screen.width });
+      await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBeGreaterThan(1.1);
+      await waitForSettledBoxes(page, ['.cl-chat-window']);
+
+      expect(await zoomMark(page)).toBe(false);
+      expect(await partsOutsideScreen(page, windowParts)).toEqual([]);
+      // The window follows the visitor's pan.
+      await panToLayoutCorner(page);
+      await waitForSettledBoxes(page, ['.cl-chat-window']);
+      expect(await partsOutsideScreen(page, windowParts)).toEqual([]);
+    });
+  }
+
+  // A pinch keeps the window on the layout viewport, so the visitor can pan
+  // over it (#77). The short phone rule must not give it the whole layout
+  // height there: its close X, its send button and the launcher would leave
+  // the screen.
+  test('keeps the gaps of the phone layout while the visitor pinch-zooms in', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'android', 'A pinch with CDP touch events');
     await page.setViewportSize({ width: 568, height: 320 });
-    await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBeGreaterThan(1.1);
+    await extendHostPage(page, hostCorner);
+    await loadWidget(page, { show_closed_widget_hint: 'false' });
+    // Two fingers move apart on the page, with the chat closed.
+    const cdp = await page.context().newCDPSession(page);
+    const fingers = (spread: number) => [{ x: 200 - spread, y: 150, id: 0 }, { x: 200 + spread, y: 150, id: 1 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: fingers(20) });
+    for (let step = 1; step <= 12; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: fingers(20 + step * 8) });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBeGreaterThan(1.5);
+    await page.evaluate(() => (window as unknown as Record<string, { open: () => void }>)['browser-fixture_api'].open());
     await waitForSettledBoxes(page, ['.cl-chat-window']);
 
-    const chatWindow = await page.evaluate(() => window.__widgetRoots.get(document.querySelector('punku-chat')!)!
-      .querySelector('.cl-chat-window')!.hasAttribute('data-cl-zoomed'));
-    expect(chatWindow).toBe(true);
+    expect(await zoomMark(page)).toBe(true);
     // top_offset above the window, and the room for the launcher below it.
     const gaps = (await edgeGaps(page, '.cl-chat-window')).layout;
     expect(gaps.top).toBe(60);

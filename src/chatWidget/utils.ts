@@ -232,15 +232,86 @@ export function getPageScale(viewport: VisualViewport | null | undefined = windo
  * True while the page is zoomed in: the visitor pinch-zoomed in, or a
  * rotation left the page zoomed in. Chrome on Android keeps the zoom of a
  * page that was wider than the portrait screen: a 371 px page on a 320 px
- * phone then shows 490 x 276 px of the 568 x 320 px layout viewport.
+ * phone then shows 490 x 276 px of the 568 x 320 px layout viewport. The zoom
+ * is the page width over the portrait width, up to 1.775 on that phone.
  */
 function isZoomedIn(viewport: VisualViewport | null) {
 	return !!viewport && viewport.scale > getPageScale(viewport) * PINCH_ZOOM_SCALE;
 }
 
+// A device whose main pointer is a finger.
+const isTouchScreen = () =>
+	typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
+/*
+ * Who zoomed the page in. A pinch or a double tap needs the visitor's
+ * fingers on the screen. The zoom that a rotation leaves comes with the new
+ * size of the layout viewport, before any touch. So on a touch screen, a zoom
+ * that changes after a touch since the last resize is the visitor's, and the
+ * window stays on the layout viewport (trackVisualViewport). The zoom of a
+ * resize, and a zoom that was there before the widget, are not: the window
+ * then follows the visible area as without a zoom, and no side of it is cut
+ * off. On a desktop, every zoom is the visitor's (a trackpad pinch).
+ */
+let zoomWatchers = 0;
+let watchedViewport: VisualViewport | null = null;
+let lastLayoutWidth = -1;
+let lastLayoutHeight = -1;
+let touchedSinceResize = false;
+// The zoom before the visitor's first touch since the last resize.
+let untouchedScale = 1;
+let pinchedSinceResize = false;
+
+function checkPageZoom() {
+	const viewport = window.visualViewport;
+	if (!viewport) return;
+	const { width, height } = getLayoutViewportSize();
+	if (width !== lastLayoutWidth || height !== lastLayoutHeight) {
+		lastLayoutWidth = width;
+		lastLayoutHeight = height;
+		touchedSinceResize = false;
+		pinchedSinceResize = false;
+	}
+	// The zoom of a resize can settle over several frames. 1 %: a pinch
+	// changes the zoom by more, and a scroll does not change it.
+	if (!touchedSinceResize) untouchedScale = viewport.scale;
+	else if (Math.abs(viewport.scale - untouchedScale) > untouchedScale * 0.01) pinchedSinceResize = true;
+}
+
+function noteTouch() {
+	checkPageZoom();
+	touchedSinceResize = true;
+}
+
+/**
+ * Watches resizes, zoom changes and touches while a widget is on the page,
+ * also while its window is closed. Returns a function that stops it.
+ */
+export function watchPageZoom() {
+	if (zoomWatchers++ === 0) {
+		watchedViewport = window.visualViewport ?? null;
+		checkPageZoom();
+		watchedViewport?.addEventListener('resize', checkPageZoom);
+		window.addEventListener('resize', checkPageZoom);
+		window.addEventListener('touchstart', noteTouch, { capture: true, passive: true });
+	}
+	return () => {
+		if (--zoomWatchers > 0) return;
+		watchedViewport?.removeEventListener('resize', checkPageZoom);
+		watchedViewport = null;
+		window.removeEventListener('resize', checkPageZoom);
+		window.removeEventListener('touchstart', noteTouch, { capture: true });
+		lastLayoutWidth = -1;
+		lastLayoutHeight = -1;
+		touchedSinceResize = false;
+		pinchedSinceResize = false;
+	};
+}
+
 function readVisualViewport(): VisualViewportBox | null {
 	const viewport = observedViewport;
-	if (!viewport || isZoomedIn(viewport)) return null;
+	checkPageZoom();
+	if (!viewport || (isZoomedIn(viewport) && (pinchedSinceResize || !isTouchScreen()))) return null;
 	const { offsetLeft, offsetTop, width, height } = viewport;
 	return { offsetLeft, offsetTop, width, height };
 }
@@ -256,8 +327,9 @@ function notifyVisualViewportListeners() {
  * the layout viewport larger, which fires a window resize. All listeners
  * share one set of event listeners. The browser fires these events in the
  * rendering steps of a frame, so the listeners update before that frame is
- * painted. The box is null while the visitor has pinch-zoomed in, and
- * without visualViewport. Returns a function that stops the updates.
+ * painted. The box is null while the visitor has zoomed in (see
+ * watchPageZoom), and without visualViewport. Returns a function that stops
+ * the updates.
  */
 export function subscribeVisualViewport(listener: VisualViewportListener) {
 	if (visualViewportListeners.size === 0) {
@@ -299,16 +371,12 @@ export function isKeyboardOpen(box: VisualViewportBox | null, layout = getLayout
 export const KEYBOARD_ATTRIBUTE = 'data-cl-keyboard';
 
 /*
- * Set on the tracked element while the page is zoomed in on a touch screen,
- * where a rotation can leave a page zoomed in. A desktop pinch (a trackpad)
- * keeps the layout of the browser zoom, such as the short layout at 400 %:
- * the element then zooms with the page.
+ * Set on the tracked element while the visitor has zoomed the page in on a
+ * touch screen (watchPageZoom): the element stays on the layout viewport. A
+ * desktop pinch (a trackpad) keeps the layout of the browser zoom, such as
+ * the short layout at 400 %: the element then zooms with the page.
  */
 export const ZOOMED_ATTRIBUTE = 'data-cl-zoomed';
-
-// A device whose main pointer is a finger.
-const isTouchScreen = () =>
-	typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
 // Set or remove a boolean attribute. Write only changes.
 function markElement(element: HTMLElement, attribute: string, on: boolean) {
@@ -321,7 +389,7 @@ function markElement(element: HTMLElement, attribute: string, on: boolean) {
  * Copy the visual viewport box to CSS variables on `element`, now and after
  * each change. When the visitor pinch-zooms in, remove the variables: the
  * element then stays on the layout viewport, and the visitor can pan over it.
- * While the page is zoomed in on a touch screen, set ZOOMED_ATTRIBUTE. While
+ * While the visitor's zoom is on a touch screen, set ZOOMED_ATTRIBUTE. While
  * the on-screen keyboard is open, set KEYBOARD_ATTRIBUTE. The same event sets
  * all of them, so the styles that use them change in the same frame. Returns
  * a function that stops the updates. The last box stays.

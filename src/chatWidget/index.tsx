@@ -5,7 +5,7 @@ import { ChatMessageType, LoadingMessages } from "../types/chatWidget";
 import { SessionStorage, SessionConfig } from "../utils/sessionStorage";
 import { ClosedWidgetHintStorage } from "../utils/closedWidgetHintStorage";
 import { Language, toLanguage, translations } from "../translations";
-import { chooseLanguage, safeAreaGap, subscribeVisualViewport, ViewportEdge, VisualViewportBox } from "./utils";
+import { chooseLanguage, safeAreaGap, subscribeVisualViewport, ViewportEdge, VisualViewportBox, watchPageZoom } from "./utils";
 import type { PunkuChatErrorDetail } from "./clientErrors";
 import BookingkitCheckoutModal from "./components/BookingkitCheckoutModal";
 import { getBookingkitCheckoutUrl, openNativeBookingkitCheckout } from "./bookingkitCheckout";
@@ -553,6 +553,9 @@ export default function ChatWidget({
   // (visitorAction.ts).
   const openedByVisitorRef = useRef(false);
   useEffect(() => watchVisitorInput(), []);
+  // A zoom that a rotation leaves is not the visitor's: the open window then
+  // fits the visible area. The widget watches for it also while it is closed.
+  useEffect(() => watchPageZoom(), []);
 
   const openWidget = useCallback((userMessage?: string) => {
     if (!openRef.current) {

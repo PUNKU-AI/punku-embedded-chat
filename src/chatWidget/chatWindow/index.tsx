@@ -547,7 +547,8 @@ export default function ChatWindow({
           }
           sendingRef.current = false;
           setSendingMessage(false);
-          announce(markdownToPlainText(answers.join("\n\n")));
+          // Each answer is a message of its own, with its own footnotes.
+          announce(answers.map((answer) => markdownToPlainText(answer, t.footnotes)).join("\n\n"));
         })
         .catch((err) => {
           const errorText = getRequestErrorMessage(err, t);
@@ -808,9 +809,9 @@ export default function ChatWindow({
     const answer = pendingAnswer.id ? messages.find((message) => message.message_id === pendingAnswer.id) : undefined;
     if (answer && (answer.streaming || answer.message !== pendingAnswer.markdown)) return;
     const cards = pendingAnswer.id ? cardSpeech.get(pendingAnswer.id) : [];
-    announce(markdownToPlainText(speakCheckoutCards(pendingAnswer.markdown, cards)));
+    announce(markdownToPlainText(speakCheckoutCards(pendingAnswer.markdown, cards), t.footnotes));
     setPendingAnswer(null);
-  }, [announce, pendingAnswer, messages, cardSpeech]);
+  }, [announce, pendingAnswer, messages, cardSpeech, t.footnotes]);
 
   // The newest answer keeps its feedback buttons visible; older ones show
   // them on hover, on focus or after a vote.
@@ -1012,9 +1013,15 @@ export default function ChatWindow({
   const focusOnOpen = useRef(false);
   // A visitor opened the chat, or the focus has been in the window since it opened.
   const visitorInChat = useRef(false);
+  /*
+   * The opening focus, 100 ms after the open. An answer on its way does not
+   * delay it: the input takes text while the assistant answers. Before, a
+   * chat that opened with a message (api.open("…")) focused its input only
+   * after the whole answer, wherever the visitor was by then. Until then the
+   * focus stayed on the launcher, which the window can cover. A ref, not a
+   * local flag: when StrictMode runs the effect again, the timer starts again.
+   */
   useEffect(() => {
-    // A ref, not a local flag: a message change in the first 100 ms restarts
-    // the timer, and the chat still focuses its input for the opening.
     if (open && !wasOpen.current) {
       focusOnOpen.current = openedByVisitorRef?.current ?? true;
       visitorInChat.current = focusOnOpen.current;
@@ -1024,33 +1031,39 @@ export default function ChatWindow({
       visitorInChat.current = false;
     }
     wasOpen.current = open;
-    if (!open || sendingMessage || !visitorInChat.current) return;
+    if (!focusOnOpen.current) return;
+    const focusTimer = setTimeout(() => {
+      focusOnOpen.current = false;
+      const input = inputRef.current;
+      // A page dialog over the input: the visitor answers it first.
+      if (input && !coveredByPage(input)) input.focus({ preventScroll: true });
+    }, 100);
+    return () => clearTimeout(focusTimer);
+  }, [open, openedByVisitorRef]);
+  // After an answer or another change of the messages, unless the visitor works elsewhere.
+  useEffect(() => {
+    if (!open || sendingMessage || !visitorInChat.current || focusOnOpen.current) return;
     const focusTimer = setTimeout(() => {
       const input = inputRef.current;
       if (!input) return;
-      const opening = focusOnOpen.current;
-      focusOnOpen.current = false;
-      if (!opening) {
-        const root = input.getRootNode() as Document | ShadowRoot;
-        const host = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot ? root.host : null;
-        const pageFocus = document.activeElement;
-        const focusOnHostPage =
-          !!pageFocus &&
-          pageFocus !== document.body &&
-          pageFocus !== document.documentElement &&
-          pageFocus !== host &&
-          !chatWindowRef.current?.contains(pageFocus);
-        if (focusOnHostPage) return;
-        const chatFocus = root.activeElement;
-        if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
-        if (isTouchScreen()) return;
-      }
-      // A page dialog over the input: the visitor answers it first.
+      const root = input.getRootNode() as Document | ShadowRoot;
+      const host = typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot ? root.host : null;
+      const pageFocus = document.activeElement;
+      const focusOnHostPage =
+        !!pageFocus &&
+        pageFocus !== document.body &&
+        pageFocus !== document.documentElement &&
+        pageFocus !== host &&
+        !chatWindowRef.current?.contains(pageFocus);
+      if (focusOnHostPage) return;
+      const chatFocus = root.activeElement;
+      if (chatFocus && chatFocus !== input && messagesContainer.current?.contains(chatFocus)) return;
+      if (isTouchScreen()) return;
       if (coveredByPage(input)) return;
       input.focus({ preventScroll: true });
     }, 100);
     return () => clearTimeout(focusTimer);
-  }, [messages, open, sendingMessage, openedByVisitorRef]);
+  }, [messages, open, sendingMessage]);
 
   /*
    * When the chat closes from inside (the close button, Escape), the focus
@@ -1425,13 +1438,13 @@ export default function ChatWindow({
            * layout keeps its own rule. !important: the window sets
            * --cl-top-offset inline (top_offset).
            *
-           * Not while the page is zoomed in on a touch screen: the window then
-           * stays on the layout viewport (trackVisualViewport), and the whole
-           * height would go below the visible area. A rotation can leave a page
-           * zoomed in (Chrome on Android, a page wider than the portrait
-           * screen): the close X, the send button and the launcher went off the
-           * screen. The window keeps the gaps of the phone layout there, as
-           * before. A desktop pinch keeps this rule.
+           * Not while the visitor has zoomed in on a touch screen: the window
+           * then stays on the layout viewport (trackVisualViewport), and the
+           * whole height would go below the visible area. The window keeps the
+           * gaps of the phone layout there, as before. The zoom that a rotation
+           * leaves (Chrome on Android, a page wider than the portrait screen)
+           * is not the visitor's: the window follows the visible area, and this
+           * rule applies. A desktop pinch keeps this rule.
            */
           ${screenRules({ maxWidth: 640, maxHeight: 420 }, `
             .cl-chat-window:not([${KEYBOARD_ATTRIBUTE}]):not([${ZOOMED_ATTRIBUTE}]) {
@@ -1952,10 +1965,11 @@ export default function ChatWindow({
           cancelText={t.cancelButton}
           closeLabel={t.closeDialog}
           lang={language}
-          // The swarovski theme keeps the branch's red (#ef4444). Else a
-          // site text colour without button_color gets a red it reads on.
-          buttonColor={button_color || (branchLook ? "#ef4444" : dialogConfirm.fill)}
-          buttonTextColor={(!button_color && !branchLook && dialogConfirm.label) || button_text_color}
+          // A site text colour without button_color gets a red it reads on.
+          // The swarovski theme takes the same red: white on the branch's
+          // #ef4444 was 3.76:1 (WCAG 1.4.3).
+          buttonColor={button_color || dialogConfirm.fill}
+          buttonTextColor={(!button_color && dialogConfirm.label) || button_text_color}
         />
 
         <style>{`
