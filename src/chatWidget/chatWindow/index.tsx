@@ -23,6 +23,7 @@ import { takesText } from "../visitorAction";
 import { guardControlColors, guardDialogConfirm } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
+import { createBackendStreamError, isInsufficientCredits } from "../../controllers/backendError";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
@@ -89,7 +90,13 @@ const openerToRefocus = (opener: HTMLElement | null | undefined) => {
  * (ERR_BACKEND_STREAM, for example "Error building Component …: 401"). The
  * technical detail still goes to console.error and to client-error reporting.
  */
-const getRequestErrorMessage = (error: unknown, t: Translation) => {
+const getRequestErrorMessage = (error: unknown, t: Translation, contactEmail?: string) => {
+  if (isInsufficientCredits(error)) {
+    const email = contactEmail?.trim();
+    return email
+      ? `${t.errorUnavailable} ${t.errorUnavailableContact.replace("{email}", () => email)}`
+      : t.errorUnavailable;
+  }
   if (error && typeof error === "object") {
     const errorRecord = error as { code?: string; name?: string };
 
@@ -185,6 +192,7 @@ export default function ChatWindow({
   onCheckout,
   removeLastMessage,
   ai_notice_text,
+  unavailable_contact_email,
   show_ai_notice = true,
   checkout_card_venue,
   dismissDialogRef,
@@ -268,6 +276,7 @@ export default function ChatWindow({
   removeLastMessage?: () => void;
   /** Replaces the AI notice under the input (EU AI Act, Article 50). */
   ai_notice_text?: string;
+  unavailable_contact_email?: string;
   /** false hides the AI notice, for sites that show it elsewhere. */
   show_ai_notice?: boolean;
   /** The second line of each checkout card, for example the name of the venue. */
@@ -551,11 +560,12 @@ export default function ChatWindow({
           announce(answers.map((answer) => markdownToPlainText(answer, t.footnotes)).join("\n\n"));
         })
         .catch((err) => {
-          const errorText = getRequestErrorMessage(err, t);
+          const errorText = getRequestErrorMessage(err, t, unavailable_contact_email);
           addMessage({
             message: errorText,
             isSend: false,
             error: true,
+            ...(isInsufficientCredits(err) ? { retryable: false } : {}),
           });
           announce(errorText);
           notifyClientError(err, "send-message", {
@@ -598,9 +608,10 @@ export default function ChatWindow({
         setIsStreaming(false);
 
         const errorMessage = {
-          message: getRequestErrorMessage(error, t),
+          message: getRequestErrorMessage(error, t, unavailable_contact_email),
           isSend: false,
           error: true,
+          ...(isInsufficientCredits(error) ? { retryable: false } : {}),
         };
         announce(errorMessage.message);
 
@@ -667,19 +678,7 @@ export default function ChatWindow({
             }
           } else if (data.event === "error") {
             terminalReceived = true;
-            const detail = [
-              data.data,
-              data.data?.text,
-              data.data?.message,
-              data.data?.detail,
-              data.message
-            ].find((value) => typeof value === "string" && value.trim());
-            handleStreamError(createStreamError(
-              typeof detail === "string" && detail.trim()
-                ? detail
-                : t.errorServer,
-              "ERR_BACKEND_STREAM"
-            ));
+            handleStreamError(createBackendStreamError(data));
           } else if (data.event === "end") {
             terminalReceived = true;
 
@@ -758,6 +757,7 @@ export default function ChatWindow({
     sendingMessage,
     sessionId,
     t,
+    unavailable_contact_email,
     tweaks,
     updateLastMessage,
   ]);
@@ -1830,7 +1830,7 @@ export default function ChatWindow({
                 onCheckout={onCheckout}
                 streaming={message.streaming}
                 isLatest={index === latestAnswerIndex}
-                onRetry={index === messages.length - 1 ? handleRetry : undefined}
+                onRetry={index === messages.length - 1 && message.retryable !== false ? handleRetry : undefined}
                 retryLabel={t.retry}
                 helpfulLabel={t.helpful}
                 notHelpfulLabel={t.notHelpful}

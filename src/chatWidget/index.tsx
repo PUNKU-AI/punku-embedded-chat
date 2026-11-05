@@ -195,6 +195,7 @@ export default function ChatWidget({
   placeholder_sending,
   loading_messages,
   ai_notice_text,
+  unavailable_contact_email,
   show_ai_notice,
   checkout_card_venue,
   input_container_style,
@@ -264,6 +265,8 @@ export default function ChatWidget({
   loading_messages?: LoadingMessages;
   /** Replaces the AI notice under the input (EU AI Act, Article 50). */
   ai_notice_text?: string;
+  /** Public contact shown when the assistant has no usable credits. */
+  unavailable_contact_email?: string;
   /** false hides the AI notice, for sites that show it elsewhere. */
   show_ai_notice?: boolean;
   /** The second line of each checkout card, for example the name of the venue. */
@@ -4994,6 +4997,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
           placeholder_sending={placeholder_sending}
           loading_messages={loading_messages}
           ai_notice_text={ai_notice_text}
+          unavailable_contact_email={unavailable_contact_email}
           show_ai_notice={show_ai_notice}
           checkout_card_venue={checkout_card_venue}
           send_button_style={send_button_style}

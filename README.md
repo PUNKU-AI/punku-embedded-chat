@@ -326,12 +326,20 @@ Use the widget API to customize your widget:
 | additional_headers    | json      | No       |
 | ai_notice_text        | string    | No       |
 | show_ai_notice        | boolean   | No       |
+| unavailable_contact_email | string | No |
 | checkout_card_venue   | string    | No       |
 | show_feedback         | boolean   | No       |
 | show_closed_widget_hint | boolean | No       |
 | show_close_button_on_desktop | boolean | No |
 | link_color            | string    | No       |
 | z_index               | number    | No       |
+
+- **unavailable_contact_email:**
+  Optional public contact email shown when the backend rejects a request because the account has no credits.
+  The widget shows a neutral message in the chat language and hides the retry button for this error.
+  Example: `unavailable_contact_email="hello@example.com"`.
+  Without this attribute, the message says only that the assistant is currently unavailable.
+  Visitors do not see credit balances or billing details.
 
 - **ai_notice_text:**
   - Type: String

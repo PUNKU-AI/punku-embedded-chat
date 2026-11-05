@@ -329,3 +329,55 @@ for (const { name, style, colors, retry } of partialStyles) {
     expect(failed.retryColor).toBe(retry);
   });
 }
+
+for (const scenario of [
+  {
+    language: 'en', contact: '',
+    message: 'The assistant is currently unavailable.',
+    data: { code: 'insufficient_credits', text: 'Private billing details', retryable: false },
+  },
+  {
+    language: 'de', contact: ' hello@example.com ',
+    message: 'Der Assistent ist derzeit nicht verfügbar. Bei Fragen erreichst du uns unter hello@example.com.',
+    data: { code: 'insufficient_credits', text: 'Insufficient tokens', retryable: false },
+  },
+  {
+    language: 'en', contact: '',
+    message: 'The assistant is currently unavailable.',
+    data: { text: 'Insufficient tokens' },
+  },
+]) {
+  test(`credit rejection hides billing details and retry (${scenario.language}, ${scenario.data.code ?? 'legacy'})`, async ({ page }) => {
+    let requests = 0;
+    await page.route('**/api/v1/run/**', async (route) => {
+      requests += 1;
+      await route.fulfill({
+        status: 200, contentType: 'application/x-ndjson',
+        // The live server can follow the credit rejection with a generic error.
+        body: [
+          { event: 'error', data: scenario.data },
+          { event: 'error', data: { code: 'flow_run_failed', text: 'The flow failed to run.' } },
+        ].map((event) => JSON.stringify(event)).join('\n') + '\n',
+      });
+    });
+    await openChat(page, {
+      default_language: scenario.language,
+      unavailable_contact_email: scenario.contact,
+    });
+    await page.keyboard.type(question);
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await chatState(page)).errorText).toBe(scenario.message);
+    const failed = await chatState(page);
+    expect(failed.retryLabel).toBeNull();
+    expect(failed.status).toBe(scenario.message);
+    expect(failed.busy).toBe('false');
+    expect(failed.typingDots).toBe(0);
+    expect(failed.errorInsideList).toBe(true);
+    expect(requests).toBe(1);
+
+    // Persisted messages must not gain a retry button when the page reloads.
+    await page.reload();
+    await expect.poll(async () => (await chatState(page)).errorText).toBe(scenario.message);
+    expect((await chatState(page)).retryLabel).toBeNull();
+  });
+}
