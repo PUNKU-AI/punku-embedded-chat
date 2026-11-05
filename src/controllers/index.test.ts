@@ -202,11 +202,21 @@ describe('sendMessage', () => {
     expect(calledBody.output_component).toBe('chat_output');
   });
 
+  it('preserves a credit rejection from a non-streaming HTTP response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 400,
+      text: () => Promise.resolve(JSON.stringify({ detail: 'Insufficient tokens' }))
+    });
+    await expect(sendMessage(baseUrl, flowId, message, input_type, output_type, sessionId))
+      .rejects.toMatchObject({ code: 'insufficient_credits' });
+  });
+
   it('should throw error on HTTP error response', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
-      statusText: 'Internal Server Error'
+      statusText: 'Internal Server Error',
+      text: () => Promise.resolve('Internal Server Error')
     });
 
     await expect(
@@ -500,6 +510,21 @@ describe('streamMessage', () => {
     expect(onStreamError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'ERR_PREMATURE_STREAM_END' })
     );
+  });
+
+  it('preserves the credit code in streamed errors and the error callback', async () => {
+    const onStreamError = jest.fn();
+    const event = { event: 'error', data: { code: 'insufficient_credits', text: 'Insufficient tokens', retryable: false } };
+    mockFetch.mockResolvedValueOnce({
+      ok: true, status: 200,
+      body: { getReader: () => ({ read: jest.fn().mockResolvedValueOnce({
+        done: false, value: new TextEncoder().encode(JSON.stringify(event) + '\n')
+      }) }) }
+    });
+    await expect(streamMessage(baseUrl, flowId, message, input_type, output_type, sessionId,
+      undefined, undefined, undefined, undefined, undefined, undefined, onStreamError))
+      .rejects.toMatchObject({ code: 'insufficient_credits' });
+    expect(onStreamError).toHaveBeenCalledWith(expect.objectContaining({ code: 'insufficient_credits' }));
   });
 
   it('should reject an explicit backend error event', async () => {

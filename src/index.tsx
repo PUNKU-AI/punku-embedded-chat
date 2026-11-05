@@ -33,6 +33,7 @@ function createChatElement() {
             placeholder_sending:"string",
             loading_messages:"json",
             ai_notice_text: "string",
+            unavailable_contact_email: "string",
             show_ai_notice: "boolean",
             checkout_card_venue: "string",
             input_style:"json",

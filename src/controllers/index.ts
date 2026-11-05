@@ -1,3 +1,5 @@
+import { createBackendStreamError, createHttpError } from "./backendError";
+
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 export class InvalidRequestHeaderError extends Error {
@@ -25,22 +27,6 @@ export class StreamProtocolError extends Error {
     this.code = code;
     Object.setPrototypeOf(this, StreamProtocolError.prototype);
   }
-}
-
-function getBackendStreamErrorMessage(data: any): string {
-  const errorData = data?.data;
-
-  if (typeof errorData === "string" && errorData.trim()) {
-    return errorData;
-  }
-
-  for (const value of [errorData?.text, errorData?.message, errorData?.detail, data?.message]) {
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return "The assistant could not complete the response. Please try again.";
 }
 
 function validateRequestHeader(headerName: string, headerValue: unknown) {
@@ -132,7 +118,7 @@ export async function sendMessage(
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw createHttpError(response.status, await response.text());
     }
     
     const responseData = await response.json();
@@ -195,7 +181,7 @@ export async function sendMessage(
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ HTTP Error Response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+        throw createHttpError(response.status, errorText);
       }
   
       const reader = response.body?.getReader();
@@ -234,10 +220,7 @@ export async function sendMessage(
 
         if (parsedData?.event === "error") {
           terminalReceived = true;
-          throw new StreamProtocolError(
-            getBackendStreamErrorMessage(parsedData),
-            "ERR_BACKEND_STREAM"
-          );
+          throw createBackendStreamError(parsedData);
         }
 
         if (parsedData?.event === "end") {
