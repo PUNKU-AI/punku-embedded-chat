@@ -704,6 +704,79 @@ describe('ChatWindow', () => {
       expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
     });
 
+    // About 2,000 characters: taller than the message list on every screen.
+    const longWelcome = 'Welcome to the museum. '.repeat(90);
+
+    describe('before the first message (only the welcome message shows)', () => {
+      it('should open at the start of a long welcome message, not at its end', () => {
+        jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        render(<ChatWindow {...defaultProps} welcome_message={longWelcome} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+        expect(screen.getByTestId('bot-message')).toHaveTextContent('Welcome to the museum.');
+        // No scroll to the end (640): the visitor reads the message from its first line.
+        expect(scrollTo).not.toHaveBeenCalled();
+        expect(list.scrollTop).toBe(0);
+        expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      });
+
+      it('should follow the newest message from the first message on, also after a scroll in the welcome message', () => {
+        jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        const { rerender } = render(<ChatWindow {...defaultProps} welcome_message={longWelcome} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+        // The visitor reads down the welcome message, then up again.
+        scrollListTo(list, 300);
+        scrollListTo(list, 100);
+        scrollTo.mockClear();
+
+        rerender(
+          <ChatWindow
+            {...defaultProps}
+            welcome_message={longWelcome}
+            messages={[{ message: 'Assistant reply', isSend: false }]}
+          />
+        );
+
+        expect(scrollTo).toHaveBeenCalledTimes(1);
+        expect(scrollTo.mock.contexts[0]).toHaveClass('cl-messages_container');
+        expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+        // The welcome message is gone: no button leads back to its end.
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      });
+
+      it('should go back to the start of the welcome message when the conversation is cleared', () => {
+        jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        const { rerender } = render(
+          <ChatWindow {...defaultProps} welcome_message={longWelcome} messages={streamedAnswer('Partial')} />
+        );
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+
+        // The visitor scrolled up in the conversation: the jump button shows.
+        scrollListTo(list, 440);
+        scrollListTo(list, 100);
+        expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+        scrollTo.mockClear();
+
+        rerender(<ChatWindow {...defaultProps} welcome_message={longWelcome} messages={[]} />);
+
+        expect(list.scrollTop).toBe(0);
+        expect(scrollTo).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+
+        // The next conversation follows its newest message again.
+        rerender(
+          <ChatWindow
+            {...defaultProps}
+            welcome_message={longWelcome}
+            messages={[{ message: 'Assistant reply', isSend: false }]}
+          />
+        );
+        expect(scrollTo).toHaveBeenCalledWith({ top: 640, behavior: 'smooth' });
+      });
+    });
+
     describe('when the list gets shorter (the on-screen keyboard opens)', () => {
       // jsdom has no ResizeObserver. This one reports a resize of the list on demand.
       const resized: Array<() => void> = [];
@@ -758,6 +831,68 @@ describe('ChatWindow', () => {
 
         expect(list.scrollTop).toBe(240);
         expect(screen.getByRole('button', { name: 'Jump to the newest message' })).toBeInTheDocument();
+      });
+
+      it('should keep the start of a long welcome message before the first message', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(500);
+        render(<ChatWindow {...defaultProps} welcome_message={longWelcome} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        // jsdom has no scrolling: make the list's position writable. It is at the start.
+        Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 0 });
+
+        // The keyboard takes 300 px. The list must not jump to the end (640).
+        clientHeight.mockReturnValue(200);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(0);
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      });
+
+      it('should keep the last suggestion in view when a short welcome message fitted before the keyboard', () => {
+        // The welcome message and the suggestions (640) fit in the list (700).
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(700);
+        render(
+          <ChatWindow
+            {...defaultProps}
+            welcome_message="Hello. How can we help?"
+            suggestions={['Opening hours', 'Tickets for families', 'Wheelchair access', 'Parking']}
+          />
+        );
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        Object.defineProperty(list, 'scrollTop', { configurable: true, writable: true, value: 0 });
+
+        // The keyboard takes 400 px. The visitor saw every suggestion: they stay in view.
+        clientHeight.mockReturnValue(300);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(640);
+        expect(screen.queryByRole('button', { name: 'Jump to the newest message' })).not.toBeInTheDocument();
+      });
+
+      it('should keep the end of a long welcome message for a visitor who read down to it', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(500);
+        render(<ChatWindow {...defaultProps} welcome_message={longWelcome} suggestions={['Opening hours']} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        // The visitor reads down to the end (640 - 500).
+        scrollListTo(list, 140);
+
+        clientHeight.mockReturnValue(200);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(640);
+      });
+
+      it('should keep the place of a visitor in the middle of a long welcome message', () => {
+        const clientHeight = jest.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(300);
+        render(<ChatWindow {...defaultProps} welcome_message={longWelcome} />);
+        const list = document.querySelector('.cl-messages_container') as HTMLElement;
+        // 240 px above the end (640 - 300 - 100).
+        scrollListTo(list, 100);
+
+        clientHeight.mockReturnValue(150);
+        act(() => resized.forEach((resize) => resize()));
+
+        expect(list.scrollTop).toBe(100);
       });
 
       it('should not scroll when the list gets taller (the keyboard closes)', () => {
