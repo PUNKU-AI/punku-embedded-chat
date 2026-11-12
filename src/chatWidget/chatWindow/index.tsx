@@ -898,6 +898,12 @@ export default function ChatWindow({
    * than the screen that pans the visitor's view of the host page (#69).
    */
   const followNewest = useRef(true);
+  /*
+   * Before the first message the list holds only the welcome message and the
+   * suggestions. Nothing new arrives there, so the list does not go to its
+   * end: the visitor reads a long welcome message from its first line.
+   */
+  const welcomeOnly = useRef(messages.length === 0);
   const lastListScrollTop = useRef(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
@@ -926,19 +932,23 @@ export default function ChatWindow({
    * keeps the scroll position, so the newest message slid under the input.
    * A visitor who reads at the bottom stays there. A resize fires no scroll
    * event, so a visitor who scrolled up gets the jump button here.
+   * Before the first message the list keeps its place, so the keyboard does
+   * not move a long welcome message to its end. A visitor who saw the end of
+   * the list there (the last suggestion) keeps it in view.
    */
   useEffect(() => {
     const list = messagesContainer.current;
     if (!list || typeof ResizeObserver === "undefined") return;
     let height = list.clientHeight;
     const observer = new ResizeObserver(() => {
-      const shorter = list.clientHeight < height;
+      const previousHeight = height;
       height = list.clientHeight;
-      if (!shorter) return;
-      if (followNewest.current) {
+      if (height >= previousHeight) return;
+      const sawEnd = list.scrollHeight - previousHeight - list.scrollTop <= 8;
+      if (followNewest.current && (!welcomeOnly.current || sawEnd)) {
         list.scrollTop = list.scrollHeight;
         lastListScrollTop.current = list.scrollTop;
-      } else {
+      } else if (!followNewest.current) {
         setShowJumpToLatest(list.scrollHeight - list.clientHeight - list.scrollTop > 120);
       }
     });
@@ -949,6 +959,26 @@ export default function ChatWindow({
   useEffect(() => {
     const el = messagesContainer.current;
     if (!el) return;
+    const wasWelcomeOnly = welcomeOnly.current;
+    welcomeOnly.current = messages.length === 0;
+    if (welcomeOnly.current) {
+      // A cleared conversation shows the welcome message again, from its
+      // first line. A chat that starts without messages is already there.
+      if (!wasWelcomeOnly) {
+        el.scrollTop = 0;
+        lastListScrollTop.current = 0;
+        followNewest.current = true;
+        setShowJumpToLatest(false);
+      }
+      return;
+    }
+    if (wasWelcomeOnly) {
+      // The first message replaces the welcome message. The list follows it,
+      // wherever the visitor was in the welcome message.
+      followNewest.current = true;
+      lastListScrollTop.current = el.scrollTop;
+      setShowJumpToLatest(false);
+    }
     const last = messages[messages.length - 1];
     // A scroll up counts even before its scroll event fires (one frame later):
     // the next streamed word must not pull the visitor back down.
