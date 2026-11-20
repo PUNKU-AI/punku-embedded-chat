@@ -394,6 +394,9 @@ export default function ChatMessage({
   error_message_style,
   feedback,
   api_key,
+  publishable_key,
+  flow_id,
+  session_ref,
   additional_headers,
   host_url,
   onFeedbackUpdate,
@@ -410,6 +413,10 @@ export default function ChatMessage({
   streaming = false,
 }: ChatMessageType & {
   api_key?: string;
+  /** The widget's public key. With the flow and session it gets the visitor token for the feedback. */
+  publishable_key?: string;
+  flow_id?: string;
+  session_ref?: { current: string };
   additional_headers?: {[key: string]: string};
   host_url: string;
   onFeedbackUpdate?: (messageId: string, feedbackType: string) => void;
@@ -553,7 +560,8 @@ export default function ChatMessage({
           message_id,
           feedbackValue,
           api_key,
-          additional_headers
+          additional_headers,
+          flow_id && session_ref ? { flowId: flow_id, sessionId: session_ref, publishableKey: publishable_key } : undefined
         );
         // console.log(`Feedback sent: ${feedbackValue} (positive_feedback: ${type === 'thumbsUp' ? 'true' : 'false'})`);
       } catch (error) {

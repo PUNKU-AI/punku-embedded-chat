@@ -20,7 +20,7 @@ function handleFeedback(request, response, pathname, port) {
   if (port === 4180) {
     response.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:4179');
     response.setHeader('Access-Control-Allow-Methods', 'PUT, OPTIONS');
-    response.setHeader('Access-Control-Allow-Headers', 'content-type, x-api-key, x-widget-test, x-xsrf-token');
+    response.setHeader('Access-Control-Allow-Headers', 'content-type, x-api-key, x-widget-token, x-widget-test, x-xsrf-token');
     // Cookie assertions must fail if the widget starts including credentials.
     response.setHeader('Access-Control-Allow-Credentials', 'true');
   }
@@ -104,5 +104,16 @@ const fixtureServer = http.createServer((request, response) => {
 // Start the API first. The existing health check then covers both listeners.
 http.createServer((request, response) => {
   const pathname = new URL(request.url, 'http://127.0.0.1:4180').pathname;
-  if (!handleFeedback(request, response, pathname, 4180)) response.writeHead(404).end();
+  if (handleFeedback(request, response, pathname, 4180)) return;
+  // Like an older backend: every answer carries CORS headers, also the 404 of a route that it
+  // does not have (the visitor-token route). The widget then sends the old key directly.
+  response.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:4179');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'content-type, x-api-key, x-widget-token, x-widget-test, x-xsrf-token');
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204).end();
+    return;
+  }
+  response.setHeader('Content-Type', 'application/json');
+  response.writeHead(404).end('{"detail":"Not Found"}');
 }).listen(4180, '127.0.0.1', () => fixtureServer.listen(4179, '127.0.0.1'));

@@ -24,6 +24,8 @@ import { guardControlColors, guardDialogConfirm } from "../controlColors";
 import { markdownToPlainText } from "./plainText";
 import { sendMessage, streamMessage } from "../../controllers";
 import { createBackendStreamError, isInsufficientCredits } from "../../controllers/backendError";
+import { isWidgetNotAllowed } from "../../controllers/widgetAuth";
+import { SessionStorage } from "../../utils/sessionStorage";
 import type { StreamTerminal } from "../../controllers";
 import ChatMessagePlaceholder from "../../chatPlaceholder";
 import PunkuLogo from "../../components/PunkuLogo";
@@ -91,6 +93,9 @@ const openerToRefocus = (opener: HTMLElement | null | undefined) => {
  * technical detail still goes to console.error and to client-error reporting.
  */
 const getRequestErrorMessage = (error: unknown, t: Translation, contactEmail?: string) => {
+  if (isWidgetNotAllowed(error)) {
+    return t.errorNotAllowedHere;
+  }
   if (isInsufficientCredits(error)) {
     const email = contactEmail?.trim();
     return email
@@ -122,6 +127,7 @@ const createStreamError = (message: string, code: string) =>
 
 export default function ChatWindow({
   api_key,
+  publishable_key,
   flowId,
   hostUrl,
   updateLastMessage,
@@ -201,6 +207,7 @@ export default function ChatWindow({
   coversTrigger = false,
 }: {
   api_key?: string;
+  publishable_key?: string;
   output_type: string,
   input_type: string,
   output_component?: string,
@@ -412,6 +419,13 @@ export default function ChatWindow({
   // Set when a send starts, before React renders sendingMessage: two
   // activations in one task (Enter twice, Try again twice) send only once.
   const sendingRef = useRef(false);
+  // The server can answer with its own session id, for example in place of one that it does not
+  // accept. Store it, so that the next page sends it and the conversation keeps its memory.
+  const adoptServerSession = useCallback((serverSessionId: string) => {
+    if (!serverSessionId || sessionId.current === serverSessionId) return;
+    sessionId.current = serverSessionId;
+    SessionStorage.updateSessionId(flowId, serverSessionId);
+  }, [flowId, sessionId]);
   // The log does not announce changes: the status region tells that a new
   // conversation starts. Not in a chat that closes. A send that found the
   // session expired keeps its own status too.
@@ -493,7 +507,7 @@ export default function ChatWindow({
     announce(t.typing);
 
     if (!enable_streaming) {
-      sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers)
+      sendMessage(hostUrl, flowId, message, input_type, output_type, sessionId, output_component, tweaks, api_key, additional_headers, publishable_key)
         .then((res) => {
           const answers: string[] = [];
 
@@ -552,7 +566,7 @@ export default function ChatWindow({
           }
 
           if (res.data && res.data.session_id) {
-            sessionId.current = res.data.session_id;
+            adoptServerSession(res.data.session_id);
           }
           sendingRef.current = false;
           setSendingMessage(false);
@@ -565,7 +579,7 @@ export default function ChatWindow({
             message: errorText,
             isSend: false,
             error: true,
-            ...(isInsufficientCredits(err) ? { retryable: false } : {}),
+            ...(isInsufficientCredits(err) || isWidgetNotAllowed(err) ? { retryable: false } : {}),
           });
           announce(errorText);
           notifyClientError(err, "send-message", {
@@ -611,7 +625,7 @@ export default function ChatWindow({
           message: getRequestErrorMessage(error, t, unavailable_contact_email),
           isSend: false,
           error: true,
-          ...(isInsufficientCredits(error) ? { retryable: false } : {}),
+          ...(isInsufficientCredits(error) || isWidgetNotAllowed(error) ? { retryable: false } : {}),
         };
         announce(errorMessage.message);
 
@@ -684,7 +698,7 @@ export default function ChatWindow({
 
             // Final result - might contain session_id or final data
             if (data.data?.result?.session_id) {
-              sessionId.current = data.data.result.session_id;
+              adoptServerSession(data.data.result.session_id);
             }
 
             if (!message_to_add.trim()) {
@@ -734,7 +748,8 @@ export default function ChatWindow({
         },
         (error) => {
           handleStreamError(error);
-        }
+        },
+        publishable_key
       ).catch((error) => {
         handleStreamError(error);
       });
@@ -743,6 +758,7 @@ export default function ChatWindow({
   }, [
     additional_headers,
     addMessage,
+    adoptServerSession,
     announce,
     api_key,
     enable_streaming,
@@ -754,6 +770,7 @@ export default function ChatWindow({
     onStartNewSession,
     output_component,
     output_type,
+    publishable_key,
     sendingMessage,
     sessionId,
     t,
@@ -1787,6 +1804,9 @@ export default function ChatWindow({
               language={language}
               feedback={undefined}
               api_key={api_key}
+              publishable_key={publishable_key}
+              flow_id={flowId}
+              session_ref={sessionId}
               additional_headers={additional_headers}
               host_url={hostUrl}
               onClientError={notifyClientError}
@@ -1854,6 +1874,9 @@ export default function ChatWindow({
                 isSend={message.isSend}
                 error={message.error}
                 api_key={api_key}
+                publishable_key={publishable_key}
+                flow_id={flowId}
+                session_ref={sessionId}
                 additional_headers={additional_headers}
                 host_url={hostUrl}
                 onClientError={notifyClientError}

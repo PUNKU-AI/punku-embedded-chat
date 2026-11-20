@@ -206,6 +206,19 @@ export class SessionStorage {
   }
 
   /**
+   * A session limit that the config names applies to a stored session too, counted from its start.
+   * The limit can come after the session exists: an embed code with a public key gets it with the
+   * live look, after the widget started.
+   */
+  private static applyConfiguredExpiry(session: StoredSession, config: SessionConfig): void {
+    if (config.expiryHours === undefined) {
+      return;
+    }
+    const expiryHours = this.resolveHours(config.expiryHours, this.DEFAULT_EXPIRY_HOURS);
+    session.expiresAt = expiryHours > 0 ? session.createdAt + (expiryHours * this.HOUR_MS) : 0;
+  }
+
+  /**
    * Get or create session - main entry point
    */
   static getOrCreateSession(
@@ -226,6 +239,9 @@ export class SessionStorage {
 
     // Try to get existing session
     const existingSession = this.getStoredSession(flowId);
+    if (existingSession) {
+      this.applyConfiguredExpiry(existingSession, config);
+    }
 
     if (existingSession && !this.isSessionExpired(existingSession, config)) {
       // Update last active time

@@ -4,6 +4,7 @@ import ChatWindow from './index';
 import { safeAreaGap, visualViewportInset } from '../utils';
 import { sendMessage, streamMessage } from '../../controllers';
 import type { ChatMessageType } from '../../types/chatWidget';
+import { SessionStorage } from '../../utils/sessionStorage';
 
 // jsdom has no scrolling. The widget must not call scrollIntoView (#69).
 Element.prototype.scrollIntoView = jest.fn();
@@ -1259,6 +1260,23 @@ describe('ChatWindow', () => {
       expect(updateLastMessage).not.toHaveBeenCalled();
     });
 
+    it('stores the session id that the server answers with, so the next page keeps the chat', async () => {
+      const stored = jest.spyOn(SessionStorage, 'updateSessionId').mockReturnValue(true);
+      const sessionId = { current: 'client-made-id' } as React.MutableRefObject<string>;
+      mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
+
+      render(<ChatWindow {...defaultProps} sessionId={sessionId} enable_streaming={false} />);
+      const input = document.querySelector('.cl-input-element') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'Hello' } });
+      fireEvent.click(document.querySelector('.cl-send-button') as HTMLButtonElement);
+
+      await waitFor(() => {
+        expect(stored).toHaveBeenCalledWith('test-flow-id', 'new-session');
+      });
+      expect(sessionId.current).toBe('new-session');
+      stored.mockRestore();
+    });
+
     it('should call sendMessage when send button is clicked', async () => {
       mockedSendMessage.mockResolvedValueOnce(successfulNonStreamingResponse());
 
@@ -1281,6 +1299,7 @@ describe('ChatWindow', () => {
           undefined,
           undefined,
           'test-api-key',
+          undefined,
           undefined
         );
       });
@@ -1384,6 +1403,7 @@ describe('ChatWindow', () => {
           undefined,
           undefined,
           'test-api-key',
+          undefined,
           undefined
         );
       });

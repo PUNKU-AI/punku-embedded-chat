@@ -415,6 +415,63 @@ describe('SessionStorage', () => {
       expect(result.sessionId).toBe('idle-session-id');
       expect(result.messages).toHaveLength(1);
     });
+
+    describe('a session limit that arrives after the session exists (live look)', () => {
+      const HOUR_MS = 60 * 60 * 1000;
+      const storageKey = `punku-chat-session-${domain}-${flowId}`;
+      const storeSession = (createdAt: number, expiresAt: number) => {
+        const session: StoredSession = {
+          sessionId: 'started-session-id',
+          messages: [{ message: 'Hello', isSend: true }],
+          createdAt,
+          lastActiveAt: Date.now(),
+          expiresAt,
+          domain,
+          flowId,
+        };
+        mockStorage[storageKey] = JSON.stringify(session);
+      };
+      const stored = () => JSON.parse(mockStorage[storageKey]) as StoredSession;
+
+      it('applies the new limit, counted from the start of the session', () => {
+        const createdAt = Date.now() - 10 * 60 * 1000;
+        storeSession(createdAt, createdAt + 24 * HOUR_MS);
+
+        const result = SessionStorage.getOrCreateSession(flowId, undefined, { expiryHours: 1 });
+
+        expect(result.isNewSession).toBe(false);
+        expect(result.sessionId).toBe('started-session-id');
+        expect(stored().expiresAt).toBe(createdAt + HOUR_MS);
+      });
+
+      it('ends a session that is older than the new limit', () => {
+        const createdAt = Date.now() - 2 * HOUR_MS;
+        storeSession(createdAt, createdAt + 24 * HOUR_MS);
+
+        const result = SessionStorage.getOrCreateSession(flowId, undefined, { expiryHours: 1 });
+
+        expect(result.isNewSession).toBe(true);
+        expect(result.sessionId).not.toBe('started-session-id');
+      });
+
+      it('removes the absolute limit when the new limit is 0', () => {
+        const createdAt = Date.now() - 10 * 60 * 1000;
+        storeSession(createdAt, createdAt + 24 * HOUR_MS);
+
+        SessionStorage.getOrCreateSession(flowId, undefined, { expiryHours: 0 });
+
+        expect(stored().expiresAt).toBe(0);
+      });
+
+      it('keeps the stored limit when the config names none', () => {
+        const createdAt = Date.now() - 10 * 60 * 1000;
+        storeSession(createdAt, createdAt + 48 * HOUR_MS);
+
+        SessionStorage.getOrCreateSession(flowId);
+
+        expect(stored().expiresAt).toBe(createdAt + 48 * HOUR_MS);
+      });
+    });
   });
 
   describe('cleanupExpiredSessions', () => {
