@@ -1,9 +1,17 @@
-import { applyLook, FIRST_LOOK_WAIT_MS, fetchLook, LOOK_ATTRIBUTES, readCachedLook, writeCachedLook } from './liveLook';
+import {
+  applyLook,
+  FIRST_LOOK_WAIT_MS,
+  fetchLook,
+  LOOK_ATTRIBUTES,
+  newLookState,
+  readCachedLook,
+  readHeadersAttribute,
+  writeCachedLook,
+} from './liveLook';
 
 const HOST = 'https://api.example.com';
 const FLOW = 'your-flow-id';
 const PUBLIC_KEY = 'pk_' + 'b'.repeat(32);
-const CONNECTED = Symbol.for('r2wc.connected');
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -60,6 +68,38 @@ describe('live look', () => {
       `${HOST}/api/v1/widget/config?flow_id=${FLOW}&publishable_key=${PUBLIC_KEY}`
     );
     expect(mockFetch.mock.calls[0][1]).toEqual({ credentials: 'omit' });
+  });
+
+  it('takes back a setting that a newer look no longer has, and keeps a value that the page changed', () => {
+    const element = document.createElement('div');
+    const state = newLookState();
+    applyLook(element, { window_title: 'Lena', online: 'false', welcome_message: 'Hi' }, new Set(), state);
+    element.setAttribute('welcome_message', 'Text of the page');
+
+    expect(applyLook(element, { theme: 'dark' }, new Set(), state)).toBe(true);
+
+    expect(element.hasAttribute('window_title')).toBe(false);
+    expect(element.hasAttribute('online')).toBe(false);
+    expect(element.getAttribute('welcome_message')).toBe('Text of the page');
+    expect(JSON.parse(element.getAttribute('look_unset') ?? 'null')).toEqual(['online', 'window_title']);
+
+    // The owner sets the title again.
+    applyLook(element, { theme: 'dark', window_title: 'Lena' }, new Set(), state);
+    expect(element.getAttribute('window_title')).toBe('Lena');
+    expect(JSON.parse(element.getAttribute('look_unset') ?? 'null')).toEqual(['online']);
+    applyLook(element, { theme: 'dark', window_title: 'Lena', online: 'true' }, new Set(), state);
+    expect(element.hasAttribute('look_unset')).toBe(false);
+  });
+
+  it("sends the page's extra headers with the look request", async () => {
+    mockFetch.mockResolvedValueOnce(answer(200, { attributes: {} }));
+
+    await fetchLook(HOST, FLOW, PUBLIC_KEY, { 'x-gateway': 'allowed' });
+
+    expect(mockFetch.mock.calls[0][1]).toEqual({ credentials: 'omit', headers: { 'x-gateway': 'allowed' } });
+    expect(readHeadersAttribute('{"x-gateway":"allowed"}')).toEqual({ 'x-gateway': 'allowed' });
+    expect(readHeadersAttribute('{"x-gateway":1}')).toBeUndefined();
+    expect(readHeadersAttribute('not json')).toBeUndefined();
   });
 
   it('keeps the last look for the next page', () => {
@@ -162,6 +202,29 @@ describe('punku-chat with a public key', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('takes back a stored setting that the fresh look no longer has', async () => {
+    writeCachedLook(HOST, FLOW, { window_title: 'Old title', online: 'false' });
+    mockFetch.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('/api/v1/widget/config')
+          ? answer(200, { attributes: { theme: 'dark' } })
+          : answer(404, { detail: 'Not Found' })
+      )
+    );
+    const chat = element({ host_url: HOST, flow_id: FLOW, publishable_key: PUBLIC_KEY });
+
+    document.body.appendChild(chat);
+    expect(chat.getAttribute('window_title')).toBe('Old title');
+    await settle();
+
+    expect(chat.hasAttribute('window_title')).toBe(false);
+    expect(chat.hasAttribute('online')).toBe(false);
+    expect(chat.getAttribute('theme')).toBe('dark');
+    expect(JSON.parse(chat.getAttribute('look_unset') ?? 'null')).toEqual(['online', 'window_title']);
+    expect(chat.getAttribute('look_revision')).toBe('2');
+    expect(readCachedLook(HOST, FLOW)).toEqual({ theme: 'dark' });
   });
 
   it('shows no widget for a rotated key', async () => {

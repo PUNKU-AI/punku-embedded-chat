@@ -3,10 +3,13 @@ import type { ComponentProps } from 'react';
 import ChatWidget, { DEFAULT_HOST_URL } from './chatWidget';
 import {
     FIRST_LOOK_WAIT_MS,
+    LOOK_ATTRIBUTES,
     applyLook,
     clearCachedLook,
     fetchLook,
+    newLookState,
     readCachedLook,
+    readHeadersAttribute,
     writeCachedLook,
     type Look,
 } from './liveLook';
@@ -17,8 +20,20 @@ type ChatElementClass = new () => HTMLElement & { connectedCallback(): void };
 // the widget reads only at start (start_open, the session limits) apply too.
 const LOOK_REVISION_ATTRIBUTE = "look_revision";
 
-function LiveLookChatWidget({ look_revision, ...props }: ComponentProps<typeof ChatWidget> & { look_revision?: string }) {
-    return <ChatWidget key={look_revision ?? "page"} {...props} />;
+type LiveLookProps = ComponentProps<typeof ChatWidget> & { look_revision?: string; look_unset?: unknown };
+
+function LiveLookChatWidget({ look_revision, look_unset, ...props }: LiveLookProps) {
+    // The live look took these settings back. A removed attribute reaches this component as null
+    // or false, not as unset, so drop the prop: the widget's own default applies again.
+    const shown: Record<string, unknown> = { ...props };
+    if (Array.isArray(look_unset)) {
+        for (const name of look_unset) {
+            if (typeof name === "string" && LOOK_ATTRIBUTES.has(name)) {
+                delete shown[name];
+            }
+        }
+    }
+    return <ChatWidget key={look_revision ?? "page"} {...(shown as ComponentProps<typeof ChatWidget>)} />;
 }
 
 function createChatElement() {
@@ -97,6 +112,7 @@ function createChatElement() {
             enable_trigger_relocation: "boolean",
             z_index: "number",
             look_revision: "string",
+            look_unset: "json",
         },
     }) as unknown as ChatElementClass;
 
@@ -104,6 +120,7 @@ function createChatElement() {
     return class PunkuChatElement extends Base {
         private lookRequested = false;
         private lookRevision = 0;
+        private lookState = newLookState();
 
         connectedCallback() {
             super.connectedCallback();
@@ -117,7 +134,7 @@ function createChatElement() {
             // The page's own attributes win over the server's look.
             const pageAttributes = new Set(this.getAttributeNames());
             const showLook = (look: Look) => {
-                if (applyLook(this, look, pageAttributes)) {
+                if (applyLook(this, look, pageAttributes, this.lookState)) {
                     this.lookRevision += 1;
                     this.setAttribute(LOOK_REVISION_ATTRIBUTE, String(this.lookRevision));
                 }
@@ -130,7 +147,8 @@ function createChatElement() {
                 showLook(cached);
             }
             const timer = cached ? undefined : window.setTimeout(reveal, FIRST_LOOK_WAIT_MS);
-            void fetchLook(hostUrl, flowId, publishableKey).then((look) => {
+            const additionalHeaders = readHeadersAttribute(this.getAttribute("additional_headers"));
+            void fetchLook(hostUrl, flowId, publishableKey, additionalHeaders).then((look) => {
                 window.clearTimeout(timer);
                 if (look === "hidden") {
                     // The key was rotated or the widget removed: no chat on this page.

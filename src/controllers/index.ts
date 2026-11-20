@@ -107,6 +107,7 @@ export async function sendMessage(
   const url = `${baseUrl}/api/v1/run/${flowId}`;
   const credentials: WidgetCredentials = {
     hostUrl: baseUrl, flowId, sessionId, publishableKey: publishable_key, apiKey: api_key,
+    additionalHeaders: additional_headers,
   };
 
     const response = await fetchWithWidgetAuth(credentials, (authHeaders) => {
@@ -168,6 +169,7 @@ export async function sendMessage(
       const url = `${baseUrl}/api/v1/run/${flowId}?stream=true`
       const credentials: WidgetCredentials = {
         hostUrl: baseUrl, flowId, sessionId, publishableKey: publishable_key, apiKey: api_key,
+        additionalHeaders: additional_headers,
       };
     
       // console.log('🚀 Starting streaming request to:', url);
@@ -340,6 +342,7 @@ export async function sendFeedback(
           sessionId: widget.sessionId,
           publishableKey: widget.publishableKey,
           apiKey: api_key,
+          additionalHeaders: additional_headers,
         },
         send
       )

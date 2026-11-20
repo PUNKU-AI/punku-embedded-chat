@@ -101,6 +101,31 @@ test('the page title wins over the live look', async ({ page }) => {
   expect(await answerText(page)).not.toContain('Synthetic live title');
 });
 
+test('a setting that the owner took back gets its default again for a returning visitor', async ({ page }) => {
+  // The last visit stored a look with the chat offline. The owner set it online again since then,
+  // so the fresh look no longer has the setting.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      `punku-chat-look-${window.location.origin}-browser-fixture`,
+      JSON.stringify({ online: 'false', start_open: 'true' }),
+    );
+  });
+  await page.route('**/api/v1/widget/config?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ attributes: { start_open: 'true' } }),
+  }));
+
+  await loadWidget(page, { publishable_key: PUBLIC_KEY, unset: 'online,start_open' });
+
+  await expect.poll(() => page.evaluate(() => document.querySelector('punku-chat')?.getAttribute('look_unset')))
+    .toBe('["online"]');
+  await expect.poll(() => page.evaluate(() => {
+    const root = window.__widgetRoots.get(document.querySelector('punku-chat')!)!;
+    return { online: !!root.querySelector('.cl-online-message'), offline: !!root.querySelector('.cl-offline-message') };
+  })).toEqual({ online: true, offline: false });
+});
+
 test('a website that the owner did not allow shows a short note', async ({ page }) => {
   await page.route('**/api/v1/widget/sessions', (route) => route.fulfill({
     status: 403,

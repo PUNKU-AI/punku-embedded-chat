@@ -63,6 +63,23 @@ describe('visitor token', () => {
     expect(run.headers).not.toHaveProperty('x-api-key');
   });
 
+  it("sends the page's extra headers with the token request, as with the run", async () => {
+    const sessionId = { current: 'stored-session' };
+    mockFetch.mockResolvedValueOnce(tokenAnswer('wt1.token.one', 'stored-session'));
+    mockFetch.mockResolvedValueOnce(runAnswer());
+
+    await sendMessage(
+      HOST, FLOW, 'Hello', 'chat', 'chat', sessionId, undefined, undefined, OLD_KEY, { 'x-gateway': 'allowed' }
+    );
+
+    const [exchange, run] = calls();
+    expect(exchange.url).toBe(`${HOST}/api/v1/widget/sessions`);
+    expect(exchange.headers['x-gateway']).toBe('allowed');
+    expect(exchange.headers['x-api-key']).toBe(OLD_KEY);
+    expect(run.headers['x-gateway']).toBe('allowed');
+    expect(run.headers[WIDGET_TOKEN_HEADER]).toBe('wt1.token.one');
+  });
+
   it('stores the session that the server gives and sends it with the run', async () => {
     const sessionId = { current: 'client-made-id' };
     mockFetch.mockResolvedValueOnce(tokenAnswer('wt1.token.one', 'ws1.server.made'));

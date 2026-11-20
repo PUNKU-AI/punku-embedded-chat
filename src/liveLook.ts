@@ -71,6 +71,20 @@ export const LOOK_ATTRIBUTES: ReadonlySet<string> = new Set([
 ]);
 
 export type Look = Record<string, string>;
+
+// The settings that the live look took back, as a JSON list. The element drops them, so the
+// widget's own defaults apply again. Only this file sets it.
+export const LOOK_UNSET_ATTRIBUTE = "look_unset";
+
+/** What the live look did on one element: the value it set per attribute, and the settings it took back. */
+export interface LookState {
+  applied: Map<string, string>;
+  unset: Set<string>;
+}
+
+export function newLookState(): LookState {
+  return { applied: new Map(), unset: new Set() };
+}
 /** The widget's look, "hidden" when the server knows no widget for this key, or null when it cannot answer. */
 export type LookAnswer = Look | "hidden" | null;
 
@@ -116,10 +130,39 @@ export function clearCachedLook(hostUrl: string, flowId: string): void {
   }
 }
 
-export async function fetchLook(hostUrl: string, flowId: string, publishableKey: string): Promise<LookAnswer> {
-  const query = `flow_id=${encodeURIComponent(flowId)}&publishable_key=${encodeURIComponent(publishableKey)}`;
+/** The page's extra headers (`additional_headers`), when the attribute holds a JSON object of texts. */
+export function readHeadersAttribute(text: string | null): Record<string, string> | undefined {
+  if (!text) {
+    return undefined;
+  }
   try {
-    const response = await fetch(`${hostUrl}${LOOK_PATH}?${query}`, { credentials: "omit" });
+    const value: unknown = JSON.parse(text);
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    const entries = Object.entries(value as Record<string, unknown>);
+    return entries.every(([, header]) => typeof header === "string")
+      ? Object.fromEntries(entries as [string, string][])
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function fetchLook(
+  hostUrl: string,
+  flowId: string,
+  publishableKey: string,
+  additionalHeaders?: Record<string, string>
+): Promise<LookAnswer> {
+  const query = `flow_id=${encodeURIComponent(flowId)}&publishable_key=${encodeURIComponent(publishableKey)}`;
+  // A proxy in front of the server may need the page's extra headers, as on every chat call.
+  const init: RequestInit = { credentials: "omit" };
+  if (additionalHeaders && Object.keys(additionalHeaders).length > 0) {
+    init.headers = additionalHeaders;
+  }
+  try {
+    const response = await fetch(`${hostUrl}${LOOK_PATH}?${query}`, init);
     if (response.status === 404) {
       // The server answers 404 with this detail for a wrong or rotated key. A server
       // without the route answers 404 too, without it: the widget then keeps its defaults.
@@ -136,16 +179,48 @@ export async function fetchLook(hostUrl: string, flowId: string, publishableKey:
   }
 }
 
-/** Set the look attributes that the page did not set itself. Returns whether an attribute changed. */
-export function applyLook(element: Element, look: Look, pageAttributes: ReadonlySet<string>): boolean {
+/**
+ * Set the look attributes that the page did not set itself. When a newer look no longer has a
+ * setting that an earlier look set (the owner removed it, or set it back to its default), take it
+ * back, so that the widget's default applies again. Returns whether an attribute changed.
+ */
+export function applyLook(
+  element: Element,
+  look: Look,
+  pageAttributes: ReadonlySet<string>,
+  state: LookState = newLookState()
+): boolean {
   let changed = false;
+  for (const [name, text] of Array.from(state.applied)) {
+    if (Object.prototype.hasOwnProperty.call(look, name)) {
+      continue;
+    }
+    state.applied.delete(name);
+    // A value that the page set after the look stays.
+    if (element.getAttribute(name) === text) {
+      element.removeAttribute(name);
+      state.unset.add(name);
+      changed = true;
+    }
+  }
   for (const [name, text] of Object.entries(look)) {
     if (!LOOK_ATTRIBUTES.has(name) || pageAttributes.has(name)) {
       continue;
     }
+    state.applied.set(name, text);
+    if (state.unset.delete(name)) {
+      changed = true;
+    }
     if (element.getAttribute(name) !== text) {
       element.setAttribute(name, text);
       changed = true;
+    }
+  }
+  if (changed) {
+    if (state.unset.size > 0) {
+      element.setAttribute(LOOK_UNSET_ATTRIBUTE, JSON.stringify(Array.from(state.unset).sort()));
+    } else {
+      element.removeAttribute(LOOK_UNSET_ATTRIBUTE);
     }
   }
   return changed;

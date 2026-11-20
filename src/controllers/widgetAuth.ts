@@ -30,6 +30,8 @@ export interface WidgetCredentials {
   sessionId: { current: string };
   publishableKey?: string;
   apiKey?: string;
+  // The page's extra headers (`additional_headers`). A proxy in front of the server may need them.
+  additionalHeaders?: Record<string, string>;
 }
 
 export interface WidgetAuthHeaders {
@@ -109,6 +111,8 @@ async function exchange(credentials: WidgetCredentials): Promise<ExchangeResult>
   if (credentials.sessionId.current) {
     body.session_id = credentials.sessionId.current;
   }
+  // The page's extra headers go with the token request too, and win, as on every chat call.
+  Object.assign(headers, credentials.additionalHeaders);
 
   const keyCanRunDirectly = !!credentials.apiKey && !credentials.publishableKey;
   let response: Response;
