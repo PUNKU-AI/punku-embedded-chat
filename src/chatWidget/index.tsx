@@ -168,6 +168,7 @@ export const getVisibleCornerShift = (
 
 export default function ChatWidget({
   api_key,
+  publishable_key,
   output_type = "chat",
   input_type = "chat",
   output_component,
@@ -240,6 +241,8 @@ export default function ChatWidget({
   z_index,
 }: {
   api_key?: string;
+  /** The public key of the embed code. The widget trades it for a visitor token. */
+  publishable_key?: string;
   input_value: string,
   output_type: string,
   input_type: string,
@@ -4975,6 +4978,7 @@ input::-ms-input-placeholder { /* Microsoft Edge */
       >
         <ChatWindow
           api_key={api_key}
+          publishable_key={publishable_key}
           hostUrl={host_url}
           flowId={flow_id}
           messages={messages}

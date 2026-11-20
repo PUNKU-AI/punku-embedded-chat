@@ -1,4 +1,5 @@
 import { sendMessage, streamMessage, sendFeedback } from './index';
+import { resetWidgetAuthForTests } from './widgetAuth';
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -14,6 +15,7 @@ describe('sendMessage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetWidgetAuthForTests();
   });
 
   it('should send a message successfully', async () => {
@@ -67,6 +69,12 @@ describe('sendMessage', () => {
   });
 
   it('should include API key in headers when provided', async () => {
+    // A server without the token route: the old embed code sends its key directly, as before.
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('{"detail":"Not Found"}')
+    });
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -252,6 +260,7 @@ describe('streamMessage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetWidgetAuthForTests();
   });
 
   it('should stream messages successfully', async () => {

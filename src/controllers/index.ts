@@ -1,4 +1,5 @@
 import { createBackendStreamError, createHttpError } from "./backendError";
+import { fetchWithWidgetAuth, WidgetCredentials } from "./widgetAuth";
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
@@ -61,14 +62,10 @@ function validateRequestHeader(headerName: string, headerValue: unknown) {
 }
 
 function buildRequestHeaders(
-  api_key?: string,
+  authHeaders: { [key: string]: string },
   additional_headers?: { [key: string]: string }
 ) {
-  let headers: { [key: string]: string } = { "Content-Type": "application/json" };
-
-  if (api_key) {
-    headers["x-api-key"] = api_key;
-  }
+  let headers: { [key: string]: string } = { "Content-Type": "application/json", ...authHeaders };
 
   if (additional_headers) {
     headers = { ...headers, ...additional_headers };
@@ -92,6 +89,7 @@ export async function sendMessage(
   tweaks?: Object,
   api_key?: string, 
   additional_headers?: {[key:string]:string}, 
+  publishable_key?: string,
 ){
   let data: any = {input_type, input_value: message, output_type}
   
@@ -103,18 +101,24 @@ export async function sendMessage(
     data["output_component"] = output_component;
   }
 
-  if(sessionId.current && sessionId.current !== ""){
-    data.session_id=sessionId.current;
-  }
-
-  const headers = buildRequestHeaders(api_key, additional_headers);
+  // Invalid extra headers fail before any request, also before a token request.
+  buildRequestHeaders({}, additional_headers);
 
   const url = `${baseUrl}/api/v1/run/${flowId}`;
+  const credentials: WidgetCredentials = {
+    hostUrl: baseUrl, flowId, sessionId, publishableKey: publishable_key, apiKey: api_key,
+  };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data)
+    const response = await fetchWithWidgetAuth(credentials, (authHeaders) => {
+      // The token request can change the session, so the body reads it at send time.
+      if (sessionId.current && sessionId.current !== "") {
+        data.session_id = sessionId.current;
+      }
+      return fetch(url, {
+        method: 'POST',
+        headers: buildRequestHeaders(authHeaders, additional_headers),
+        body: JSON.stringify(data)
+      });
     });
     
     if (!response.ok) {
@@ -145,7 +149,8 @@ export async function sendMessage(
     additional_headers?: {[key:string]:string}, 
     onStreamData?: (data: any) => void,
     onStreamEnd?: (terminal?: StreamTerminal) => void,
-    onStreamError?: (error: any) => void
+    onStreamError?: (error: any) => void,
+    publishable_key?: string,
   ){
     let data: any = {input_type, input_value: message, output_type}
       
@@ -157,22 +162,28 @@ export async function sendMessage(
         data["output_component"] = output_component;
     }
   
-    if(sessionId.current && sessionId.current !== ""){
-      data.session_id=sessionId.current;
-    }
-  
     try {
-      const headers = buildRequestHeaders(api_key, additional_headers);
+      // Invalid extra headers fail before any request, also before a token request.
+      buildRequestHeaders({}, additional_headers);
       const url = `${baseUrl}/api/v1/run/${flowId}?stream=true`
+      const credentials: WidgetCredentials = {
+        hostUrl: baseUrl, flowId, sessionId, publishableKey: publishable_key, apiKey: api_key,
+      };
     
       // console.log('🚀 Starting streaming request to:', url);
       // console.log('📦 Request data:', data);
       // console.log('📋 Headers:', headers);
     
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
+      const response = await fetchWithWidgetAuth(credentials, (authHeaders) => {
+        // The token request can change the session, so the body reads it at send time.
+        if (sessionId.current && sessionId.current !== "") {
+          data.session_id = sessionId.current;
+        }
+        return fetch(url, {
+          method: 'POST',
+          headers: buildRequestHeaders(authHeaders, additional_headers),
+          body: JSON.stringify(data)
+        });
       });
   
       // console.log('📡 Response status:', response.status);
@@ -282,18 +293,27 @@ export async function sendMessage(
     }
   }
 
+export interface FeedbackWidgetContext {
+  flowId: string;
+  sessionId: { current: string };
+  publishableKey?: string;
+}
+
 export async function sendFeedback(
   baseUrl: string,
   message_id: string,
   feedback: string,
   api_key?: string,
-  additional_headers?: {[key: string]: string}
+  additional_headers?: {[key: string]: string},
+  widget?: FeedbackWidgetContext
 ) {
   // Preserve case-insensitive overrides. Fetch otherwise joins duplicate names.
-  const headers = Object.fromEntries(
-    Object.entries(buildRequestHeaders(api_key, additional_headers))
+  const headersWith = (authHeaders: Record<string, string>) => Object.fromEntries(
+    Object.entries(buildRequestHeaders(authHeaders, additional_headers))
       .map(([name, value]) => [name.toLowerCase(), value])
   );
+  // Invalid extra headers fail before any request, also before a token request.
+  headersWith({});
 
   // Prepare the request body according to MessageUpdate model
   const requestBody = {
@@ -302,15 +322,28 @@ export async function sendFeedback(
     }
   };
 
-  const response = await fetch(
+  const send = (authHeaders: Record<string, string>) => fetch(
     `${baseUrl}/api/v1/monitor/messages/${message_id}`,
     {
       method: 'PUT',
-      headers,
+      headers: headersWith(authHeaders),
       body: JSON.stringify(requestBody),
       credentials: 'same-origin'
     }
   );
+  // With the widget's context the feedback uses the visitor token of the chat session.
+  const response = widget
+    ? await fetchWithWidgetAuth(
+        {
+          hostUrl: baseUrl,
+          flowId: widget.flowId,
+          sessionId: widget.sessionId,
+          publishableKey: widget.publishableKey,
+          apiKey: api_key,
+        },
+        send
+      )
+    : await send(api_key ? { "x-api-key": api_key } : {});
 
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);

@@ -384,6 +384,7 @@ describe('ChatMessage', () => {
           'test-message-id',
           'positive',
           'test-api-key',
+          undefined,
           undefined
         );
       });
@@ -407,6 +408,7 @@ describe('ChatMessage', () => {
           'http://localhost:3000',
           'test-message-id',
           'negative',
+          undefined,
           undefined,
           undefined
         );
