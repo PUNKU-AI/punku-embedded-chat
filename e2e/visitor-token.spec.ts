@@ -88,6 +88,39 @@ test('a public key embed gets its look and chats with a visitor token only', asy
   expect(stored).toBe('ws1.synthetic.session');
 });
 
+test('a look that arrives while the first answer is on its way does not drop the chat', async ({ page }) => {
+  let runStarted: () => void = () => undefined;
+  const runStartedPromise = new Promise<void>((resolve) => { runStarted = resolve; });
+  // The look comes late: after the widget shows, while the first answer is on its way.
+  await page.route('**/api/v1/widget/config?**', async (route) => {
+    await runStartedPromise;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ attributes: { window_title: 'Synthetic late title' } }),
+    });
+  });
+  await page.route('**/api/v1/widget/sessions', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      token: TOKEN, session_id: 'ws1.synthetic.session', expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600,
+    }),
+  }));
+  await page.route('**/api/v1/run/**', async (route) => {
+    runStarted();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: reply });
+  });
+
+  await loadWidget(page, { publishable_key: PUBLIC_KEY, start_open: 'true', unset: 'window_title' });
+  await send(page, 'Hello');
+
+  await expect.poll(() => answerText(page), { timeout: 10000 }).toContain('Synthetic late title');
+  await expect.poll(() => answerText(page), { timeout: 10000 }).toContain('Synthetic answer');
+  expect(await page.evaluate(() => document.querySelector('punku-chat')?.getAttribute('look_revision'))).toBeNull();
+});
+
 test('the page title wins over the live look', async ({ page }) => {
   await page.route('**/api/v1/widget/config?**', (route) => route.fulfill({
     status: 200,
