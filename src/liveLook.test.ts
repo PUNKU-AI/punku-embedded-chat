@@ -242,6 +242,20 @@ describe('punku-chat with a public key', () => {
     warn.mockRestore();
   });
 
+  it('ignores an API key in publishable_key: no look request, never hidden, one console note', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const apiKey = 'sk-' + 'c'.repeat(24);
+    const chat = element({ host_url: HOST, flow_id: FLOW, api_key: apiKey, publishable_key: apiKey });
+
+    document.body.appendChild(chat);
+
+    expect(lookRequests()).toBe(0);
+    expect(chat.style.opacity).toBe('');
+    expect(chat.style.display).toBe('');
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it('an embed code without a public key reads no look and is never hidden', () => {
     const chat = element({ host_url: HOST, flow_id: FLOW, api_key: 'sk-' + 'c'.repeat(24) });
 

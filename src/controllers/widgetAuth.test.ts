@@ -1,5 +1,5 @@
 import { sendFeedback, sendMessage, streamMessage } from './index';
-import { isWidgetNotAllowed, resetWidgetAuthForTests, WIDGET_TOKEN_HEADER } from './widgetAuth';
+import { isWidgetNotAllowed, resetWidgetAuthForTests, usablePublishableKey, WIDGET_TOKEN_HEADER } from './widgetAuth';
 import { SessionStorage } from '../utils/sessionStorage';
 
 const mockFetch = jest.fn();
@@ -78,6 +78,28 @@ describe('visitor token', () => {
     expect(exchange.headers['x-api-key']).toBe(OLD_KEY);
     expect(run.headers['x-gateway']).toBe('allowed');
     expect(run.headers[WIDGET_TOKEN_HEADER]).toBe('wt1.token.one');
+  });
+
+  it('counts only a pk_ value as a public key', () => {
+    expect(usablePublishableKey(PUBLIC_KEY)).toBe(PUBLIC_KEY);
+    for (const value of [OLD_KEY, 'pk_short', 'pk_' + 'b'.repeat(16) + '!', '', undefined, 42]) {
+      expect(usablePublishableKey(value)).toBeUndefined();
+    }
+  });
+
+  it('ignores an API key in publishable_key and trades api_key, then sends it directly on a server without the route', async () => {
+    const sessionId = { current: 'stored-session' };
+    mockFetch.mockResolvedValueOnce(json(405, { detail: 'Method Not Allowed' }));
+    mockFetch.mockResolvedValueOnce(runAnswer());
+
+    await send(sessionId, { apiKey: OLD_KEY, publicKey: OLD_KEY });
+
+    const [exchange, run] = calls();
+    expect(exchange.url).toBe(`${HOST}/api/v1/widget/sessions`);
+    expect(exchange.body).not.toHaveProperty('publishable_key');
+    expect(exchange.headers['x-api-key']).toBe(OLD_KEY);
+    expect(run.headers['x-api-key']).toBe(OLD_KEY);
+    expect(run.headers).not.toHaveProperty(WIDGET_TOKEN_HEADER);
   });
 
   it('stores the session that the server gives and sends it with the run', async () => {
