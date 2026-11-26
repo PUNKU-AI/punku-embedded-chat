@@ -18,7 +18,8 @@ import {
 type ChatElementClass = new () => HTMLElement & { connectedCallback(): void };
 
 // A new value starts the widget again with its current attributes, so that the look's settings that
-// the widget reads only at start (start_open, the session limits) apply too.
+// the widget reads only at start (start_open, the session limits) apply too. This happens only before
+// the visitor can use the widget: a restart would drop a chat in progress.
 const LOOK_REVISION_ATTRIBUTE = "look_revision";
 
 type LiveLookProps = ComponentProps<typeof ChatWidget> & { look_revision?: string; look_unset?: unknown };
@@ -128,6 +129,8 @@ function createChatElement() {
         private lookRevision = 0;
         private lookState = newLookState();
         private keyWarned = false;
+        // True once the visitor can use the widget. After that a new look never restarts it.
+        private shown = false;
 
         connectedCallback() {
             super.connectedCallback();
@@ -146,7 +149,10 @@ function createChatElement() {
             // The page's own attributes win over the server's look.
             const pageAttributes = new Set(this.getAttributeNames());
             const showLook = (look: Look) => {
-                if (applyLook(this, look, pageAttributes, this.lookState)) {
+                const changed = applyLook(this, look, pageAttributes, this.lookState);
+                // Once the widget shows, the look applies as props, without a restart. Settings that the
+                // widget reads only at start then take effect on the next page, from the stored look.
+                if (changed && !this.shown) {
                     this.lookRevision += 1;
                     this.setAttribute(LOOK_REVISION_ATTRIBUTE, String(this.lookRevision));
                 }
@@ -157,6 +163,7 @@ function createChatElement() {
             const reveal = cached ? () => undefined : this.hideWhileLoading();
             if (cached) {
                 showLook(cached);
+                this.shown = true;
             }
             const timer = cached ? undefined : window.setTimeout(reveal, FIRST_LOOK_WAIT_MS);
             const additionalHeaders = readHeadersAttribute(this.getAttribute("additional_headers"));
@@ -180,14 +187,19 @@ function createChatElement() {
         /** Make the widget invisible and inert. Returns the function that shows it again. */
         private hideWhileLoading(): () => void {
             const { opacity, pointerEvents } = this.style;
+            const wasInert = this.hasAttribute("inert");
             this.style.opacity = "0";
             this.style.pointerEvents = "none";
-            let shown = false;
+            // Inert also keeps the keyboard out, so nobody can start a chat that a restart would drop.
+            this.setAttribute("inert", "");
+            let revealed = false;
             return () => {
-                if (shown) return;
-                shown = true;
+                if (revealed) return;
+                revealed = true;
+                this.shown = true;
                 this.style.opacity = opacity;
                 this.style.pointerEvents = pointerEvents;
+                if (!wasInert) this.removeAttribute("inert");
             };
         }
     };

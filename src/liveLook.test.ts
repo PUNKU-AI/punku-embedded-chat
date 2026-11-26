@@ -156,6 +156,7 @@ describe('punku-chat with a public key', () => {
     expect(chat.getAttribute('look_revision')).toBe('1');
     expect(chat.style.opacity).toBe('');
     expect(chat.style.pointerEvents).toBe('');
+    expect(chat.hasAttribute('inert')).toBe(false);
     expect(readCachedLook(HOST, FLOW)).toEqual({ window_title: 'Lena', button_color: '#FFFFFF', start_open: 'false' });
   });
 
@@ -223,8 +224,51 @@ describe('punku-chat with a public key', () => {
     expect(chat.hasAttribute('online')).toBe(false);
     expect(chat.getAttribute('theme')).toBe('dark');
     expect(JSON.parse(chat.getAttribute('look_unset') ?? 'null')).toEqual(['online', 'window_title']);
-    expect(chat.getAttribute('look_revision')).toBe('2');
+    // Only the stored look restarted the widget, at start. The fresh look applies without a restart.
+    expect(chat.getAttribute('look_revision')).toBe('1');
     expect(readCachedLook(HOST, FLOW)).toEqual({ theme: 'dark' });
+  });
+
+  it('keeps a first visit inert while it waits, and lets a late look apply without a restart', async () => {
+    mockFetch.mockImplementation((url: string) =>
+      String(url).includes('/api/v1/widget/config')
+        ? new Promise((resolve) =>
+            setTimeout(() => resolve(answer(200, { attributes: { window_title: 'Late title' } })), FIRST_LOOK_WAIT_MS + 200)
+          )
+        : Promise.resolve(answer(404, { detail: 'Not Found' }))
+    );
+    const chat = element({ host_url: HOST, flow_id: FLOW, publishable_key: PUBLIC_KEY });
+
+    document.body.appendChild(chat);
+    expect(chat.hasAttribute('inert')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, FIRST_LOOK_WAIT_MS + 50));
+    // The widget shows after the wait, without the look.
+    expect(chat.hasAttribute('inert')).toBe(false);
+    expect(chat.style.opacity).toBe('');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(chat.getAttribute('window_title')).toBe('Late title');
+    expect(chat.hasAttribute('look_revision')).toBe(false);
+  });
+
+  it('applies a changed fresh look for a returning visitor without a restart', async () => {
+    writeCachedLook(HOST, FLOW, { window_title: 'Stored title' });
+    mockFetch.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('/api/v1/widget/config')
+          ? answer(200, { attributes: { window_title: 'New title' } })
+          : answer(404, { detail: 'Not Found' })
+      )
+    );
+    const chat = element({ host_url: HOST, flow_id: FLOW, publishable_key: PUBLIC_KEY });
+
+    document.body.appendChild(chat);
+    expect(chat.hasAttribute('inert')).toBe(false);
+    await settle();
+
+    expect(chat.getAttribute('window_title')).toBe('New title');
+    expect(chat.getAttribute('look_revision')).toBe('1');
+    expect(readCachedLook(HOST, FLOW)).toEqual({ window_title: 'New title' });
   });
 
   it('shows no widget for a rotated key', async () => {
