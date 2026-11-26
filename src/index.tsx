@@ -1,6 +1,7 @@
 import r2wc from '@r2wc/react-to-web-component';
 import type { ComponentProps } from 'react';
 import ChatWidget, { DEFAULT_HOST_URL } from './chatWidget';
+import { usablePublishableKey } from './controllers/widgetAuth';
 import {
     FIRST_LOOK_WAIT_MS,
     LOOK_ATTRIBUTES,
@@ -26,6 +27,11 @@ function LiveLookChatWidget({ look_revision, look_unset, ...props }: LiveLookPro
     // The live look took these settings back. A removed attribute reaches this component as null
     // or false, not as unset, so drop the prop: the widget's own default applies again.
     const shown: Record<string, unknown> = { ...props };
+    // Only a public key ("pk_...") goes to the widget. Another value, such as an API key,
+    // would fail as a public key; without it the widget uses api_key.
+    if (shown.publishable_key !== undefined && !usablePublishableKey(shown.publishable_key)) {
+        delete shown.publishable_key;
+    }
     if (Array.isArray(look_unset)) {
         for (const name of look_unset) {
             if (typeof name === "string" && LOOK_ATTRIBUTES.has(name)) {
@@ -121,10 +127,16 @@ function createChatElement() {
         private lookRequested = false;
         private lookRevision = 0;
         private lookState = newLookState();
+        private keyWarned = false;
 
         connectedCallback() {
             super.connectedCallback();
-            const publishableKey = this.getAttribute("publishable_key");
+            const pagePublishableKey = this.getAttribute("publishable_key");
+            const publishableKey = usablePublishableKey(pagePublishableKey);
+            if (pagePublishableKey && !publishableKey && !this.keyWarned) {
+                this.keyWarned = true;
+                console.warn("punku-chat: publishable_key is no public key (it starts with pk_). The widget ignores it and uses api_key.");
+            }
             const flowId = this.getAttribute("flow_id");
             if (!publishableKey || !flowId || this.lookRequested) {
                 return;

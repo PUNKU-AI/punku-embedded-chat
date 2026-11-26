@@ -24,6 +24,20 @@ const ROUTE_MISSING_RETRY_MS = 10 * 60_000;
 
 export const WIDGET_NOT_ALLOWED_CODE = "ERR_WIDGET_NOT_ALLOWED_HERE";
 
+// The server makes every public key as "pk_" plus URL-safe characters. Any other value
+// in publishable_key (for example an API key) is no public key: the widget ignores it
+// and uses api_key, as before public keys existed.
+const PUBLIC_KEY_PATTERN = /^pk_[A-Za-z0-9_-]{16,128}$/;
+
+/** The page's publishable_key when it is a public key, else undefined. */
+export function usablePublishableKey(value: unknown): string | undefined {
+  return typeof value === "string" && PUBLIC_KEY_PATTERN.test(value) ? value : undefined;
+}
+
+function publicKeyOf(credentials: WidgetCredentials): string | undefined {
+  return usablePublishableKey(credentials.publishableKey);
+}
+
 export interface WidgetCredentials {
   hostUrl: string;
   flowId: string;
@@ -62,8 +76,9 @@ export function isWidgetNotAllowed(error: unknown): boolean {
 }
 
 function credentialKey(credentials: WidgetCredentials): string {
-  const credential = credentials.publishableKey
-    ? `public:${credentials.publishableKey}`
+  const publicKey = publicKeyOf(credentials);
+  const credential = publicKey
+    ? `public:${publicKey}`
     : `key:${credentials.apiKey ?? ""}`;
   return `${credentials.hostUrl}|${credentials.flowId}|${credential}`;
 }
@@ -103,8 +118,9 @@ function readDetail(body: string): unknown {
 async function exchange(credentials: WidgetCredentials): Promise<ExchangeResult> {
   const body: Record<string, string> = { flow_id: credentials.flowId };
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (credentials.publishableKey) {
-    body.publishable_key = credentials.publishableKey;
+  const publicKey = publicKeyOf(credentials);
+  if (publicKey) {
+    body.publishable_key = publicKey;
   } else if (credentials.apiKey) {
     headers["x-api-key"] = credentials.apiKey;
   }
@@ -114,7 +130,7 @@ async function exchange(credentials: WidgetCredentials): Promise<ExchangeResult>
   // The page's extra headers go with the token request too, and win, as on every chat call.
   Object.assign(headers, credentials.additionalHeaders);
 
-  const keyCanRunDirectly = !!credentials.apiKey && !credentials.publishableKey;
+  const keyCanRunDirectly = !!credentials.apiKey && !publicKey;
   let response: Response;
   try {
     response = await fetch(`${credentials.hostUrl}${SESSIONS_PATH}`, {
@@ -155,7 +171,7 @@ async function exchange(credentials: WidgetCredentials): Promise<ExchangeResult>
 
 /** The auth headers of the next chat call: a visitor token, the old widget key, or none. */
 export async function widgetAuthHeaders(credentials: WidgetCredentials): Promise<WidgetAuthHeaders> {
-  if (!credentials.publishableKey && !credentials.apiKey) {
+  if (!publicKeyOf(credentials) && !credentials.apiKey) {
     return { headers: {}, fromToken: false };
   }
   const key = credentialKey(credentials);

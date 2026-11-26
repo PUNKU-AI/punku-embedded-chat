@@ -145,6 +145,42 @@ test('a website that the owner did not allow shows a short note', async ({ page 
   expect(retryButtons).toBe(0);
 });
 
+test('an API key in publishable_key is ignored: the embed code chats with api_key', async ({ page }) => {
+  const exchanges: Request[] = [];
+  const runs: Request[] = [];
+  let lookRequests = 0;
+  // Like a server without the token route: the route answers 405 with CORS headers.
+  await page.route('**/api/v1/widget/sessions', (route) => {
+    exchanges.push(route.request());
+    return route.fulfill({
+      status: 405,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ detail: 'Method Not Allowed' }),
+    });
+  });
+  await page.route('**/api/v1/widget/config?**', (route) => {
+    lookRequests += 1;
+    return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Not Found' }) });
+  });
+  await page.route('**/api/v1/run/**', (route) => {
+    runs.push(route.request());
+    return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: reply });
+  });
+
+  await loadWidget(page, { api_key: OLD_KEY, publishable_key: OLD_KEY, start_open: 'true' });
+  await send(page, 'Hello');
+  await expect.poll(() => answerText(page)).toContain('Synthetic answer');
+
+  expect(lookRequests).toBe(0);
+  expect(exchanges).toHaveLength(1);
+  expect(exchanges[0].postDataJSON()).not.toHaveProperty('publishable_key');
+  expect(exchanges[0].headers()['x-api-key']).toBe(OLD_KEY);
+  expect(runs).toHaveLength(1);
+  expect(runs[0].headers()['x-api-key']).toBe(OLD_KEY);
+  expect(runs[0].headers()).not.toHaveProperty('x-widget-token');
+});
+
 test('an older embed code with a widget key works on a server without the token route', async ({ page }) => {
   const runs: Request[] = [];
   await page.route('**/api/v1/run/**', (route) => {

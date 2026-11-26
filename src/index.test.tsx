@@ -24,6 +24,22 @@ describe('web component registration', () => {
     element.remove();
   });
 
+  it('passes only a real public key to the widget', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const element = document.createElement('punku-chat');
+    element.setAttribute('flow_id', 'your-flow-id');
+    element.setAttribute('api_key', 'sk-' + 'c'.repeat(24));
+    element.setAttribute('publishable_key', 'sk-' + 'c'.repeat(24));
+    document.body.append(element);
+    await waitFor(() => expect(mockRenderedProps[mockRenderedProps.length - 1]?.api_key).toBe('sk-' + 'c'.repeat(24)));
+    expect(mockRenderedProps[mockRenderedProps.length - 1]).not.toHaveProperty('publishable_key');
+
+    element.setAttribute('publishable_key', 'pk_' + 'b'.repeat(32));
+    await waitFor(() => expect(mockRenderedProps[mockRenderedProps.length - 1]?.publishable_key).toBe('pk_' + 'b'.repeat(32)));
+    element.remove();
+    warn.mockRestore();
+  });
+
   it('gives the widget its defaults again for the settings that the live look took back', async () => {
     const element = document.createElement('punku-chat');
     element.setAttribute('flow_id', 'your-flow-id');
