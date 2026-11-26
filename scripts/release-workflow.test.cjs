@@ -18,6 +18,7 @@ const { build, browser, report } = checks.jobs;
 const tagJob = release.jobs.tag;
 const validate = release.jobs.validate;
 const publish = release.jobs.publish;
+const partner = release.jobs.partner;
 const workflows = [ci, release, checks];
 const playwrightConfig = readText('playwright.config.ts');
 const playwrightProjects = [...playwrightConfig.matchAll(/\{ name: '([^']+)'/g)].map((match) => match[1]);
@@ -67,8 +68,9 @@ function runTagStep(env) {
 }
 
 test('publication requires successful validation with real Gemini and committed bundle checks', () => {
-  assert.deepEqual([publish.needs].flat(), ['tag', 'validate']);
-  assert.equal(condition(publish.if), "needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'");
+  assert.deepEqual([publish.needs].flat(), ['tag', 'validate', 'partner']);
+  assert.equal(condition(publish.if), "!cancelled() && needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'"
+    + " && (needs.partner.result == 'success' || needs.partner.result == 'skipped')");
   assert.equal(validate.uses, sharedChecks);
   assert.equal(validate.needs, 'tag');
   assert.equal(validate.if, undefined, 'Release validation must not skip its shared checks');
@@ -368,7 +370,7 @@ test('every check job tests the commit of its own run, never a ref from an input
   assert.equal(validate.with.ref, undefined);
   assert.deepEqual(Object.values(release.jobs).filter((job) => job.steps)
     .flatMap((job) => job.steps.filter((step) => step.uses?.startsWith('actions/checkout@') && step.with?.ref))
-    .map((step) => step.with.ref), ['${{ needs.validate.outputs.commit_sha }}']);
+    .map((step) => step.with.ref), ['${{ needs.validate.outputs.commit_sha }}', '${{ needs.validate.outputs.commit_sha }}']);
 });
 
 test('only the live Gemini step receives the key and only the publisher has OIDC permission', () => {
@@ -430,5 +432,38 @@ test('a dry run checks the dispatched commit and never reaches the publish job',
   }
   assert.deepEqual(runTagStep({ RELEASE_REF: 'main', DRY_RUN: 'true', RUN_REF: 'refs/heads/main', RUN_SHA: sha }),
     { status: 1, outputs: {} });
-  assert.match(condition(publish.if), /&& needs\.tag\.outputs\.publish == 'true'$/);
+  assert.match(condition(publish.if), /&& needs\.tag\.outputs\.publish == 'true'(?: &&|$)/);
+});
+
+test('a partner embed check with the tested bundle gates the publish', () => {
+  assert.deepEqual([partner.needs].flat(), ['tag', 'validate']);
+  assert.equal(condition(partner.if),
+    "needs.validate.result == 'success' && vars.PARTNER_EMBED_CHECK == 'true' && github.event.inputs.skip_partner_check != 'true'");
+  assert.equal(partner.container.image, browser.container.image, 'The partner check runs in the browser test image');
+  assert.equal(partner.permissions, undefined, 'The partner check needs no extra permission');
+  assert.equal(partner.secrets, undefined);
+  const checkout = uniqueStep(partner.steps, (step) => step.uses?.startsWith('actions/checkout@'), 'partner checkout');
+  const download = uniqueStep(partner.steps, (step) => step.uses?.startsWith('actions/download-artifact@'), 'tested bundle download');
+  const check = uniqueStep(partner.steps, (step) => /node scripts\/partner-embed-check\.cjs/.test(step.run || ''), 'partner check');
+  assert.equal(checkout.with.ref, '${{ needs.validate.outputs.commit_sha }}');
+  assert.equal(download.with.name, validate.with.bundle_artifact_name);
+  assert.match(check.run, /--bundle dist\/build\/static\/js\/widget\.min\.js/);
+  assert.equal(check.env.PARTNER_EMBED_HTML, '${{ secrets.PARTNER_EMBED_HTML }}');
+  // The repository is public, and its run log prints a plain variable: the embed stays a secret,
+  // and only the check step receives it.
+  for (const workflow of workflows) {
+    for (const job of Object.values(workflow.jobs)) {
+      assert.equal(job.env?.PARTNER_EMBED_HTML, undefined);
+      for (const step of job.steps || []) {
+        if (step !== check) assert.equal(step.env?.PARTNER_EMBED_HTML, undefined, 'Only the partner check receives the embed');
+      }
+    }
+  }
+  assert.equal(readText('.github/workflows/publish-cdn.yml').match(/PARTNER_EMBED_HTML \}\}/g).length, 1);
+  assert.doesNotMatch(readText('.github/workflows/publish-cdn.yml'), /vars\.PARTNER_EMBED_HTML/);
+  assertOrdered(partner.steps, [checkout, download, check]);
+  assert.ok(!partner.steps.some((step) => rebuild.test(step.run || '')), 'The partner check must use the tested bundle, not a new build');
+  const skip = release.on.workflow_dispatch.inputs.skip_partner_check;
+  assert.equal(skip.type, 'boolean');
+  assert.equal(skip.default, false);
 });

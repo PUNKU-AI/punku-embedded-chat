@@ -230,6 +230,49 @@ The publish job does not run.
 gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
 ```
 
+### Partner embed check
+
+Some partners embed the widget through their own script.
+Their script sets the widget attributes, so a widget change can break their pages although every other check passes.
+After the browser and Gemini checks pass, the `partner` job loads one partner's real embed code on a synthetic page.
+It serves the tested bundle in place of the CDN file, opens the chat with a real mouse click, and sends one message.
+The job answers every PUNKU API call itself, so no agent runs and nothing is billed.
+It runs the chat twice: against a server without the visitor-token route, and against a server with it.
+
+The check fails when one of these is true:
+
+- The page does not load the tested bundle, for example because the partner changed its loader URL.
+- The chat does not open, or the visitor gets no answer.
+- A value without `pk_` goes out as a public key.
+- The widget throws an error, or sends a client error report.
+
+Errors from the partner's own code show in the log, but do not fail the check.
+A failed check stops the publish.
+
+To switch the check on, set the repository variable `PARTNER_EMBED_CHECK` to `true`.
+Put the partner's script tag and element, as on their page, in the repository secret `PARTNER_EMBED_HTML`.
+Use a secret, because this repository is public and its run log shows plain variables.
+For the same reason, the check prints no URLs.
+When the check is on and the secret is empty, the job fails.
+
+Run the check locally:
+
+```sh
+PARTNER_EMBED_HTML='<script ...></script><partner-element ...></partner-element>' \
+  npm run check:partner -- --bundle dist/build/static/js/widget.min.js
+```
+
+If the check fails because of a network problem, re-run the failed jobs: `gh run rerun <run-id> --failed`.
+A tag push cannot skip the check.
+During an outage on the partner's side, publish from the tag without the check:
+
+```sh
+gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7 -f skip_partner_check=true
+```
+
+A manual run uses the workflow file of the selected tag.
+A republish of v1.0.36 or an older tag, for example a rollback, therefore runs without the partner check.
+
 ## Manual screenshot review
 
 Set `GEMINI_API_KEY` through your secure shell environment.

@@ -18,6 +18,12 @@ name: Publish widget bundle to CDN (S3 + CloudFront)
 # browser job per profile, then one real Gemini review. A manual run must start
 # from the tag it publishes. A manual run with dry_run checks the selected
 # branch's commit and never starts the publish job.
+#
+# The partner job loads a partner's own embed with the tested bundle and chats
+# once. A failure stops the publish. The repository variable
+# PARTNER_EMBED_CHECK=true switches it on. The embed is the repository secret
+# PARTNER_EMBED_HTML, because the public run log shows a plain variable.
+# See scripts/partner-embed-check.cjs.
 
 on:
   push:
@@ -29,6 +35,10 @@ on:
         required: true
       dry_run:
         description: "Dry run: check the selected branch's commit as this tag. Nothing is published."
+        type: boolean
+        default: false
+      skip_partner_check:
+        description: "Skip the partner embed check. Only for an outage on the partner's side."
         type: boolean
         default: false
 
@@ -82,9 +92,46 @@ jobs:
     secrets:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-  publish:
+  partner:
+    name: partner embed check
     needs: [tag, validate]
-    if: needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'
+    # A partner script builds the widget element with attributes that this repository does not
+    # control. Load that real embed with the tested bundle and chat once before any upload.
+    # Skipped when PARTNER_EMBED_CHECK is not 'true', or on a manual run that skips it.
+    # When the check is on, an empty secret fails the job, so the publish stops.
+    if: needs.validate.result == 'success' && vars.PARTNER_EMBED_CHECK == 'true' && github.event.inputs.skip_partner_check != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --user pwuser --init --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Download the tested bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: widget-tested-release-bundle
+          path: .
+      - name: Chat once on the partner embed with the tested bundle
+        env:
+          PARTNER_EMBED_HTML: ${{ secrets.PARTNER_EMBED_HTML }}
+        run: node scripts/partner-embed-check.cjs --bundle dist/build/static/js/widget.min.js
+
+  publish:
+    needs: [tag, validate, partner]
+    # !cancelled(): the partner job may be skipped (check off, or a manual skip).
+    # A cancelled run still stops the publish.
+    if: >-
+      ${{ !cancelled() && needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'
+      && (needs.partner.result == 'success' || needs.partner.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write

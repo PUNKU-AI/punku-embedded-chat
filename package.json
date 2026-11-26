@@ -20,6 +20,7 @@
     "test": "jest --maxWorkers=2",
     "build:browser-tests": "npm run build:release",
     "test:browser": "playwright test --workers=1",
+    "check:partner": "node scripts/partner-embed-check.cjs",
     "typecheck:browser": "tsc --noEmit -p tsconfig.e2e.json",
     "test:visual-audit": "node --test --test-concurrency=1 scripts/visual-audit.test.mjs",
     "audit:visual": "node scripts/visual-audit.mjs",
