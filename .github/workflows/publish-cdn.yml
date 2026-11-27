@@ -24,6 +24,14 @@ name: Publish widget bundle to CDN (S3 + CloudFront)
 # PARTNER_EMBED_CHECK=true switches it on. The embed is the repository secret
 # PARTNER_EMBED_HTML, because the public run log shows a plain variable.
 # See scripts/partner-embed-check.cjs.
+#
+# Every job that writes to the CDN runs in the GitHub environment cdn-release.
+# It waits there for an approval, and the deploy role trusts only runs from a
+# version tag in that environment. See SELF_HOSTING.md.
+#
+# A manual run with restore_tag puts an earlier release back on the floating
+# path. It uploads the published copy of that release and runs no checks,
+# because that copy was tested before its own release.
 
 on:
   push:
@@ -31,16 +39,20 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to (re)publish, e.g. v1.0.7. Run the workflow from this tag."
+        description: "Tag to (re)publish, e.g. v1.0.7. Run the workflow from this tag. For a restore: the newest tag."
         required: true
       dry_run:
-        description: "Dry run: check the selected branch's commit as this tag. Nothing is published."
+        description: "Dry run: nothing is published. A release checks the selected commit as this tag. A restore checks the published copy."
         type: boolean
         default: false
       skip_partner_check:
         description: "Skip the partner embed check. Only for an outage on the partner's side."
         type: boolean
         default: false
+      restore_tag:
+        description: "Restore: put this earlier release back on the floating path, e.g. v1.0.6. No new bundle is published."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -54,6 +66,7 @@ jobs:
     outputs:
       tag: ${{ steps.ref.outputs.tag }}
       publish: ${{ steps.ref.outputs.publish }}
+      restore: ${{ steps.ref.outputs.restore }}
     steps:
       # The checks always test the commit of this run. A publishing run must
       # therefore start from the tag itself: a tag push, or a manual run from it.
@@ -63,19 +76,35 @@ jobs:
         env:
           RELEASE_REF: ${{ github.event.inputs.tag || github.ref }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
+          RESTORE_TAG: ${{ github.event.inputs.restore_tag }}
           RUN_REF: ${{ github.ref }}
           RUN_SHA: ${{ github.sha }}
         run: |
+          VERSION='^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*([+][0-9A-Za-z.-]+)?$'
           TAG="${RELEASE_REF#refs/tags/}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)*([+][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "$TAG" =~ $VERSION ]]; then
             echo "Release requires an existing version tag such as v1.0.7."
             exit 1
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          if [[ "$DRY_RUN" == "true" ]]; then
+          if [[ -n "$RESTORE_TAG" ]]; then
+            # A restore publishes no new bundle. Only a run from a version tag can
+            # enter the cdn-release environment, so a restore starts from one too.
+            if [[ ! "$RESTORE_TAG" =~ $VERSION ]]; then
+              echo "Restore requires an earlier version tag such as v1.0.6."
+              exit 1
+            fi
+            if [[ "$RUN_REF" != "refs/tags/$TAG" ]]; then
+              echo "Run the restore from a version tag: gh workflow run publish-cdn.yml --ref $TAG -f tag=$TAG -f restore_tag=$RESTORE_TAG"
+              exit 1
+            fi
+            { echo "tag=$TAG"; echo "publish=false"; echo "restore=$RESTORE_TAG"; } >> "$GITHUB_OUTPUT"
+            echo "Restore: $RESTORE_TAG goes back on the floating path. No new bundle is built or published."
+          elif [[ "$DRY_RUN" == "true" ]]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "Dry run: checking $RUN_SHA as $TAG. The publish job does not run."
           elif [[ "$RUN_REF" == "refs/tags/$TAG" ]]; then
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "Run the release from its tag: gh workflow run publish-cdn.yml --ref $TAG -f tag=$TAG"
@@ -84,6 +113,8 @@ jobs:
 
   validate:
     needs: tag
+    # Every release runs the checks. A restore publishes no new bundle, so it skips them.
+    if: needs.tag.outputs.restore == ''
     uses: ./.github/workflows/widget-checks.yml
     with:
       real_gemini: true
@@ -133,6 +164,8 @@ jobs:
       ${{ !cancelled() && needs.validate.result == 'success' && needs.tag.outputs.publish == 'true'
       && (needs.partner.result == 'success' || needs.partner.result == 'skipped') }}
     runs-on: ubuntu-latest
+    # Waits for an approval. The deploy role trusts only this environment.
+    environment: cdn-release
     permissions:
       id-token: write
       contents: read
@@ -247,3 +280,75 @@ jobs:
               rm -f purge-response.json
             done
           done
+
+  restore:
+    name: restore an earlier release
+    needs: tag
+    if: needs.tag.outputs.restore != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The same approval as a publish. The deploy role trusts only this environment.
+    environment: cdn-release
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.CDN_AWS_REGION }}
+      BUCKET: ${{ vars.CDN_BUCKET }}
+      BUCKET_BACKUP: ${{ vars.CDN_BUCKET_BACKUP }}
+      DIST_ID: ${{ vars.CDN_CLOUDFRONT_ID }}
+      RESTORE_TAG: ${{ needs.tag.outputs.restore }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the restored tag
+        run: git fetch --no-tags --depth=1 origin "+refs/tags/$RESTORE_TAG:refs/tags/$RESTORE_TAG"
+
+      # The widget that the restored tag committed (tags from v1.0.30 have widget.min.js).
+      - name: Read the committed widget of the restored tag
+        id: restore
+        run: |
+          git show "$RESTORE_TAG:dist/build/static/js/widget.min.js" > restore-widget.js
+          node -e "require('./scripts/release-bundle.cjs').assertFullBundle(require('fs').readFileSync('restore-widget.js'))"
+          echo "major=${RESTORE_TAG%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CDN_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Only a published release can come back: its pinned copy must be the committed widget.
+      - name: Check the pinned copy chat/<restored tag>/bundle.min.js (primary + failover origin)
+        run: |
+          for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
+            echo "checking the pinned copy on s3://$B"
+            aws s3 cp "s3://$B/chat/$RESTORE_TAG/bundle.min.js" pinned-bundle.js
+            cmp pinned-bundle.js restore-widget.js
+            rm pinned-bundle.js
+          done
+
+      # The same upload and read-back as a publish, from the local copy.
+      - name: Upload the restored widget -> chat/<major>/bundle.min.js (primary + failover origin)
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          MAJOR: ${{ steps.restore.outputs.major }}
+        run: |
+          for B in "$BUCKET" ${BUCKET_BACKUP:+"$BUCKET_BACKUP"}; do
+            echo "restoring $RESTORE_TAG on s3://$B/chat/$MAJOR/"
+            aws s3 cp restore-widget.js "s3://$B/chat/$MAJOR/bundle.min.js" \
+              --content-type "application/javascript; charset=utf-8" \
+              --cache-control "public, max-age=300, s-maxage=300"
+            aws s3 cp "s3://$B/chat/$MAJOR/bundle.min.js" uploaded-bundle.js
+            cmp uploaded-bundle.js restore-widget.js
+            rm uploaded-bundle.js
+          done
+
+      - name: Invalidate floating path on CloudFront
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          MAJOR: ${{ steps.restore.outputs.major }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/chat/$MAJOR/bundle.min.js"

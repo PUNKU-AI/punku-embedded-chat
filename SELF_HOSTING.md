@@ -69,13 +69,28 @@ Defaults below — confirm/adjust the values in **§6 Decisions** before running
 5. **DNS:** `cdn.punku.ai` → the distribution domain (`dxxxx.cloudfront.net`).
 6. **IAM deploy role (OIDC)** — so the GitHub Action assumes a role instead of storing static keys:
    - Add the GitHub OIDC provider (`token.actions.githubusercontent.com`) if not present.
-   - Role `punku-cdn-deploy` trust policy restricted to this repo:
+   - Role `punku-cdn-deploy` trusts only the two CDN workflows, run from a version tag in the GitHub environment `cdn-release` (step 7):
      ```json
-     { "Condition": { "StringLike": {
-         "token.actions.githubusercontent.com:sub": "repo:PUNKU-AI/punku-embedded-chat:*" } } }
+     { "Condition": {
+         "StringEquals": {
+           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+           "token.actions.githubusercontent.com:repository_id": "<REPOSITORY_ID>",
+           "token.actions.githubusercontent.com:repository_owner_id": "<OWNER_ID>",
+           "token.actions.githubusercontent.com:sub": "repo:PUNKU-AI/punku-embedded-chat:environment:cdn-release" },
+         "StringLike": {
+           "token.actions.githubusercontent.com:ref": "refs/tags/v*",
+           "token.actions.githubusercontent.com:job_workflow_ref": [
+             "PUNKU-AI/punku-embedded-chat/.github/workflows/publish-cdn.yml@refs/tags/v*",
+             "PUNKU-AI/punku-embedded-chat/.github/workflows/publish-icons.yml@refs/tags/v*" ] } } }
      ```
-   - Permissions (scoped to the bucket + distribution): `s3:PutObject` on `arn:aws:s3:::punku-cdn/chat/*` and `cloudfront:CreateInvalidation` on the distribution.
-   - *(Fast alternative if OIDC setup is a blocker: create a scoped IAM user, store `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` as repo secrets, and swap the `configure-aws-credentials` step to use them.)*
+   - Permissions (scoped to the bucket + distribution): `s3:PutObject` and `s3:GetObject` on `arn:aws:s3:::punku-cdn/chat/*` (and the failover bucket), and `cloudfront:CreateInvalidation` on the distribution.
+   - Do not store static AWS keys in the repository. Every CDN write must go through the approval of step 7.
+7. **GitHub environment `cdn-release`** (Settings → Environments):
+   - Required reviewers: the people who approve a release.
+   - Deployment branches and tags: only tags that match `v*`.
+   - Turn off "Allow administrators to bypass configured protection rules".
+   - The deploy role must trust this environment before the first release that uses it.
+8. **Release tag rules** (Settings → Rules → Rulesets, target: tags, pattern `v*`): only admins create release tags, and nobody moves or deletes one. jsDelivr serves files from tags, so a release tag is a release.
 
 ---
 
@@ -90,17 +105,18 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 3. Tests that file across eight browser and device profiles, with one parallel job for each profile.
 4. Merges the profile reports and runs real Gemini checks on the screenshots.
 5. Loads a partner's real embed code with the tested bundle and chats once, when the partner embed check is on.
-6. Downloads the tested artifact in the publish job and verifies its commit and checksums.
-7. Uploads `widget.min.js` as the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache), and reads it back.
-8. Overwrites the floating copy with `widget.min.js` → `chat/v1/bundle.min.js` (5-min cache), and reads it back.
-9. Invalidates the floating path on CloudFront.
-10. Purges `bundle.min.js` and `widget.min.js` under the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
+6. Waits for an approval in the `cdn-release` environment.
+7. Downloads the tested artifact in the publish job and verifies its commit and checksums.
+8. Uploads `widget.min.js` as the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache), and reads it back.
+9. Overwrites the floating copy with `widget.min.js` → `chat/v1/bundle.min.js` (5-min cache), and reads it back.
+10. Invalidates the floating path on CloudFront.
+11. Purges `bundle.min.js` and `widget.min.js` under the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
 
-Steps 7 and 8 read each S3 object back after the upload.
+Steps 8 and 9 read each S3 object back after the upload.
 The release fails if an object is the forwarder, is shorter than 100 KiB, or is not the tested file.
 A failed check stops the release before the next upload.
 
-Step 10 is for the sites that still load jsDelivr `@v1` or a URL without a version.
+Step 11 is for the sites that still load jsDelivr `@v1` or a URL without a version.
 jsDelivr keeps these aliases in its cache for up to 7 days, so the purge makes a release reach them sooner.
 The step logs each purge response.
 A failed purge shows a warning and does not fail the release, because the bundle is already on `cdn.punku.ai`.
@@ -125,6 +141,31 @@ It never starts the publish job, so it uploads nothing:
 ```sh
 gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
 ```
+
+**Approve a release.** The publish job waits in the `cdn-release` environment.
+Before you approve, check on your own machine that `main` contains the tag:
+
+```sh
+git fetch origin main --tags && git merge-base --is-ancestor v1.0.7 origin/main && git rev-parse 'v1.0.7^{commit}'
+```
+
+The command prints the tag's commit only when `main` contains it.
+Approve only when that commit is the commit on the approval page.
+Do not trust a check in the run log for this: the tagged commit holds the workflow that writes the log.
+
+**Restore an earlier release.** Run a restore from the newest version tag:
+
+```sh
+gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7 -f restore_tag=v1.0.6
+```
+
+The restore waits for the same approval.
+It checks that the pinned copy `chat/v1.0.6/bundle.min.js` is the widget that the tag `v1.0.6` committed.
+Then it uploads that copy as the floating copy, reads it back, and invalidates the floating path.
+It builds nothing and runs no checks, because that copy passed them before its own release.
+Add `-f dry_run=true` to check the pinned copy without an upload.
+A restore works for tags from v1.0.30, which commit `widget.min.js`.
+It does not change the jsDelivr aliases.
 
 **Activate it** by adding these **repo variables** (Settings → Secrets and variables → Actions → *Variables*):
 
@@ -200,13 +241,13 @@ https://cdn.punku.ai/chat/icons/lucide/manifest.json   (Lucide version and all n
 - [`scripts/build-lucide-icons.js`](./scripts/build-lucide-icons.js) builds the files from the `lucide-static` dev dependency, plus [`assets/lucide-legacy/`](./assets/lucide-legacy) for icons that Lucide 1.x removed.
 - [`scripts/upload-lucide-icons.sh`](./scripts/upload-lucide-icons.sh) uploads them. It only adds and overwrites. It never deletes, so old names keep working.
 - `publish-cdn.yml` runs both scripts on every version tag, before it uploads the bundle.
-- [`publish-icons.yml`](./.github/workflows/publish-icons.yml) runs them by hand, without a widget release.
+- [`publish-icons.yml`](./.github/workflows/publish-icons.yml) runs them by hand, without a widget release. Run it from the newest version tag (`--ref v1.0.7`). It waits for the same approval as a release.
 - Six common icons (`MessageSquare`, `MessagesSquare`, `MessageCircle`, `Bot`, `Sparkles`, `MountainSnow`) are built into the bundle and need no request.
 - If a request fails or a name does not exist, the widget shows the default icon.
 - The CDN must send `Access-Control-Allow-Origin: *` (§2, step 3). The deploy role already may write to `chat/*`.
 - **The CORS policy must allow all request headers.** Chrome and Firefox add a `Priority` header to every `fetch()`. CloudFront adds the CORS headers only when every request header is on the policy's allow-list. The AWS managed policies (`Managed-SimpleCORS` and the others) have an empty allow-list, so a browser gets no CORS header and blocks the icon. Use a custom response headers policy with `Access-Control-Allow-Headers: *`. `curl -H "Origin: ..."` alone does not show the problem. Add `-H "Priority: u=1, i"` to test like a browser. `upload-lucide-icons.sh` runs this check after each upload.
 
-**When the platform updates `lucide-react`:** set `lucide-react` and `lucide-static` in this repo to the same version or a newer one, merge, and run `publish-icons.yml`. No widget release is necessary for new icons.
+**When the platform updates `lucide-react`:** set `lucide-react` and `lucide-static` in this repo to the same version or a newer one, merge, and run `publish-icons.yml` from the newest version tag. No widget release is necessary for new icons.
 
 ### Header icon overrides for existing embeds
 
@@ -260,6 +301,7 @@ Run `publish-icons.yml` with `manifest_only` enabled to publish only the configu
 The workflow tests the publisher before it validates deployment configuration.
 This option skips dependency installation, the Lucide build, and shared icon uploads.
 The workflow uses the existing deploy role, primary bucket, and optional backup bucket.
+It waits for the same approval as a release.
 It sets a five-minute cache and invalidates only the manifest path.
 
 An unset or blank secret preserves the existing CDN manifest.

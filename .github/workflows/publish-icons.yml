@@ -7,6 +7,10 @@ name: Publish header icons to CDN
 #   - once, before the first widget release that loads icons from the CDN
 #   - after a `lucide-static` update, when the platform offers new icons
 #
+# Run it from the newest version tag:
+#   gh workflow run publish-icons.yml --ref v1.0.7
+# Like a release, it waits for an approval in the cdn-release environment.
+#
 # publish-cdn.yml runs the same two scripts on every version tag.
 
 on:
@@ -18,13 +22,17 @@ on:
         default: false
 
 permissions:
-  id-token: write # OIDC: assume the deploy role without storing static AWS keys
   contents: read
 
 jobs:
   publish-icons:
     if: ${{ vars.CDN_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
+    # Waits for an approval. The deploy role trusts only this environment.
+    environment: cdn-release
+    permissions:
+      id-token: write # OIDC: assume the deploy role without storing static AWS keys
+      contents: read
     env:
       AWS_REGION: ${{ vars.CDN_AWS_REGION }}
       BUCKET: ${{ vars.CDN_BUCKET }}
