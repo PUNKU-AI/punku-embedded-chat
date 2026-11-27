@@ -230,6 +230,9 @@ The publish job does not run.
 gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
 ```
 
+The publish job waits for an approval in the `cdn-release` environment.
+See [SELF_HOSTING.md](../SELF_HOSTING.md) for the approval check and for a restore of an earlier release.
+
 ### Partner embed check
 
 Some partners embed the widget through their own script.
@@ -271,7 +274,8 @@ gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7 -f skip_partner_check
 ```
 
 A manual run uses the workflow file of the selected tag.
-A republish of v1.0.36 or an older tag, for example a rollback, therefore runs without the partner check.
+To go back to an earlier release, run a restore from the newest tag (see [SELF_HOSTING.md](../SELF_HOSTING.md)).
+A restore uploads the published copy of that release, which passed its checks before its own release.
 
 ## Manual screenshot review
 

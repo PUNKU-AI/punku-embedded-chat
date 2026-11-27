@@ -19,7 +19,10 @@ const tagJob = release.jobs.tag;
 const validate = release.jobs.validate;
 const publish = release.jobs.publish;
 const partner = release.jobs.partner;
+const restore = release.jobs.restore;
 const workflows = [ci, release, checks];
+const workflowDir = path.join(repoRoot, '.github', 'workflows');
+const RELEASE_ENVIRONMENT = 'cdn-release';
 const playwrightConfig = readText('playwright.config.ts');
 const playwrightProjects = [...playwrightConfig.matchAll(/\{ name: '([^']+)'/g)].map((match) => match[1]);
 const rebuild = /npm\s+run\s+build(?::(?:release|react|bundle|browser-tests))?(?:\s|$)|build-widget-bundle\.cjs|react-scripts\s+build|\bwebpack\b/;
@@ -58,7 +61,7 @@ function runTagStep(env) {
   const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'widget-release-tag-')), 'output');
   fs.writeFileSync(outputFile, '');
   const result = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', '-c', tagStep.run], {
-    env: { PATH: process.env.PATH, GITHUB_OUTPUT: outputFile, DRY_RUN: '', RUN_REF: '', RUN_SHA: '', ...env },
+    env: { PATH: process.env.PATH, GITHUB_OUTPUT: outputFile, DRY_RUN: '', RESTORE_TAG: '', RUN_REF: '', RUN_SHA: '', ...env },
     encoding: 'utf8',
   });
   const outputs = Object.fromEntries(fs.readFileSync(outputFile, 'utf8').trim().split('\n').filter(Boolean)
@@ -73,7 +76,7 @@ test('publication requires successful validation with real Gemini and committed 
     + " && (needs.partner.result == 'success' || needs.partner.result == 'skipped')");
   assert.equal(validate.uses, sharedChecks);
   assert.equal(validate.needs, 'tag');
-  assert.equal(validate.if, undefined, 'Release validation must not skip its shared checks');
+  assert.equal(condition(validate.if), "needs.tag.outputs.restore == ''", 'Only a restore, which publishes no new bundle, skips the checks');
   assert.equal(validate.with.real_gemini, true);
   assert.equal(validate.with.check_committed_bundle, true);
   assert.equal(validate.secrets.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
@@ -373,7 +376,7 @@ test('every check job tests the commit of its own run, never a ref from an input
     .map((step) => step.with.ref), ['${{ needs.validate.outputs.commit_sha }}', '${{ needs.validate.outputs.commit_sha }}']);
 });
 
-test('only the live Gemini step receives the key and only the publisher has OIDC permission', () => {
+test('only the live Gemini step receives the key and only the CDN jobs have OIDC permission', () => {
   const gemini = uniqueStep(report.steps, (step) => step.run?.trim() === 'npm run test:visual-live', 'real Gemini check');
   assert.equal(gemini.env.GEMINI_API_KEY, '${{ secrets.GEMINI_API_KEY }}');
   assert.equal(gemini.env.GEMINI_MODEL, 'gemini-3.1-flash-lite');
@@ -387,10 +390,30 @@ test('only the live Gemini step receives the key and only the publisher has OIDC
       for (const step of job.steps || []) {
         if (step !== gemini) assert.equal(step.env?.GEMINI_API_KEY, undefined, 'Other steps must not receive the credential');
       }
-      if (job !== publish) assert.notEqual(job.permissions?.['id-token'], 'write');
+      if (job !== publish && job !== restore) assert.notEqual(job.permissions?.['id-token'], 'write');
     }
   }
   assert.equal(publish.permissions['id-token'], 'write');
+  assert.equal(restore.permissions['id-token'], 'write');
+});
+
+// The deploy role trusts only runs from a version tag in the cdn-release environment (SELF_HOSTING.md).
+// A job that asks for the cloud token outside that environment would wait for no approval.
+test('only jobs in the cdn-release environment can ask for a cloud token', () => {
+  const withToken = [];
+  for (const filename of fs.readdirSync(workflowDir).filter((name) => /\.ya?ml$/.test(name)).sort()) {
+    const workflow = yaml.load(fs.readFileSync(path.join(workflowDir, filename), 'utf8'));
+    assert.notEqual(workflow.permissions, 'write-all', filename);
+    assert.notEqual(workflow.permissions?.['id-token'], 'write', `${filename}: ask for the token in the job, not the workflow`);
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      assert.notEqual(job.permissions, 'write-all', `${filename}:${name}`);
+      if (job.permissions?.['id-token'] !== 'write') continue;
+      withToken.push(`${filename}:${name}`);
+      assert.equal(job.environment, RELEASE_ENVIRONMENT, `${filename}:${name} must wait for the release approval`);
+      assert.deepEqual(job.permissions, { 'id-token': 'write', contents: 'read' }, `${filename}:${name}`);
+    }
+  }
+  assert.deepEqual(withToken, ['publish-cdn.yml:publish', 'publish-cdn.yml:restore', 'publish-icons.yml:publish-icons']);
 });
 
 test('release tags enter through an environment variable and publish only from the tag ref', () => {
@@ -405,6 +428,7 @@ test('release tags enter through an environment variable and publish only from t
   assert.deepEqual(tagJob.outputs, {
     tag: '${{ steps.ref.outputs.tag }}',
     publish: '${{ steps.ref.outputs.publish }}',
+    restore: '${{ steps.ref.outputs.restore }}',
   });
   const published = { status: 0, outputs: { tag: 'v1.0.22', publish: 'true' } };
   assert.deepEqual(runTagStep({ RELEASE_REF: 'refs/tags/v1.0.22', RUN_REF: 'refs/tags/v1.0.22' }), published);
@@ -466,4 +490,101 @@ test('a partner embed check with the tested bundle gates the publish', () => {
   const skip = release.on.workflow_dispatch.inputs.skip_partner_check;
   assert.equal(skip.type, 'boolean');
   assert.equal(skip.default, false);
+});
+
+test('a restore starts from a version tag and skips the release checks', () => {
+  const input = release.on.workflow_dispatch.inputs.restore_tag;
+  assert.equal(input.required, false);
+  assert.equal(input.default, '');
+  assert.equal(tagStep.env.RESTORE_TAG, '${{ github.event.inputs.restore_tag }}');
+  const restored = { status: 0, outputs: { tag: 'v1.0.22', publish: 'false', restore: 'v1.0.21' } };
+  for (const DRY_RUN of ['false', 'true']) {
+    assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', RUN_REF: 'refs/tags/v1.0.22', RESTORE_TAG: 'v1.0.21', DRY_RUN }), restored);
+    // Only a run from a version tag can enter the release environment, also for a dry run.
+    for (const RUN_REF of ['refs/heads/main', 'refs/tags/v1.0.21', '']) {
+      assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', RUN_REF, RESTORE_TAG: 'v1.0.21', DRY_RUN }), { status: 1, outputs: {} },
+        `A restore from ${RUN_REF || 'no ref'} must stop`);
+    }
+  }
+  for (const RESTORE_TAG of ['main', 'v1.0', 'v1.0.21;id', 'v1.0.21\nrestore=v1.0.1', '../v1.0.21']) {
+    assert.deepEqual(runTagStep({ RELEASE_REF: 'v1.0.22', RUN_REF: 'refs/tags/v1.0.22', RESTORE_TAG }), { status: 1, outputs: {} });
+  }
+  assert.deepEqual([restore.needs].flat(), ['tag']);
+  assert.equal(condition(restore.if), "needs.tag.outputs.restore != ''");
+  // A restore runs no checks, so the partner check and the publish job cannot run either.
+  assert.equal(condition(validate.if), "needs.tag.outputs.restore == ''");
+  assert.match(condition(partner.if), /^needs\.validate\.result == 'success' && /);
+  assert.match(condition(publish.if), /&& needs\.validate\.result == 'success' && needs\.tag\.outputs\.publish == 'true'/);
+});
+
+test('a restore uploads the published copy of an earlier release after the same approval', (t) => {
+  assert.equal(restore.environment, RELEASE_ENVIRONMENT);
+  assert.equal(publish.environment, RELEASE_ENVIRONMENT);
+  assert.equal(restore.env.RESTORE_TAG, '${{ needs.tag.outputs.restore }}');
+  const steps = restore.steps;
+  const checkout = uniqueStep(steps, (step) => step.uses?.startsWith('actions/checkout@'), 'restore checkout');
+  const fetchTag = uniqueStep(steps, (step) => /git fetch .*refs\/tags\/\$RESTORE_TAG/.test(step.run || ''), 'restored tag fetch');
+  const read = uniqueStep(steps, (step) => step.id === 'restore', 'committed widget read');
+  const credentials = uniqueStep(steps, (step) => step.uses?.startsWith('aws-actions/configure-aws-credentials@'), 'AWS credentials');
+  const check = uniqueStep(steps, (step) => /s3:\/\/\$B\/chat\/\$RESTORE_TAG\/bundle\.min\.js/.test(step.run || ''), 'pinned copy check');
+  const upload = uniqueStep(steps, (step) => /aws\s+s3\s+cp\s+restore-widget\.js\s/.test(step.run || ''), 'restored upload');
+  const invalidation = uniqueStep(steps, (step) => /aws\s+cloudfront\s+create-invalidation/.test(step.run || ''), 'CloudFront invalidation');
+  assertOrdered(steps, [checkout, fetchTag, read, credentials, check, upload, invalidation]);
+  assert.equal(steps.length, 7);
+  assert.equal(checkout.with, undefined, 'The restore runs the workflow of its own tag');
+  assert.equal(credentials.with['role-to-assume'], '${{ vars.CDN_DEPLOY_ROLE_ARN }}');
+  for (const step of [checkout, fetchTag, read, credentials, check]) assert.equal(step.if, undefined);
+  for (const step of [upload, invalidation]) {
+    assert.equal(condition(step.if), "github.event.inputs.dry_run != 'true'", 'A dry run only checks the published copy');
+    assert.equal(step.env.MAJOR, '${{ steps.restore.outputs.major }}');
+  }
+  for (const step of steps) {
+    assert.doesNotMatch(step.run || '', rebuild, 'A restore must not build a bundle');
+    assert.doesNotMatch(step.run || '', /aws\s+s3\s+(?:cp|sync|mv)\s+s3:\/\/\S+\s+s3:\/\//, 'A restore downloads and uploads, as a publish does');
+    assert.doesNotMatch(step.run || '', /\$\{\{/, 'Values enter the scripts through the environment');
+  }
+
+  // The release checkout of v1.0.21 and a fake S3.
+  const dir = publishFixture(t);
+  git(dir, ['tag', 'v1.0.21']);
+  const outputFile = path.join(dir, 'step-output');
+  fs.writeFileSync(outputFile, '');
+  const env = { RESTORE_TAG: 'v1.0.21', MAJOR: 'v1', GITHUB_OUTPUT: outputFile };
+  const readRun = runUploadStep(dir, read, env);
+  assert.equal(readRun.status, 0, readRun.stderr);
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'restore-widget.js')), widget);
+  assert.equal(fs.readFileSync(outputFile, 'utf8'), 'major=v1\n');
+
+  // A tag that was never published has no pinned copy: nothing is uploaded.
+  const unpublished = runUploadStep(dir, check, env);
+  assert.notEqual(unpublished.status, 0);
+  assert.equal(unpublished.log.length, 1);
+  const pinned = (bucket) => path.join(dir, 's3', bucket, 'chat', 'v1.0.21', 'bundle.min.js');
+  for (const bucket of ['primary', 'backup']) {
+    fs.mkdirSync(path.dirname(pinned(bucket)), { recursive: true });
+    fs.writeFileSync(pinned(bucket), widget);
+  }
+  const checked = runUploadStep(dir, check, env);
+  assert.equal(checked.status, 0, checked.stderr);
+  assert.deepEqual(checked.log, ['primary', 'backup'].map((bucket) => `s3://${bucket}/chat/v1.0.21/bundle.min.js -> pinned-bundle.js`));
+
+  const uploaded = runUploadStep(dir, upload, env);
+  assert.equal(uploaded.status, 0, uploaded.stderr);
+  assert.deepEqual(uploaded.log, ['primary', 'backup'].flatMap((bucket) => [
+    `restore-widget.js -> s3://${bucket}/chat/v1/bundle.min.js`, `s3://${bucket}/chat/v1/bundle.min.js -> uploaded-bundle.js`]));
+  for (const bucket of ['primary', 'backup']) {
+    assert.deepEqual(fs.readFileSync(path.join(dir, 's3', bucket, 'chat', 'v1', 'bundle.min.js')), widget);
+  }
+  assert.equal(runUploadStep(dir, upload, { ...env, BUCKET_BACKUP: '' }).log.length, 2, 'The failover bucket is optional');
+
+  // A short upload stops the restore before the failover bucket.
+  const short = runUploadStep(dir, upload, { ...env, AWS_UPLOAD: 'short' });
+  assert.notEqual(short.status, 0);
+  assert.equal(short.log.length, 2);
+
+  // A pinned copy that is not the committed widget stops the restore before any upload.
+  fs.writeFileSync(pinned('backup'), forwarder);
+  const changed = runUploadStep(dir, check, env);
+  assert.notEqual(changed.status, 0);
+  assert.equal(changed.log.length, 2);
 });
