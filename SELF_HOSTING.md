@@ -89,17 +89,18 @@ On `git push --tags` (e.g. `v1.0.7`) it:
 2. Verifies that committed fallback files match the built bundle and license.
 3. Tests that file across eight browser and device profiles, with one parallel job for each profile.
 4. Merges the profile reports and runs real Gemini checks on the screenshots.
-5. Downloads the tested artifact in the publish job and verifies its commit and checksums.
-6. Uploads `widget.min.js` as the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache), and reads it back.
-7. Overwrites the floating copy with `widget.min.js` → `chat/v1/bundle.min.js` (5-min cache), and reads it back.
-8. Invalidates the floating path on CloudFront.
-9. Purges `bundle.min.js` and `widget.min.js` under the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
+5. Loads a partner's real embed code with the tested bundle and chats once, when the partner embed check is on.
+6. Downloads the tested artifact in the publish job and verifies its commit and checksums.
+7. Uploads `widget.min.js` as the pinned immutable copy → `chat/v1.0.7/bundle.min.js` (1-year cache), and reads it back.
+8. Overwrites the floating copy with `widget.min.js` → `chat/v1/bundle.min.js` (5-min cache), and reads it back.
+9. Invalidates the floating path on CloudFront.
+10. Purges `bundle.min.js` and `widget.min.js` under the jsDelivr aliases `@v1`, no version, and `@latest` (best effort).
 
-Steps 6 and 7 read each S3 object back after the upload.
+Steps 7 and 8 read each S3 object back after the upload.
 The release fails if an object is the forwarder, is shorter than 100 KiB, or is not the tested file.
 A failed check stops the release before the next upload.
 
-Step 9 is for the sites that still load jsDelivr `@v1` or a URL without a version.
+Step 10 is for the sites that still load jsDelivr `@v1` or a URL without a version.
 jsDelivr keeps these aliases in its cache for up to 7 days, so the purge makes a release reach them sooner.
 The step logs each purge response.
 A failed purge shows a warning and does not fail the release, because the bundle is already on `cdn.punku.ai`.
@@ -134,6 +135,10 @@ gh workflow run publish-cdn.yml --ref <branch> -f tag=v1.0.22 -f dry_run=true
 | `CDN_BUCKET` | `punku-cdn` |
 | `CDN_CLOUDFRONT_ID` | `<DISTRIBUTION_ID>` |
 
+Optional: the partner embed check (step 5).
+Set the variable `PARTNER_EMBED_CHECK` to `true`, and the **secret** `PARTNER_EMBED_HTML` to the partner's embed code.
+See [the partner embed check](./docs/widget-browser-tests.md#partner-embed-check).
+
 GitHub tags remain available to fallback CDNs.
 Manual publication requires an existing version tag with the release gate files and matching committed bundle.
 Start a manual publication from the tag itself, so that the checks test the tagged commit:
@@ -143,6 +148,7 @@ gh workflow run publish-cdn.yml --ref v1.0.7 -f tag=v1.0.7
 ```
 
 A run from any other branch or tag fails, unless `dry_run` is on.
+During an outage on the partner's side, add `-f skip_partner_check=true` to skip the partner embed check.
 A manual run uses the workflow file of the selected tag.
 Old tags that lack the gate files fail validation.
 
